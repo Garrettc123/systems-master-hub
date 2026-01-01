@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # 🤖 AI SYSTEMS
+  apex-os:
+    image: garrettc123/apex-os:latest
+    build: ./ai-systems/APEX-Universal-AI-Operating-System
+    restart: always
+    environment:
+      - ENV=production
+
+  mlops-platform:
+    image: garrettc123/mlops:latest
+    build: ./ai-systems/enterprise-mlops-platform
+    restart: always
+
+  # ⛓️ BLOCKCHAIN SYSTEMS
+  stablecoin-api:
+    image: garrettc123/stablecoin:latest
+    build: ./blockchain/stablecoin-protocol
+    ports:
+      - "3000:3000"
+
+  autohelix-node:
+    image: garrettc123/autohelix:latest
+    build: ./blockchain/autohelix
+
+  # 🏢 ENTERPRISE SYSTEMS
+  unified-platform:
+    image: garrettc123/unified-platform:latest
+    build: ./enterprise/enterprise-unified-platform
+    ports:
+      - "8000:8000"
+
+  tree-of-life:
+    image: garrettc123/tree-of-life:latest
+    build: ./enterprise/tree-of-life-system
+    ports:
+      - "8080:8080"
+
+  # 🌐 WEB FRONTENDS
+  portfolio:
+    image: garrettc123/portfolio:latest
+    build: ./web/portfolio-website
+    ports:
+      - "80:80"
