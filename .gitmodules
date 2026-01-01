@@ -1,0 +1,27 @@
+[submodule "ai-systems/APEX-Universal-AI-Operating-System"]
+	path = ai-systems/APEX-Universal-AI-Operating-System
+	url = https://github.com/Garrettc123/APEX-Universal-AI-Operating-System.git
+
+[submodule "ai-systems/enterprise-mlops-platform"]
+	path = ai-systems/enterprise-mlops-platform
+	url = https://github.com/Garrettc123/enterprise-mlops-platform.git
+
+[submodule "blockchain/stablecoin-protocol"]
+	path = blockchain/stablecoin-protocol
+	url = https://github.com/Garrettc123/stablecoin-protocol.git
+
+[submodule "blockchain/autohelix"]
+	path = blockchain/autohelix
+	url = https://github.com/Garrettc123/autohelix.git
+
+[submodule "enterprise/enterprise-unified-platform"]
+	path = enterprise/enterprise-unified-platform
+	url = https://github.com/Garrettc123/enterprise-unified-platform.git
+
+[submodule "enterprise/tree-of-life-system"]
+	path = enterprise/tree-of-life-system
+	url = https://github.com/Garrettc123/tree-of-life-system.git
+
+[submodule "web/portfolio-website"]
+	path = web/portfolio-website
+	url = https://github.com/Garrettc123/portfolio-website.git
