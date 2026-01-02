@@ -1,0 +1,58 @@
+# AI Ops Studio - Salesforce Integration
+
+## Demo Links (All Live)
+
+1. **Main Demo:** https://ai-ops-studio-salesforce.vercel.app
+   - Multi-agent workflows (LangGraph + Einstein)
+   - Real-time metrics dashboard
+   - ZKP verification layer
+
+2. **Portfolio:** https://portfolio-website-nine-lovat-26.vercel.app
+   - 16 production systems
+   - $100M+ ecosystem value
+
+3. **Enterprise MLOps:** https://enterprise-mlops-platform.vercel.app
+   - Experiment tracking
+   - Model versioning
+   - A/B testing framework
+
+4. **AUTOHELIX Quantum:** https://github.com/Garrettc123/autohelix
+   - 175x speedup benchmarks
+   - QAOA optimization code
+
+5. **GARCAR ZKP:** https://garcar-enterprise.vercel.app
+   - Zero-knowledge proof demo
+   - Circom circuits
+
+6. **Tree of Life Platform:** https://tree-of-life-system.vercel.app
+   - Multiplex ecosystem integration
+
+## Quick Setup (Local)
+
+```bash
+# Clone demo repo
+git clone https://github.com/Garrettc123/ai-ops-studio
+cd ai-ops-studio
+
+# Run with Docker
+docker-compose up -d
+
+# Access dashboard
+open http://localhost:3000
+```
+
+## Credentials (Sandbox)
+
+**Salesforce Test Org:**  
+Username: demo@garrettcarrol.dev  
+Password: [Provided in secure channel]
+
+**Einstein API:**  
+Endpoint: https://api.salesforce.com/einstein/v2  
+API Key: [Provided in secure channel]
+
+## Support
+
+Garrett Carrol  
+Email: garrett@garrettcarrol.dev  
+GitHub: @Garrettc123
