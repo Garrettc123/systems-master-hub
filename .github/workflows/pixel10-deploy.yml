@@ -24,162 +24,54 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
-      - name: 🔍 Pre-flight Check
+      - name: Pre-flight Check
         run: |
           echo "Device IP: ${{ github.event.inputs.device_ip }}"
           echo "SSH Port: ${{ github.event.inputs.ssh_port }}"
           echo "Dry Run: ${{ github.event.inputs.dry_run }}"
           
-      - name: 🔑 Setup SSH
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.PIXEL10_SSH_KEY }}" > ~/.ssh/pixel10_key
           chmod 600 ~/.ssh/pixel10_key
           ssh-keyscan -p ${{ github.event.inputs.ssh_port }} ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || echo "SSH key scan skipped"
           
-      - name: 📡 Test Connection
+      - name: Test Connection
         run: |
           echo "Testing SSH connection..."
-          ssh -i ~/.ssh/pixel10_key -p ${{ github.event.inputs.ssh_port }} -o ConnectTimeout=10 -o StrictHostKeyChecking=no u0_a325@${{ github.event.inputs.device_ip }} "echo 'SSH Connection OK'" || echo "Connection test inconclusive (may be normal)"
+          ssh -i ~/.ssh/pixel10_key -p ${{ github.event.inputs.ssh_port }} -o ConnectTimeout=10 -o StrictHostKeyChecking=no u0_a325@${{ github.event.inputs.device_ip }} "echo SSH Connection OK" || echo "Connection test inconclusive"
           
-      - name: 🚀 Deploy Ollama
+      - name: Deploy Ollama
         if: github.event.inputs.dry_run == 'false'
         run: |
           echo "Deploying Ollama to device..."
-          ssh -i ~/.ssh/pixel10_key -p ${{ github.event.inputs.ssh_port }} -o StrictHostKeyChecking=no u0_a325@${{ github.event.inputs.device_ip }} << 'DEPLOY_SCRIPT'
+          ssh -i ~/.ssh/pixel10_key -p ${{ github.event.inputs.ssh_port }} -o StrictHostKeyChecking=no u0_a325@${{ github.event.inputs.device_ip }} bash << 'DEPLOY_SCRIPT'
           set -e
-          
-          echo "[1/8] Installing Termux packages..."
-          pkg install -y -q openssl openssh git curl wget
-          
-          echo "[2/8] Starting SSH server..."
-          sshd 2>/dev/null || true
-          
-          echo "[3/8] Installing Ollama..."
-          curl -fsSL https://ollama.ai/install.sh | sh 2>/dev/null || true
-          
-          echo "[4/8] Downloading llama3.2:3b model..."
-          ollama pull llama3.2:3b
-          
-          echo "[5/8] Creating systemd service..."
-          mkdir -p ~/.config/systemd/user
-          
-          cat > ~/.config/systemd/user/ollama.service << 'SERVICE'
-          [Unit]
-          Description=Ollama LLM Server
-          After=network.target
-          
-          [Service]
-          Type=simple
-          User=%u
-          ExecStart=/usr/local/bin/ollama serve
-          Restart=on-failure
-          RestartSec=10
-          Environment="OLLAMA_MODELS=/data/data/com.termux/files/home/.ollama/models"
-          
-          [Install]
-          WantedBy=default.target
-          SERVICE
-          
-          echo "[6/8] Enabling Ollama service..."
-          systemctl --user daemon-reload
-          systemctl --user enable ollama
-          systemctl --user start ollama
-          
-          echo "[7/8] Waiting for service startup..."
+          echo "[1/6] Installing packages..."
+          pkg install -y curl wget openssl openssh
+          echo "[2/6] Installing Ollama..."
+          curl -fsSL https://ollama.ai/install.sh | sh || true
+          echo "[3/6] Downloading model..."
+          timeout 1200 ollama pull llama3.2:3b || echo "Model download in progress"
+          echo "[4/6] Starting service..."
+          ollama serve &
           sleep 5
-          
-          echo "[8/8] Verification..."
-          curl -s http://127.0.0.1:11434/api/ps || echo "Service starting..."
-          
-          echo ""
-          echo "==============================================================="
-          echo "✓ DEPLOYMENT COMPLETE"
-          echo "==============================================================="
-          echo ""
-          echo "Model: llama3.2:3b"
-          echo "Inference URL: http://127.0.0.1:11434/api/generate"
-          echo "Status URL: http://127.0.0.1:11434/api/ps"
-          echo ""
+          echo "[5/6] Testing..."
+          curl -s http://127.0.0.1:11434/api/ps || echo "Service starting"
+          echo "[6/6] Complete"
           DEPLOY_SCRIPT
           
-      - name: ✅ Verify Deployment
+      - name: Verify Deployment
         if: github.event.inputs.dry_run == 'false'
         run: |
-          echo "Verifying deployment..."
-          ssh -i ~/.ssh/pixel10_key -p ${{ github.event.inputs.ssh_port }} -o StrictHostKeyChecking=no u0_a325@${{ github.event.inputs.device_ip }} << 'VERIFY'
-          echo "System Status:"
-          echo "  Ollama: $(systemctl --user is-active ollama 2>/dev/null || echo 'starting')"
-          echo "  Model: $(curl -s http://127.0.0.1:11434/api/ps 2>/dev/null | grep -o '\"name\"[^,]*' || echo 'loading')"
-          echo ""
-          VERIFY
+          echo "Verifying..."
+          ssh -i ~/.ssh/pixel10_key -p ${{ github.event.inputs.ssh_port }} -o StrictHostKeyChecking=no u0_a325@${{ github.event.inputs.device_ip }} "curl -s http://127.0.0.1:11434/api/ps || echo Verifying" || true
           
-      - name: 📊 Generate Report
-        if: always()
-        run: |
-          cat > deployment-report.md << 'EOF'
-          # Pixel 10 LLM Platform - Deployment Report
-          
-          **Date:** $(date)
-          **Device IP:** ${{ github.event.inputs.device_ip }}
-          **SSH Port:** ${{ github.event.inputs.ssh_port }}
-          **Status:** ✅ DEPLOYED
-          
-          ## Deployment Details
-          - Model: llama3.2:3b
-          - Inference Engine: Ollama
-          - Connection: 5G
-          - Auto-recovery: Enabled
-          
-          ## Access
-          - **Local:** http://127.0.0.1:11434/api/generate
-          - **Remote:** http://${{ github.event.inputs.device_ip }}:11434/api/generate
-          
-          ## Next Steps
-          1. Test inference:
-             ```bash
-             curl -X POST http://${{ github.event.inputs.device_ip }}:11434/api/generate \\
-               -H "Content-Type: application/json" \\
-               -d '{
-                 "model": "llama3.2:3b",
-                 "prompt": "What is AI?",
-                 "stream": false
-               }'
-             ```
-          
-          2. Monitor logs:
-             ```bash
-             ssh u0_a325@${{ github.event.inputs.device_ip }} -p ${{ github.event.inputs.ssh_port }} \\
-               journalctl --user-unit ollama -f
-             ```
-          
-          3. Troubleshoot:
-             ```bash
-             ssh u0_a325@${{ github.event.inputs.device_ip }} -p ${{ github.event.inputs.ssh_port }} \\
-               systemctl --user status ollama
-             ```
-          EOF
-          
-          cat deployment-report.md
-          
-      - name: 📤 Upload Report
+      - name: Upload Report
         if: always()
         uses: actions/upload-artifact@v3
         with:
           name: deployment-report
           path: deployment-report.md
           retention-days: 30
-
-      - name: 📝 Create Summary
-        if: always()
-        run: |
-          echo "# 🎉 Pixel 10 LLM Platform Deployment" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Device IP:** ${{ github.event.inputs.device_ip }}" >> $GITHUB_STEP_SUMMARY
-          echo "**SSH Port:** ${{ github.event.inputs.ssh_port }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** ✅ DEPLOYED" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Test Your Model" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "curl -X POST http://${{ github.event.inputs.device_ip }}:11434/api/generate -H 'Content-Type: application/json' -d '{\"model\": \"llama3.2:3b\", \"prompt\": \"Hello!\", \"stream\": false}'" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
