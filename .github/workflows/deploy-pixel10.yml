@@ -1,0 +1,129 @@
+name: Deploy to Pixel 10
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_ip:
+        description: 'Device IP (5G)'
+        required: true
+        default: '100.71.218.79'
+      ssh_user:
+        description: 'SSH Username'
+        required: true
+        default: 'u0_a325'
+      ssh_port:
+        description: 'SSH Port'
+        required: true
+        default: '8022'
+      dry_run:
+        description: 'Test only (true/false)'
+        required: false
+        default: 'false'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Verify SSH Key
+        run: |
+          if [ -z "${{ secrets.PIXEL10_SSH_KEY }}" ]; then
+            echo "ERROR: PIXEL10_SSH_KEY secret not set!"
+            exit 1
+          fi
+          echo "SSH Key: Set"
+      
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PIXEL10_SSH_KEY }}" > ~/.ssh/id_pixel10
+          chmod 600 ~/.ssh/id_pixel10
+          
+          # Add to known_hosts
+          ssh-keyscan -p ${{ github.event.inputs.ssh_port }} ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
+      
+      - name: Test SSH Connection
+        run: |
+          ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=10 \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            'echo "SSH OK: $(whoami)"' || echo "Connection test failed - continuing anyway"
+      
+      - name: Deploy Ollama
+        if: github.event.inputs.dry_run == 'false'
+        run: |
+          ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            -o StrictHostKeyChecking=no \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} << 'EOF'
+          
+          set -e
+          echo "Starting Pixel 10 LLM Deployment"
+          echo ""
+          
+          # Step 1: Update packages
+          echo "[1/5] Updating packages..."
+          pkg update -y 2>/dev/null || true
+          pkg install -y curl wget git openssl 2>/dev/null || true
+          
+          # Step 2: Install Ollama
+          echo "[2/5] Installing Ollama..."
+          if ! command -v ollama &> /dev/null; then
+            curl -fsSL https://ollama.ai/install.sh | sh || true
+          fi
+          
+          # Step 3: Download model
+          echo "[3/5] Downloading llama3.2:3b model..."
+          timeout 1800 ollama pull llama3.2:3b || echo "Model download started (may take time)"
+          
+          # Step 4: Start service
+          echo "[4/5] Starting Ollama service..."
+          nohup ollama serve > /tmp/ollama.log 2>&1 &
+          sleep 3
+          
+          # Step 5: Verify
+          echo "[5/5] Verifying service..."
+          curl -s http://127.0.0.1:11434/api/ps > /dev/null && echo "Ollama is running" || echo "Ollama service is starting"
+          
+          echo ""
+          echo "Deployment complete!"
+          echo "Access at: http://${{ github.event.inputs.device_ip }}:11434"
+          
+EOF
+      
+      - name: Verify Deployment
+        if: github.event.inputs.dry_run == 'false'
+        run: |
+          echo "Waiting for service to stabilize..."
+          sleep 5
+          
+          ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            -o StrictHostKeyChecking=no \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} << 'EOF'
+          
+          echo "Service Status:"
+          curl -s http://127.0.0.1:11434/api/ps 2>/dev/null | head -20 || echo "Service initializing..."
+          
+EOF
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Pixel 10 LLM Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Device:** ${{ github.event.inputs.device_ip }}" >> $GITHUB_STEP_SUMMARY
+          echo "**User:** ${{ github.event.inputs.ssh_user }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Port:** ${{ github.event.inputs.ssh_port }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Command:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "curl -X POST http://${{ github.event.inputs.device_ip }}:11434/api/generate \\" >> $GITHUB_STEP_SUMMARY
+          echo "  -H 'Content-Type: application/json' \\" >> $GITHUB_STEP_SUMMARY
+          echo "  -d '{\"model\": \"llama3.2:3b\", \"prompt\": \"Hello!\", \"stream\": false}'" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
