@@ -41,17 +41,42 @@ if ! command -v ssh-keygen &> /dev/null; then
     pkg install -y openssh
 fi
 
+if ! command -v ifconfig &> /dev/null; then
+    log_info "Installing net-tools..."
+    pkg install -y net-tools
+fi
+
 log_success "Termux environment ready"
 
 # Stage 2: Get device IP
 print_header "STAGE 1: GET DEVICE IP"
 
 log_info "Getting your device IP address..."
-DEVICE_IP=$(hostname -I | awk '{print $1}' || echo "")
 
+# Try multiple methods to get IP
+DEVICE_IP=""
+
+# Method 1: ifconfig
+if command -v ifconfig &> /dev/null; then
+    DEVICE_IP=$(ifconfig wlan0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1 || echo "")
+fi
+
+# Method 2: ip command
+if [ -z "$DEVICE_IP" ] && command -v ip &> /dev/null; then
+    DEVICE_IP=$(ip addr show wlan0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "")
+fi
+
+# Method 3: Manual entry
 if [ -z "$DEVICE_IP" ]; then
-    log_warning "Could not auto-detect IP. What's your WiFi IP? (e.g., 192.168.1.100)"
-    read -p "Enter your device IP: " DEVICE_IP
+    log_warning "Could not auto-detect IP."
+    echo "How to find your IP:"
+    echo "  1. Open Settings on your Pixel 10"
+    echo "  2. Go to About Phone"
+    echo "  3. Look for 'IP address' field"
+    echo "  OR"
+    echo "  4. Open WiFi settings and long-press your WiFi network"
+    echo ""
+    read -p "Enter your device WiFi IP (e.g., 192.168.1.100): " DEVICE_IP
 fi
 
 if [ -z "$DEVICE_IP" ]; then
@@ -106,18 +131,13 @@ log_info "Starting SSH server..."
 sshd 2>/dev/null || true
 sleep 2
 
-if pgrep -x "sshd" > /dev/null; then
+if pgrep -x "sshd" > /dev/null 2>&1; then
     log_success "SSH server is running"
 else
-    log_warning "SSH server may not be running. Trying to start..."
-    sshd -D &
+    log_warning "Starting SSH server in background..."
+    sshd
     sleep 2
 fi
-
-# Stage 6: Test SSH
-log_info "Testing SSH connectivity..."
-ssh -o ConnectTimeout=5 -p 8022 localhost "echo OK" > /dev/null 2>&1 || \
-    log_warning "SSH test inconclusive (may be normal in Termux)"
 
 log_success "SSH ready"
 
