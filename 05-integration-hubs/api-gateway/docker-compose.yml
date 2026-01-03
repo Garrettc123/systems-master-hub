@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  api-gateway:
+    build: .
+    container_name: api-gateway-v2
+    ports:
+      - "8080:8080"
+    environment:
+      - AUTOHELIX_URL=http://autohelix:8000
+      - APEX_URL=http://apex:8001
+      - MLOPS_URL=http://mlops:8100
+      - NWU_URL=http://nwu:8200
+      - AIOPS_URL=http://ai-ops:8300
+      - TOL_URL=http://tree-of-life:3000
+      - JWT_SECRET=change-this-in-production
+    networks:
+      - enterprise-network
+    restart: unless-stopped
+
+networks:
+  enterprise-network:
+    external: true

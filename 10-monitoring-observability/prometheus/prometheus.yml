@@ -1,0 +1,137 @@
+# Prometheus Configuration
+# Enterprise Ecosystem Monitoring
+# Last Updated: January 3, 2026
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'enterprise-ecosystem'
+    environment: 'production'
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+rule_files:
+  - 'alerts/*.yml'
+  - 'rules/*.yml'
+
+scrape_configs:
+  # Core Infrastructure
+  - job_name: 'autohelix'
+    static_configs:
+      - targets: ['autohelix:8000']
+        labels:
+          tier: 'core'
+          system: 'autohelix'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  - job_name: 'apex-universal-os'
+    static_configs:
+      - targets: ['apex:8001']
+        labels:
+          tier: 'core'
+          system: 'apex'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  - job_name: 'neural-mesh-pipeline'
+    static_configs:
+      - targets: ['neural-mesh:8002']
+        labels:
+          tier: 'core'
+          system: 'neural-mesh'
+
+  # AI/ML Platforms
+  - job_name: 'enterprise-mlops'
+    static_configs:
+      - targets: ['mlops:8100']
+        labels:
+          tier: 'ai-ml'
+          system: 'mlops'
+    metrics_path: '/api/metrics'
+
+  - job_name: 'ai-business-platform'
+    static_configs:
+      - targets: ['ai-business:8101']
+        labels:
+          tier: 'ai-ml'
+          system: 'ai-business'
+
+  # Protocols
+  - job_name: 'nwu-protocol'
+    static_configs:
+      - targets: ['nwu:8200']
+        labels:
+          tier: 'protocols'
+          system: 'nwu'
+
+  - job_name: 'stablecoin-protocol'
+    static_configs:
+      - targets: ['stablecoin:8201']
+        labels:
+          tier: 'protocols'
+          system: 'stablecoin'
+
+  # Business Automation
+  - job_name: 'ai-ops-studio'
+    static_configs:
+      - targets: ['ai-ops:8300']
+        labels:
+          tier: 'business'
+          system: 'ai-ops-studio'
+
+  - job_name: 'process-copilot'
+    static_configs:
+      - targets: ['process-copilot:8301']
+        labels:
+          tier: 'business'
+          system: 'process-copilot'
+
+  - job_name: 'hypervelocity-orchestrator'
+    static_configs:
+      - targets: ['hypervelocity:8302']
+        labels:
+          tier: 'business'
+          system: 'hypervelocity'
+
+  # Integration Hubs
+  - job_name: 'tree-of-life-system'
+    static_configs:
+      - targets: ['tree-of-life:3000']
+        labels:
+          tier: 'integration'
+          system: 'tree-of-life'
+
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:8080']
+        labels:
+          tier: 'integration'
+          system: 'api-gateway'
+    scrape_interval: 5s
+
+  # Infrastructure Monitoring
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  - job_name: 'mongodb-exporter'
+    static_configs:
+      - targets: ['mongodb-exporter:9216']
