@@ -51,18 +51,18 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
       - name: Terraform Init
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', matrix.env)] }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', matrix.env)] }}
+          AWS_ACCESS_KEY_ID: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(matrix.env))] }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(matrix.env))] }}
         run: |
           cd terraform
-          terraform init -backend-config="bucket=${{ secrets[format('{0}_TF_STATE_BUCKET', matrix.env)] }}" \
+          terraform init -backend-config="bucket=${{ secrets[format('{0}_TF_STATE_BUCKET', upper(matrix.env))] }}" \
                          -backend-config="key=env/${{ matrix.env }}/terraform.tfstate" \
                          -backend-config="region=${{ secrets.AWS_REGION }}" \
                          -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
       - name: Terraform Plan
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', matrix.env)] }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', matrix.env)] }}
+          AWS_ACCESS_KEY_ID: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(matrix.env))] }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(matrix.env))] }}
         id: plan
         run: |
           cd terraform
@@ -115,15 +115,15 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
       - name: Terraform Init
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', matrix.env)] }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', matrix.env)] }}
+          AWS_ACCESS_KEY_ID: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(matrix.env))] }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(matrix.env))] }}
         run: |
           cd terraform
           terraform init
       - name: Terraform Apply
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', matrix.env)] }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', matrix.env)] }}
+          AWS_ACCESS_KEY_ID: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(matrix.env))] }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(matrix.env))] }}
         run: |
           cd terraform
           terraform apply -auto-approve tfplan
