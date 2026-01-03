@@ -1,0 +1,124 @@
+version: '3.8'
+
+services:
+  # Main integration service
+  sf-connector:
+    build: .
+    container_name: salesforce-connector
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - SF_CLIENT_ID=${SF_CLIENT_ID}
+      - SF_CLIENT_SECRET=${SF_CLIENT_SECRET}
+      - SF_USERNAME=${SF_USERNAME}
+      - SF_PASSWORD=${SF_PASSWORD}
+      - SF_SECURITY_TOKEN=${SF_SECURITY_TOKEN}
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - POSTGRES_URL=postgresql://sfuser:sfpass@postgres:5432/sf_integration
+      - API_PORT=3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+      - rabbitmq
+      - postgres
+    networks:
+      - sf-network
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Background worker for async jobs
+  sf-worker:
+    build: .
+    container_name: salesforce-worker
+    restart: unless-stopped
+    command: npm run worker
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - POSTGRES_URL=postgresql://sfuser:sfpass@postgres:5432/sf_integration
+    depends_on:
+      - redis
+      - rabbitmq
+      - postgres
+    networks:
+      - sf-network
+
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    container_name: sf-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - sf-network
+
+  # RabbitMQ message queue
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: sf-rabbitmq
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-admin123}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - sf-network
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: sf-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=sfuser
+      - POSTGRES_PASSWORD=sfpass
+      - POSTGRES_DB=sf_integration
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - sf-network
+
+  # ML service for predictions
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    container_name: sf-ml-service
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=production
+      - MODEL_PATH=/models
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./models:/models
+    networks:
+      - sf-network
+
+networks:
+  sf-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  rabbitmq-data:
+  postgres-data:
