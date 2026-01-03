@@ -79,8 +79,8 @@ jobs:
       - name: 'Configure AWS for ${{ needs.detect-env.outputs.environment }}'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', needs.detect-env.outputs.environment)] }}
-          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', needs.detect-env.outputs.environment)] }}
+          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(needs.detect-env.outputs.environment))] }}
+          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(needs.detect-env.outputs.environment))] }}
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -200,8 +200,8 @@ jobs:
       - name: 'Configure AWS'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', needs.detect-env.outputs.environment)] }}
-          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', needs.detect-env.outputs.environment)] }}
+          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(needs.detect-env.outputs.environment))] }}
+          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(needs.detect-env.outputs.environment))] }}
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
       - name: 'Terraform Init & Plan'
         run: |
@@ -236,8 +236,8 @@ jobs:
       - name: 'Configure AWS'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', needs.detect-env.outputs.environment)] }}
-          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', needs.detect-env.outputs.environment)] }}
+          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(needs.detect-env.outputs.environment))] }}
+          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(needs.detect-env.outputs.environment))] }}
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
       - name: 'Terraform Init & Apply'
         run: |
@@ -336,8 +336,8 @@ jobs:
       - name: 'Configure AWS'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', needs.detect-env.outputs.environment)] }}
-          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', needs.detect-env.outputs.environment)] }}
+          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(needs.detect-env.outputs.environment))] }}
+          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(needs.detect-env.outputs.environment))] }}
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
       - name: 'Terraform Destroy'
         run: |
