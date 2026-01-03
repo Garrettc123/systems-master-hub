@@ -2,10 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install fastapi uvicorn aiohttp pydantic
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY orchestrator.py .
-
-EXPOSE 8302
 
 CMD ["python", "orchestrator.py"]

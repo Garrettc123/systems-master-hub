@@ -1,0 +1,4 @@
+aiohttp==3.9.1
+aiofiles==23.2.1
+pydantic==2.5.3
+python-dotenv==1.0.0
