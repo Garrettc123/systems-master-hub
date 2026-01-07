@@ -1,0 +1,188 @@
+# Zero-Human Platform - Security & Configuration
+# Production settings with credential protection and rate limiting
+
+version: "1.0.0"
+last_updated: "2026-01-06T23:17:00Z"
+environment: "production"
+
+# Credential Management
+credentials:
+  github:
+    auth_method: "ssh_preferred"  # Use SSH, not token
+    token_storage: "env_only"     # Never store in files
+    fallback: "https_with_token"  # Only if SSH unavailable
+    warning: "SSH is more secure. Generate key: ssh-keygen -t ed25519"
+  
+  email:
+    sender_verification: "required"
+    spf_record: "must_be_set"
+    dkim_signature: "enabled"
+    dmarc_policy: "p=quarantine"
+  
+  stripe:
+    api_key_storage: "env_only"
+    webhook_signature: "required"
+    rate_limit: "100 per minute"
+
+# Security Features
+security:
+  authentication:
+    method: "credential_manager"
+    fallback: "environment_variables"
+    never_hardcode: true
+  
+  encryption:
+    at_rest: "AES-256"
+    in_transit: "TLS 1.3"
+  
+  audit_logging:
+    enabled: true
+    retention_days: 90
+    sensitive_fields_masked: true
+  
+  rate_limiting:
+    github_api: "60 per hour"
+    email_sends: "100 per day per domain"
+    stripe_webhooks: "1000 per minute"
+    dns_queries: "100 per minute"
+  
+  ip_filtering:
+    whitelist_enabled: false
+    allow_localhost: true
+    log_all_access: true
+
+# Compliance Settings
+compliance:
+  email:
+    can_spam: true
+    gdpr: true
+    casl: true
+    ccpa: true
+    unsubscribe_required: true
+    physical_address_required: true
+  
+  data_retention:
+    email_campaign_data: "30 days"
+    market_analysis: "90 days"
+    monitoring_logs: "30 days"
+    error_logs: "90 days"
+  
+  privacy:
+    personal_data_minimization: true
+    no_third_party_sharing: true
+    user_deletion: "on_request"
+
+# Deployment Settings
+deployment:
+  environment: "production"
+  parallelization: true
+  paths:
+    fast: "15_minutes"      # Market scanner + monitoring
+    complete: "45_minutes"  # GitHub sync + security
+    careful: "1_week"       # Email campaign + compliance
+  
+  health_checks: true
+  rollback_on_failure: true
+  notification_on_completion: true
+
+# Monitoring
+monitoring:
+  enabled: true
+  metrics:
+    - system_health
+    - email_delivery
+    - github_sync_status
+    - market_analysis_confidence
+    - error_rates
+  
+  alerts:
+    email_delivery_failure: "immediate"
+    github_api_errors: "immediate"
+    rate_limit_approaching: "warning"
+    compliance_violation: "immediate"
+  
+  logging:
+    level: "INFO"
+    format: "json"
+    destination: "file"
+    stdout_echo: true
+
+# Email Campaign - Compliance
+email_campaign:
+  compliance_review_required: true
+  templates_included: true
+  unsubscribe_mechanism: "double_opt"
+  
+  delivery:
+    method: "manual_verified"  # Not automated
+    wave_1: "5_emails_max"
+    wave_2: "10_emails_max"
+    wave_3: "unlocked_after_validation"
+    rate: "1_per_minute_minimum"
+  
+  followup:
+    first_followup: "day_3"
+    second_followup: "day_7"
+    max_followups: "2"
+  
+  tracking:
+    opens: "enabled"
+    clicks: "enabled"
+    replies: "manual_review"
+    bounce_handling: "auto_remove"
+
+# Market Scanning
+market_scanner:
+  analysis_frequency: "on_demand"
+  opportunities_tracked: "8+"
+  confidence_threshold: "0.7"
+  tam_validation: "external_sources"
+  update_frequency: "weekly"
+
+# GitHub Integration
+github_sync:
+  frequency: "on_demand"
+  repositories_max: "100"
+  credential_security: "ssh_preferred"
+  backup_enabled: true
+  integrity_check: "enabled"
+
+# Feature Flags
+features:
+  market_scanning: true
+  github_sync: true
+  email_campaign: true
+  monitoring: true
+  autonomous_upgrades: false  # Requires manual approval
+  self_evolution: false       # Requires manual review
+
+# Safety Gates
+safety:
+  human_approval_required_for:
+    - email_campaign_wave_2
+    - email_campaign_wave_3
+    - autonomous_code_execution
+    - credential_rotation
+    - rate_limit_changes
+  
+  automatic_safeguards:
+    - credential_expiration: "90_days"
+    - backup_before_changes: true
+    - integrity_verification: true
+    - error_isolation: true
+
+# Success Metrics
+metrics:
+  market_scan_accuracy: "85%+"
+  github_sync_success: "95%+"
+  email_delivery_rate: "95%+"
+  system_uptime: "99.5%+"
+  compliance_violations: "0"
+
+# Documentation
+docs:
+  architecture: "./docs/ARCHITECTURE.md"
+  deployment: "./docs/DEPLOYMENT.md"
+  security: "./docs/SECURITY.md"
+  compliance: "./docs/COMPLIANCE.md"
+  troubleshooting: "./docs/TROUBLESHOOTING.md"
