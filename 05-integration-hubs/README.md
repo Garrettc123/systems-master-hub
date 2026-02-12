@@ -398,8 +398,8 @@ Located in: `10-monitoring-observability/grafana/dashboards/integration-hubs/`
 
 ## Documentation
 
-- **API Gateway:** `./api-gateway/README.md` (to be created)
-- **Salesforce Integration:** `./salesforce-einstein/SPECIFICATION.md` ✅
+- **API Gateway:** [`./api-gateway/README.md`](./api-gateway/README.md) ✅
+- **Salesforce Integration:** [`./salesforce-einstein/SPECIFICATION.md`](./salesforce-einstein/SPECIFICATION.md) ✅
 - **Tree of Life:** Repository `/docs`
 - **Unified Platform:** Repository `/docs`
 - **API Reference:** OpenAPI/Swagger at `/docs` endpoint

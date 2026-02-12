@@ -369,7 +369,7 @@ Located in: `10-monitoring-observability/grafana/dashboards/automation/`
 - **AI Ops Studio:** Repository `/docs`
 - **Process Copilot:** Repository `/docs`
 - **Zero-Human Grid:** Repository `/docs`
-- **Hypervelocity:** `./hypervelocity-orchestrator/README.md` (to be created)
+- **Hypervelocity:** [`./hypervelocity-orchestrator/README.md`](./hypervelocity-orchestrator/README.md) ✅
 - **API Reference:** `/docs/api/`
 
 ## Support
