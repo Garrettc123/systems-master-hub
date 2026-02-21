@@ -1,7 +1,5 @@
-version: '3.8'
-
 # Omnibus Docker Compose - All Enterprise Systems
-# Run with: docker-compose up -d or make omni
+# Run with: docker compose up -d or make omni
 
 networks:
   enterprise-net:

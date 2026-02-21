@@ -1,5 +1,8 @@
 .PHONY: all setup build run clean omni omni-status omni-logs omni-stop
 
+# Docker Compose command (supports both v1 and v2)
+DOCKER_COMPOSE := $(shell command -v docker-compose 2> /dev/null || echo "docker compose")
+
 all: setup build run
 
 # 🚀 Omnibus deployment - Run ALL systems
@@ -10,7 +13,7 @@ omni:
 # Check status of all omnibus services
 omni-status:
 	@echo "📊 Omnibus Service Status:"
-	@docker-compose ps
+	@$(DOCKER_COMPOSE) ps
 	@echo ""
 	@echo "📈 System Resources:"
 	@docker stats --no-stream
@@ -18,12 +21,12 @@ omni-status:
 # View logs from all omnibus services
 omni-logs:
 	@echo "📝 Omnibus Service Logs:"
-	docker-compose logs -f --tail=100
+	$(DOCKER_COMPOSE) logs -f --tail=100
 
 # Stop all omnibus services
 omni-stop:
 	@echo "🛑 Stopping Omnibus Services..."
-	docker-compose down
+	$(DOCKER_COMPOSE) down
 	@echo "✅ All omnibus services stopped"
 
 setup:
@@ -33,21 +36,21 @@ setup:
 
 build:
 	@echo "🏗️  Building All Systems..."
-	docker-compose build
+	$(DOCKER_COMPOSE) build
 	@echo "✅ Build complete"
 
 run:
 	@echo "🚀 Launching Ecosystem..."
-	docker-compose up -d
+	$(DOCKER_COMPOSE) up -d
 	@echo "✅ All systems running"
 	@echo "📊 Dashboard: http://localhost:8080"
 	@echo "🌐 Portfolio: http://localhost:80"
 
 stop:
 	@echo "🛑 Stopping Ecosystem..."
-	docker-compose down
+	$(DOCKER_COMPOSE) down
 
 clean:
 	@echo "🧹 Cleaning up..."
-	docker-compose down -v
+	$(DOCKER_COMPOSE) down -v
 	git submodule foreach git clean -fdx

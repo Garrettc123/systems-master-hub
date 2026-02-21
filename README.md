@@ -2,6 +2,31 @@
 
 This repository now contains the **Master Architecture** for all 91 systems, organized into a clean, deployable structure.
 
+## 🚀 Quick Start - Run Everything (Omnibus)
+
+**NEW:** Run the entire enterprise ecosystem with one command!
+
+```bash
+make omni
+```
+
+This launches:
+- 🤖 AI/ML Systems (APEX, MLOps)
+- ⛓️ Blockchain (AUTOHELIX, Stablecoin)
+- 🏢 Enterprise Platforms
+- 📊 Monitoring Stack (Prometheus, Grafana, ELK, Jaeger)
+- 🗄️ Data Infrastructure (PostgreSQL, Redis)
+
+**Documentation:** See [OMNI-README.md](./OMNI-README.md) for complete details.
+
+**Quick Commands:**
+```bash
+make omni         # Deploy everything
+make omni-status  # Check service status
+make omni-logs    # View logs
+make omni-stop    # Stop all services
+```
+
 ## 📂 New Folder Structure
 
 ```

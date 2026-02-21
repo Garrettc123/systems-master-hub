@@ -77,7 +77,7 @@ log "\n${MAGENTA}═══ PHASE 1: Pre-flight Checks ═══${NC}"
 
 # Check for required tools
 info "Checking required tools..."
-REQUIRED_TOOLS=("docker" "docker-compose" "git" "make")
+REQUIRED_TOOLS=("docker" "docker compose" "git" "make")
 MISSING_TOOLS=()
 
 for tool in "${REQUIRED_TOOLS[@]}"; do
@@ -158,11 +158,11 @@ fi
 log "\n${MAGENTA}═══ PHASE 4: Build Docker Images ═══${NC}"
 
 info "Building all Docker images..."
-if [ -f docker-compose.yml ]; then
-    docker-compose build --parallel 2>&1 | tee -a "$LOG_FILE" || warn "Some images failed to build"
+if [ -f docker compose.yml ]; then
+    docker compose build --parallel 2>&1 | tee -a "$LOG_FILE" || warn "Some images failed to build"
     success "Docker images built"
 else
-    warn "No docker-compose.yml found, skipping Docker build"
+    warn "No docker compose.yml found, skipping Docker build"
 fi
 
 ################################################################################
@@ -205,9 +205,9 @@ success "Monitoring configuration created"
 
 log "\n${MAGENTA}═══ PHASE 6: Launch All Services ═══${NC}"
 
-info "Starting all services with docker-compose..."
-if [ -f docker-compose.yml ]; then
-    docker-compose up -d 2>&1 | tee -a "$LOG_FILE" || error "Failed to start some services"
+info "Starting all services with docker compose..."
+if [ -f docker compose.yml ]; then
+    docker compose up -d 2>&1 | tee -a "$LOG_FILE" || error "Failed to start some services"
     success "Services launched"
 
     # Wait for services to be healthy
@@ -216,9 +216,9 @@ if [ -f docker-compose.yml ]; then
 
     # Check service status
     info "Checking service status..."
-    docker-compose ps | tee -a "$LOG_FILE"
+    docker compose ps | tee -a "$LOG_FILE"
 else
-    warn "No docker-compose.yml found, skipping service launch"
+    warn "No docker compose.yml found, skipping service launch"
 fi
 
 ################################################################################
@@ -275,8 +275,8 @@ check_endpoint() {
 
 # Check Docker services
 info "Checking Docker service health..."
-RUNNING_SERVICES=$(docker-compose ps --services --filter "status=running" 2>/dev/null | wc -l)
-TOTAL_SERVICES=$(docker-compose ps --services 2>/dev/null | wc -l)
+RUNNING_SERVICES=$(docker compose ps --services --filter "status=running" 2>/dev/null | wc -l)
+TOTAL_SERVICES=$(docker compose ps --services 2>/dev/null | wc -l)
 
 if [ "$TOTAL_SERVICES" -gt 0 ]; then
     log "Services running: $RUNNING_SERVICES/$TOTAL_SERVICES"
@@ -326,17 +326,17 @@ cat > "$REPORT_FILE" << EOF
 
 ## Next Steps
 
-1. Verify all services are running: \`docker-compose ps\`
-2. Check logs: \`docker-compose logs -f\`
+1. Verify all services are running: \`docker compose ps\`
+2. Check logs: \`docker compose logs -f\`
 3. Access monitoring: http://localhost:3000 (Grafana)
 4. Access API: http://localhost:8000
 
 ## Troubleshooting
 
 If services fail to start:
-- Check logs: \`docker-compose logs [service-name]\`
-- Restart: \`docker-compose restart [service-name]\`
-- Rebuild: \`docker-compose build [service-name]\`
+- Check logs: \`docker compose logs [service-name]\`
+- Restart: \`docker compose restart [service-name]\`
+- Rebuild: \`docker compose build [service-name]\`
 
 EOF
 
@@ -370,10 +370,10 @@ echo -e "   ${GREEN}•${NC} Tree of Life:     http://localhost:8080"
 echo -e "   ${GREEN}•${NC} Portfolio:        http://localhost:80"
 echo ""
 echo -e "${BLUE}🚀 Quick Commands:${NC}"
-echo -e "   ${YELLOW}•${NC} View status:      docker-compose ps"
-echo -e "   ${YELLOW}•${NC} View logs:        docker-compose logs -f"
-echo -e "   ${YELLOW}•${NC} Stop all:         docker-compose down"
-echo -e "   ${YELLOW}•${NC} Restart all:      docker-compose restart"
+echo -e "   ${YELLOW}•${NC} View status:      docker compose ps"
+echo -e "   ${YELLOW}•${NC} View logs:        docker compose logs -f"
+echo -e "   ${YELLOW}•${NC} Stop all:         docker compose down"
+echo -e "   ${YELLOW}•${NC} Restart all:      docker compose restart"
 echo ""
 echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"
 echo ""
