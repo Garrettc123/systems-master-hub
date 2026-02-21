@@ -1,46 +1,323 @@
 version: '3.8'
 
+# Omnibus Docker Compose - All Enterprise Systems
+# Run with: docker-compose up -d or make omni
+
+networks:
+  enterprise-net:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  elasticsearch-data:
+  redis-data:
+  postgres-data:
+
 services:
-  # 🤖 AI SYSTEMS
+  # ═══════════════════════════════════════════════════════════════
+  # 🤖 AI & ML SYSTEMS
+  # ═══════════════════════════════════════════════════════════════
+
   apex-os:
     image: garrettc123/apex-os:latest
     build: ./ai-systems/APEX-Universal-AI-Operating-System
-    restart: always
+    container_name: apex-os
+    restart: unless-stopped
     environment:
       - ENV=production
+      - LOG_LEVEL=info
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   mlops-platform:
     image: garrettc123/mlops:latest
     build: ./ai-systems/enterprise-mlops-platform
-    restart: always
+    container_name: mlops-platform
+    restart: unless-stopped
+    environment:
+      - ENV=production
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # ⛓️ BLOCKCHAIN SYSTEMS
+  # ═══════════════════════════════════════════════════════════════
+  # ⛓️ BLOCKCHAIN & PROTOCOL SYSTEMS
+  # ═══════════════════════════════════════════════════════════════
+
   stablecoin-api:
     image: garrettc123/stablecoin:latest
     build: ./blockchain/stablecoin-protocol
+    container_name: stablecoin-api
+    restart: unless-stopped
     ports:
       - "3000:3000"
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   autohelix-node:
     image: garrettc123/autohelix:latest
     build: ./blockchain/autohelix
+    container_name: autohelix-node
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # 🏢 ENTERPRISE SYSTEMS
+  # ═══════════════════════════════════════════════════════════════
+  # 🏢 ENTERPRISE & BUSINESS SYSTEMS
+  # ═══════════════════════════════════════════════════════════════
+
   unified-platform:
     image: garrettc123/unified-platform:latest
     build: ./enterprise/enterprise-unified-platform
+    container_name: unified-platform
+    restart: unless-stopped
     ports:
       - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://enterprise:enterprise@postgres:5432/enterprise
+      - REDIS_URL=redis://redis:6379
+    networks:
+      - enterprise-net
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   tree-of-life:
     image: garrettc123/tree-of-life:latest
     build: ./enterprise/tree-of-life-system
+    container_name: tree-of-life
+    restart: unless-stopped
     ports:
       - "8080:8080"
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # 🌐 WEB FRONTENDS
+  # ═══════════════════════════════════════════════════════════════
+  # 🌐 WEB & FRONTEND SYSTEMS
+  # ═══════════════════════════════════════════════════════════════
+
   portfolio:
     image: garrettc123/portfolio:latest
     build: ./web/portfolio-website
+    container_name: portfolio
+    restart: unless-stopped
     ports:
       - "80:80"
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ═══════════════════════════════════════════════════════════════
+  # 📊 MONITORING & OBSERVABILITY STACK
+  # ═══════════════════════════════════════════════════════════════
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./10-monitoring-observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - enterprise-net
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: kibana
+    restart: unless-stopped
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_NAME=kibana
+    networks:
+      - enterprise-net
+    depends_on:
+      - elasticsearch
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5601/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    restart: unless-stopped
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:14269/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ═══════════════════════════════════════════════════════════════
+  # 🗄️ DATA INFRASTRUCTURE
+  # ═══════════════════════════════════════════════════════════════
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=enterprise
+      - POSTGRES_PASSWORD=enterprise
+      - POSTGRES_DB=enterprise
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U enterprise"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ═══════════════════════════════════════════════════════════════
+  # 🌐 API GATEWAY (Optional - if building locally)
+  # ═══════════════════════════════════════════════════════════════
+
+  # api-gateway:
+  #   build: ./05-integration-hubs/api-gateway
+  #   container_name: api-gateway
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8001:8000"
+  #   environment:
+  #     - ENV=production
+  #   networks:
+  #     - enterprise-net
+  #   depends_on:
+  #     - redis
+  #     - prometheus
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3

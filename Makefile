@@ -1,6 +1,30 @@
-.PHONY: all setup build run clean
+.PHONY: all setup build run clean omni omni-status omni-logs omni-stop
 
 all: setup build run
+
+# 🚀 Omnibus deployment - Run ALL systems
+omni:
+	@echo "🚀 Starting Omnibus Deployment..."
+	./run-all-omni.sh
+
+# Check status of all omnibus services
+omni-status:
+	@echo "📊 Omnibus Service Status:"
+	@docker-compose ps
+	@echo ""
+	@echo "📈 System Resources:"
+	@docker stats --no-stream
+
+# View logs from all omnibus services
+omni-logs:
+	@echo "📝 Omnibus Service Logs:"
+	docker-compose logs -f --tail=100
+
+# Stop all omnibus services
+omni-stop:
+	@echo "🛑 Stopping Omnibus Services..."
+	docker-compose down
+	@echo "✅ All omnibus services stopped"
 
 setup:
 	@echo "📦 Initializing Ecosystem..."
