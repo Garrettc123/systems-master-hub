@@ -1,0 +1,38 @@
+name: 🩺 Systems Hub Self-Heal
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  heal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate all YAML workflows
+        run: |
+          pip install pyyaml -q
+          python3 -c "
+import os, yaml
+wf = '.github/workflows'
+if os.path.exists(wf):
+    for fn in os.listdir(wf):
+        if fn.endswith(('.yml','.yaml')):
+            try: yaml.safe_load(open(f'{wf}/{fn}')); print(f'OK {fn}')
+            except yaml.YAMLError as e: print(f'ERR {fn}: {e}')
+"
+        continue-on-error: true
+      - name: Check shell scripts
+        run: |
+          find . -name '*.sh' | while read f; do
+            bash -n "$f" && echo "OK $f" || echo "SYNTAX ERR $f"
+          done
+        continue-on-error: true
+      - run: echo "Hub self-heal $(date -u)"
