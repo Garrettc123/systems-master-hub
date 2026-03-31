@@ -39,8 +39,8 @@ jobs:
       - name: 'Configure AWS Credentials'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(github.event.inputs.environment))] }}
-          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(github.event.inputs.environment))] }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       - name: 'Setup Terraform'
         uses: hashicorp/setup-terraform@v3
@@ -51,7 +51,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: 'Setup Python'
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: echo "✅ Environment initialized at ${{ steps.timestamp.outputs.timestamp }}"
@@ -97,7 +97,7 @@ jobs:
                 - uses: actions/setup-node@v4
                   with:
                     node-version: '18'
-                - uses: actions/setup-python@v4
+                - uses: actions/setup-python@v5
                   with:
                     python-version: '3.11'
                 - run: |
@@ -159,8 +159,8 @@ jobs:
       - name: 'Configure AWS'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(github.event.inputs.environment))] }}
-          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(github.event.inputs.environment))] }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       - name: 'Terraform Init'
         run: |
@@ -214,8 +214,8 @@ jobs:
       - name: 'Configure AWS'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(github.event.inputs.environment))] }}
-          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(github.event.inputs.environment))] }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       - name: 'Terraform Init'
         run: cd terraform && terraform init -upgrade
@@ -339,8 +339,8 @@ jobs:
       - name: 'Configure AWS'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(github.event.inputs.environment))] }}
-          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(github.event.inputs.environment))] }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
       - name: 'Rollback Terraform'
         run: |
