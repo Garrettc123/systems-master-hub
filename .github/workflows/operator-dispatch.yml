@@ -1,0 +1,268 @@
+name: Operator - Manual Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - validate-all
+          - inventory-report
+          - check-external-repos
+          - security-scan
+          - dry-run-deploy
+
+jobs:
+  # ─── Validate all configs and scripts ───────────────────────────
+  validate-all:
+    name: Validate entire hub
+    if: inputs.action == 'validate-all'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: YAML validation
+        run: |
+          pip install pyyaml -q
+          TOTAL=0; PASS=0; FAIL=0
+          for f in $(find . -name '*.yml' -o -name '*.yaml' | grep -v '.git/' | sort); do
+            TOTAL=$((TOTAL+1))
+            python3 -c "import yaml; yaml.safe_load(open('$f'))" 2>/dev/null \
+              && { echo "OK  $f"; PASS=$((PASS+1)); } \
+              || { echo "ERR $f"; FAIL=$((FAIL+1)); }
+          done
+          echo ""
+          echo "=== YAML Results: $PASS/$TOTAL passed, $FAIL failed ==="
+          [ "$FAIL" -eq 0 ] || exit 1
+
+      - name: Shell script validation
+        run: |
+          TOTAL=0; PASS=0; FAIL=0
+          while IFS= read -r f; do
+            TOTAL=$((TOTAL+1))
+            bash -n "$f" 2>/dev/null \
+              && { echo "OK  $f"; PASS=$((PASS+1)); } \
+              || { echo "ERR $f"; FAIL=$((FAIL+1)); }
+          done < <(find . -name '*.sh' -not -path './.git/*')
+          echo ""
+          echo "=== Shell Results: $PASS/$TOTAL passed, $FAIL failed ==="
+          [ "$FAIL" -eq 0 ] || exit 1
+
+      - name: JSON validation
+        run: |
+          TOTAL=0; PASS=0; FAIL=0
+          for f in $(find . -name '*.json' -not -path './.git/*' -not -path './node_modules/*' | sort); do
+            TOTAL=$((TOTAL+1))
+            python3 -c "import json; json.load(open('$f'))" 2>/dev/null \
+              && { echo "OK  $f"; PASS=$((PASS+1)); } \
+              || { echo "ERR $f"; FAIL=$((FAIL+1)); }
+          done
+          echo ""
+          echo "=== JSON Results: $PASS/$TOTAL passed, $FAIL failed ==="
+
+      - name: Docker Compose validation
+        run: |
+          for f in $(find . -name 'docker-compose*.yml' -not -path './.git/*' | sort); do
+            echo "--- $f ---"
+            docker compose -f "$f" config --quiet 2>/dev/null \
+              && echo "OK  $f" \
+              || echo "WARN $f (build contexts unavailable in CI)"
+          done
+
+  # ─── Generate inventory report ──────────────────────────────────
+  inventory-report:
+    name: Generate inventory report
+    if: inputs.action == 'inventory-report'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Hub inventory report
+        run: |
+          echo "============================================"
+          echo " SYSTEMS MASTER HUB — INVENTORY REPORT"
+          echo " Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "============================================"
+          echo ""
+
+          echo "--- Workflows ---"
+          ls -1 .github/workflows/*.yml 2>/dev/null | wc -l | xargs -I{} echo "  Total: {}"
+          for f in .github/workflows/*.yml; do
+            name=$(grep -m1 '^name:' "$f" | sed 's/^name:\s*//')
+            echo "  - $(basename $f): $name"
+          done
+
+          echo ""
+          echo "--- Shell Scripts ---"
+          find . -name '*.sh' -not -path './.git/*' | wc -l | xargs -I{} echo "  Total: {}"
+          find . -name '*.sh' -not -path './.git/*' -exec echo "  - {}" \;
+
+          echo ""
+          echo "--- Docker Compose Files ---"
+          find . -name 'docker-compose*.yml' -not -path './.git/*' -exec echo "  - {}" \;
+
+          echo ""
+          echo "--- Documentation ---"
+          find . -name '*.md' -not -path './.git/*' | wc -l | xargs -I{} echo "  Total: {}"
+
+          echo ""
+          echo "--- Systems Inventory ---"
+          python3 -c "
+          import json
+          inv = json.load(open('SYSTEMS-INVENTORY.json'))
+          ov = inv.get('overview', {})
+          print(f'  Owner:        {ov.get(\"owner\", \"N/A\")}')
+          print(f'  Total repos:  {ov.get(\"total_repositories\", \"N/A\")}')
+          print(f'  Public:       {ov.get(\"public_repos\", \"N/A\")}')
+          print(f'  Private:      {ov.get(\"private_repos\", \"N/A\")}')
+          print(f'  Production:   {ov.get(\"production_systems\", \"N/A\")}')
+          cats = inv.get('categories', {})
+          for cat, systems in cats.items():
+            print(f'  [{cat}]: {len(systems)} system(s)')
+          "
+
+          echo ""
+          echo "--- Directory Structure ---"
+          find . -maxdepth 1 -type d -not -name '.' -not -name '.git' -not -name '.claude' | sort | sed 's|./|  |'
+
+      - name: Upload report
+        run: echo "Report printed to job log above"
+
+  # ─── Check external repo accessibility ──────────────────────────
+  check-external-repos:
+    name: Check external repo accessibility
+    if: inputs.action == 'check-external-repos'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check GitHub repos from inventory
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Checking repos listed in SYSTEMS-INVENTORY.json..."
+          TOTAL=0; ACCESSIBLE=0; FAILED=0
+
+          python3 -c "
+          import json
+          inv = json.load(open('SYSTEMS-INVENTORY.json'))
+          for cat in inv.get('categories', {}).values():
+            for sys in cat.values():
+              url = sys.get('repo_url', '')
+              if url: print(url)
+          " | sort -u | while read url; do
+            TOTAL=$((TOTAL+1))
+            repo=$(echo "$url" | sed 's|https://github.com/||')
+            if gh repo view "$repo" --json name -q '.name' >/dev/null 2>&1; then
+              echo "OK  $repo"
+              ACCESSIBLE=$((ACCESSIBLE+1))
+            else
+              echo "ERR $repo (not accessible or private)"
+              FAILED=$((FAILED+1))
+            fi
+          done
+
+          echo ""
+          echo "Done. See results above."
+
+  # ─── Security scan ──────────────────────────────────────────────
+  security-scan:
+    name: Run security scan
+    if: inputs.action == 'security-scan'
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan for hardcoded secrets
+        run: |
+          echo "Scanning for potential secret patterns..."
+          PATTERNS='(AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{48}|ghp_[a-zA-Z0-9]{36}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)'
+          HITS=$(grep -rEn "$PATTERNS" --include='*.sh' --include='*.yml' --include='*.yaml' --include='*.py' --include='*.json' . 2>/dev/null | grep -v '.git/' | grep -v 'node_modules/' || true)
+          if [ -n "$HITS" ]; then
+            echo "::warning::Potential secrets found in the following files:"
+            echo "$HITS" | sed 's/:.*//' | sort -u
+            echo ""
+            echo "Review these files and rotate any exposed credentials."
+          else
+            echo "No obvious secret patterns found."
+          fi
+
+      - name: Check for sensitive files
+        run: |
+          echo "Checking for sensitive files that should not be committed..."
+          SENSITIVE=(.env .env.local .env.production credentials.json service-account.json id_rsa id_ed25519)
+          for pat in "${SENSITIVE[@]}"; do
+            FOUND=$(find . -name "$pat" -not -path './.git/*' 2>/dev/null)
+            if [ -n "$FOUND" ]; then
+              echo "::warning::Sensitive file found: $FOUND"
+            fi
+          done
+          echo "Sensitive file check complete."
+
+      - name: Workflow permissions audit
+        run: |
+          echo "Auditing workflow permissions..."
+          for f in .github/workflows/*.yml; do
+            perms=$(grep -A5 '^permissions:' "$f" 2>/dev/null | head -6)
+            triggers=$(grep -A3 '^on:' "$f" | head -4)
+            echo "--- $(basename $f) ---"
+            echo "  Triggers: $(echo "$triggers" | tr '\n' ' ')"
+            if [ -n "$perms" ]; then
+              echo "  Permissions: $(echo "$perms" | tr '\n' ' ')"
+            else
+              echo "  Permissions: default (broad)"
+            fi
+            echo ""
+          done
+
+  # ─── Dry-run deploy ─────────────────────────────────────────────
+  dry-run-deploy:
+    name: Dry-run deployment validation
+    if: inputs.action == 'dry-run-deploy'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate deployment prerequisites
+        run: |
+          echo "=== Deployment Dry Run ==="
+          echo ""
+
+          echo "1. Checking required files..."
+          for f in docker-compose.yml Makefile run-all-omni.sh; do
+            [ -f "$f" ] && echo "   OK  $f" || echo "   MISSING $f"
+          done
+
+          echo ""
+          echo "2. Checking script executability..."
+          for f in run-all-omni.sh verify-omni.sh; do
+            [ -x "$f" ] && echo "   OK  $f is executable" || echo "   WARN $f is not executable"
+          done
+
+          echo ""
+          echo "3. Docker Compose services..."
+          docker compose config --services 2>/dev/null | while read svc; do
+            echo "   - $svc"
+          done || echo "   WARN: could not list services"
+
+          echo ""
+          echo "4. Make targets..."
+          grep -E '^[a-zA-Z_-]+:' Makefile | sed 's/:.*//' | while read t; do
+            echo "   - make $t"
+          done
+
+          echo ""
+          echo "5. Secrets required for full deployment:"
+          echo "   - AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (per env)"
+          echo "   - AWS_REGION"
+          echo "   - VERCEL_TOKEN"
+          echo "   - SLACK_WEBHOOK"
+          echo "   - INFRACOST_API_KEY"
+          echo "   - PIXEL10_SSH_KEY, PIXEL10_IP, PIXEL10_SSH_PORT"
+          echo ""
+          echo "=== Dry run complete. No changes were made. ==="

@@ -60,57 +60,38 @@ jobs:
           ssh -i ~/.ssh/id_pixel10 \
             -p ${{ github.event.inputs.ssh_port }} \
             -o StrictHostKeyChecking=no \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} << 'EOF'
-          
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} 'bash -s' <<'EOF'
           set -e
           echo "Starting Pixel 10 LLM Deployment"
           echo ""
-          
-          # Step 1: Update packages
           echo "[1/5] Updating packages..."
           pkg update -y 2>/dev/null || true
           pkg install -y curl wget git openssl 2>/dev/null || true
-          
-          # Step 2: Install Ollama
           echo "[2/5] Installing Ollama..."
-          if ! command -v ollama &> /dev/null; then
+          if ! command -v ollama > /dev/null 2>&1; then
             curl -fsSL https://ollama.ai/install.sh | sh || true
           fi
-          
-          # Step 3: Download model
           echo "[3/5] Downloading llama3.2:3b model..."
           timeout 1800 ollama pull llama3.2:3b || echo "Model download started (may take time)"
-          
-          # Step 4: Start service
           echo "[4/5] Starting Ollama service..."
           nohup ollama serve > /tmp/ollama.log 2>&1 &
           sleep 3
-          
-          # Step 5: Verify
           echo "[5/5] Verifying service..."
           curl -s http://127.0.0.1:11434/api/ps > /dev/null && echo "Ollama is running" || echo "Ollama service is starting"
-          
           echo ""
           echo "Deployment complete!"
-          echo "Access at: http://${{ github.event.inputs.device_ip }}:11434"
-          
-EOF
+          EOF
       
       - name: Verify Deployment
         if: github.event.inputs.dry_run == 'false'
         run: |
           echo "Waiting for service to stabilize..."
           sleep 5
-          
           ssh -i ~/.ssh/id_pixel10 \
             -p ${{ github.event.inputs.ssh_port }} \
             -o StrictHostKeyChecking=no \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} << 'EOF'
-          
-          echo "Service Status:"
-          curl -s http://127.0.0.1:11434/api/ps 2>/dev/null | head -20 || echo "Service initializing..."
-          
-EOF
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            'echo "Service Status:" && curl -s http://127.0.0.1:11434/api/ps 2>/dev/null | head -20 || echo "Service initializing..."'
       
       - name: Summary
         if: always()
