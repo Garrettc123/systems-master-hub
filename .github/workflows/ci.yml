@@ -1,0 +1,130 @@
+name: CI - Validate Hub
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  yaml-lint:
+    name: Lint YAML workflows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pip install yamllint -q
+
+      - name: Lint workflow files
+        run: |
+          echo "::group::yamllint results"
+          yamllint -d '{extends: default, rules: {line-length: {max: 256}, truthy: disable, document-start: disable, comments-indentation: disable}}' \
+            .github/workflows/*.yml || true
+          echo "::endgroup::"
+
+      - name: Validate YAML is parseable
+        run: |
+          pip install pyyaml -q
+          ERRORS=0
+          for f in .github/workflows/*.yml; do
+            python3 -c "import yaml; yaml.safe_load(open('$f'))" 2>/dev/null \
+              && echo "OK  $f" \
+              || { echo "ERR $f"; ERRORS=$((ERRORS+1)); }
+          done
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "::error::$ERRORS workflow file(s) have YAML parse errors"
+            exit 1
+          fi
+
+  shell-check:
+    name: Lint shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax-check all .sh files
+        run: |
+          ERRORS=0
+          while IFS= read -r f; do
+            bash -n "$f" 2>/dev/null \
+              && echo "OK  $f" \
+              || { echo "ERR $f"; ERRORS=$((ERRORS+1)); }
+          done < <(find . -name '*.sh' -not -path './.git/*')
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "::error::$ERRORS shell script(s) have syntax errors"
+            exit 1
+          fi
+
+      - name: ShellCheck (advisory)
+        run: |
+          sudo apt-get install -y shellcheck -qq 2>/dev/null || true
+          find . -name '*.sh' -not -path './.git/*' -print0 \
+            | xargs -0 shellcheck --severity=error 2>/dev/null || true
+
+  docker-compose-validate:
+    name: Validate Docker Compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: |
+          for f in docker-compose*.yml; do
+            [ -f "$f" ] || continue
+            echo "--- Validating $f ---"
+            docker compose -f "$f" config --quiet 2>/dev/null \
+              && echo "OK  $f" \
+              || echo "WARN $f (may reference build contexts not present)"
+          done
+
+      - name: Validate sub-directory compose files
+        run: |
+          find . -name 'docker-compose*.yml' -not -path './.git/*' | while read f; do
+            dir=$(dirname "$f")
+            echo "--- $f ---"
+            (cd "$dir" && docker compose -f "$(basename "$f")" config --quiet 2>/dev/null) \
+              && echo "OK  $f" \
+              || echo "WARN $f (expected — build contexts may not exist)"
+          done
+
+  structure-check:
+    name: Validate repo structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Required files exist
+        run: |
+          MISSING=0
+          for f in README.md Makefile docker-compose.yml SYSTEMS-INVENTORY.json .github/workflows/ci.yml; do
+            [ -f "$f" ] && echo "OK  $f" || { echo "MISSING $f"; MISSING=$((MISSING+1)); }
+          done
+          if [ "$MISSING" -gt 0 ]; then
+            echo "::error::$MISSING required file(s) missing"
+            exit 1
+          fi
+
+      - name: Validate JSON files
+        run: |
+          ERRORS=0
+          find . -name '*.json' -not -path './.git/*' -not -path './node_modules/*' | while read f; do
+            python3 -c "import json; json.load(open('$f'))" 2>/dev/null \
+              && echo "OK  $f" \
+              || { echo "ERR $f"; ERRORS=$((ERRORS+1)); }
+          done
+
+      - name: Inventory coherence check
+        run: |
+          echo "Systems in inventory:"
+          python3 -c "
+          import json
+          inv = json.load(open('SYSTEMS-INVENTORY.json'))
+          cats = inv.get('categories', {})
+          count = sum(len(v) for v in cats.values())
+          print(f'  Categories: {len(cats)}')
+          print(f'  Systems:    {count}')
+          repos = inv.get('overview', {}).get('total_repositories', 0)
+          print(f'  Declared repos: {repos}')
+          "

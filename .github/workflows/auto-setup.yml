@@ -7,7 +7,7 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Create Config
         run: |
@@ -43,35 +43,27 @@ jobs:
           ssh -i ~/.ssh/pixel10_key \
             -p 8022 \
             -o StrictHostKeyChecking=no \
-            u0_a325@100.71.218.79 << 'DEPLOY'
-          
+            u0_a325@100.71.218.79 'bash -s' << 'DEPLOY'
           echo "===== PIXEL 10 LLM DEPLOYMENT ====="
           echo ""
-          
           echo "[1/5] Updating packages..."
           pkg update -y 2>/dev/null || true
           pkg install -y curl wget 2>/dev/null || true
-          
           echo "[2/5] Installing Ollama..."
-          if ! command -v ollama &> /dev/null; then
+          if ! command -v ollama > /dev/null 2>&1; then
             curl -fsSL https://ollama.ai/install.sh | sh 2>/dev/null || true
           fi
-          
           echo "[3/5] Pulling llama3.2:3b..."
           timeout 1800 ollama pull llama3.2:3b || echo "Download started"
-          
           echo "[4/5] Starting Ollama..."
           nohup ollama serve > /tmp/ollama.log 2>&1 &
           sleep 3
-          
           echo "[5/5] Verifying..."
           curl -s http://127.0.0.1:11434/api/ps 2>/dev/null | head -10 || echo "Service starting"
-          
           echo ""
           echo "===== DEPLOYMENT COMPLETE ====="
           echo "Access: http://100.71.218.79:11434"
-          
-DEPLOY
+          DEPLOY
       
       - name: Final Check
         run: |
