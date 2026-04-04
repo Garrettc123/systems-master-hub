@@ -1,0 +1,81 @@
+name: Self-Heal - Hub Health Check
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  heal:
+    name: Hub health check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate all YAML workflows
+        run: |
+          pip install pyyaml -q
+          ERRORS=0
+          for f in .github/workflows/*.yml; do
+            python3 -c "import yaml; yaml.safe_load(open('$f'))" 2>/dev/null \
+              && echo "OK  $(basename $f)" \
+              || { echo "ERR $(basename $f)"; ERRORS=$((ERRORS+1)); }
+          done
+          echo ""
+          echo "Workflow YAML check: $ERRORS error(s)"
+          [ "$ERRORS" -eq 0 ]
+
+      - name: Syntax-check shell scripts
+        run: |
+          ERRORS=0
+          while IFS= read -r f; do
+            bash -n "$f" 2>/dev/null \
+              && echo "OK  $f" \
+              || { echo "ERR $f"; ERRORS=$((ERRORS+1)); }
+          done < <(find . -name '*.sh' -not -path './.git/*')
+          echo ""
+          echo "Shell script check: $ERRORS error(s)"
+          [ "$ERRORS" -eq 0 ]
+
+      - name: Validate JSON files
+        run: |
+          ERRORS=0
+          for f in $(find . -name '*.json' -not -path './.git/*' -not -path './node_modules/*'); do
+            python3 -c "import json; json.load(open('$f'))" 2>/dev/null \
+              && echo "OK  $f" \
+              || { echo "ERR $f"; ERRORS=$((ERRORS+1)); }
+          done
+          echo ""
+          echo "JSON check: $ERRORS error(s)"
+
+      - name: Check required files
+        run: |
+          MISSING=0
+          for f in README.md Makefile docker-compose.yml SYSTEMS-INVENTORY.json; do
+            [ -f "$f" ] && echo "OK  $f" || { echo "MISSING $f"; MISSING=$((MISSING+1)); }
+          done
+          echo ""
+          if [ "$MISSING" -gt 0 ]; then
+            echo "::warning::$MISSING required file(s) missing"
+          fi
+
+      - name: Health summary
+        run: |
+          echo "============================================"
+          echo " Hub Health Check — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "============================================"
+          echo " Workflows: $(ls .github/workflows/*.yml | wc -l)"
+          echo " Scripts:   $(find . -name '*.sh' -not -path './.git/*' | wc -l)"
+          echo " Compose:   $(find . -name 'docker-compose*.yml' -not -path './.git/*' | wc -l)"
+          echo " Docs:      $(find . -name '*.md' -not -path './.git/*' | wc -l)"
+          echo "============================================"

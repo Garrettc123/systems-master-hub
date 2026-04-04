@@ -1,0 +1,95 @@
+name: Security - Org-Wide Scan
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # Weekly on Monday
+  workflow_dispatch:
+
+jobs:
+  codeql:
+    name: CodeQL analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, actions]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  secret-scan:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for hardcoded secrets
+        run: |
+          echo "=== Secret Pattern Scan ==="
+          PATTERNS='(AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{48}|ghp_[a-zA-Z0-9]{36}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)'
+          HITS=$(grep -rEn "$PATTERNS" \
+            --include='*.sh' --include='*.yml' --include='*.yaml' \
+            --include='*.py' --include='*.json' --include='*.md' \
+            . 2>/dev/null | grep -v '.git/' || true)
+          if [ -n "$HITS" ]; then
+            echo "::warning::Potential secrets detected. Review these locations:"
+            echo "$HITS" | head -20
+          else
+            echo "No obvious secret patterns found."
+          fi
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: ./
+          artifact-name: sbom.spdx.json
+        continue-on-error: true
+
+  permissions-audit:
+    name: Workflow permissions audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Audit workflow permissions
+        run: |
+          echo "=== Workflow Permissions Audit ==="
+          echo ""
+          for f in .github/workflows/*.yml; do
+            WF=$(basename "$f")
+            HAS_WRITE=$(grep -c 'contents: write' "$f" 2>/dev/null || echo 0)
+            HAS_DISPATCH=$(grep -c 'workflow_dispatch' "$f" 2>/dev/null || echo 0)
+            HAS_SCHEDULE=$(grep -c 'schedule:' "$f" 2>/dev/null || echo 0)
+            HAS_PUSH=$(grep -c 'push:' "$f" 2>/dev/null || echo 0)
+
+            FLAGS=""
+            [ "$HAS_WRITE" -gt 0 ] && FLAGS="${FLAGS} [write]"
+            [ "$HAS_DISPATCH" -gt 0 ] && FLAGS="${FLAGS} [dispatch]"
+            [ "$HAS_SCHEDULE" -gt 0 ] && FLAGS="${FLAGS} [scheduled]"
+            [ "$HAS_PUSH" -gt 0 ] && FLAGS="${FLAGS} [push]"
+
+            echo "  $WF:$FLAGS"
+          done

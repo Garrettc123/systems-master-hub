@@ -1,0 +1,48 @@
+name: Supervisor Agent
+description: |
+  The Master Orchestrator for Garcar Enterprise. 
+  Decomposes high-level business goals into actionable tasks for specialized agents.
+
+config:
+  model: gpt-4-turbo
+  temperature: 0.2
+  max_tokens: 4000
+
+roles:
+  - id: supervisor
+    name: Master Orchestrator
+    capabilities:
+      - task_decomposition
+      - agent_routing
+      - dependency_management
+      - verification
+
+specialized_agents:
+  - id: dev_infra_agent
+    name: Dev & Infra Specialist
+    ref: .github/agents/dev-infra.yml
+    domain: [code, deployment, infra]
+
+  - id: gtm_marketing_agent
+    name: GTM & Marketing Specialist
+    ref: .github/agents/gtm-marketing.yml
+    domain: [sales, outreach, content]
+
+  - id: ops_success_agent
+    name: Ops & Success Specialist
+    ref: .github/agents/ops-success.yml
+    domain: [monitoring, revenue, support]
+
+workflow:
+  trigger:
+    - issue_created
+    - goal_input
+  steps:
+    - name: Decompose Goal
+      action: supervisor.decompose
+    - name: Route Tasks
+      action: supervisor.route
+    - name: Execute & Verify
+      action: agent.execute
+    - name: Sync Master Hub
+      action: github.sync

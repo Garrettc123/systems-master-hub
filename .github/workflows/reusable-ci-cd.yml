@@ -1,0 +1,56 @@
+name: Reusable CI/CD Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      stack:
+        required: true
+        type: string
+      environment:
+        required: false
+        type: string
+        default: 'staging'
+
+jobs:
+  quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Environment
+        uses: actions/setup-node@v4
+        if: inputs.stack == 'node'
+        with:
+          node-version: '20'
+          
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        if: inputs.stack == 'python'
+        with:
+          python-version: '3.11'
+
+      - name: Run Linting
+        run: |
+          if [ "${{ inputs.stack }}" == "node" ]; then npm install && npm run lint; fi
+          if [ "${{ inputs.stack }}" == "python" ]; then pip install flake8 && flake8 .; fi
+
+  test:
+    name: Automated Testing
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Tests
+        run: |
+          if [ "${{ inputs.stack }}" == "node" ]; then npm test; fi
+          if [ "${{ inputs.stack }}" == "python" ]; then pip install pytest && pytest; fi
+
+  deploy:
+    name: Deployment
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy to ${{ inputs.environment }}
+        run: echo "Deploying system to ${{ inputs.environment }}..."

@@ -1,24 +1,12 @@
-name: 🚀 AUTO FULL STACK DEPLOY (Trigger on Every Push)
+name: Deploy - Full Stack (Manual)
 
 on:
-  push:
-    branches: [ main, master, develop ]
-    paths:
-      - 'terraform/**'
-      - 'api/**'
-      - 'src/**'
-      - 'scripts/**'
-      - '.github/workflows/**'
-  pull_request:
-    branches: [ main, master ]
-  schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
   workflow_dispatch:
     inputs:
       environment:
         description: 'Deployment environment'
         required: true
-        default: 'prod'
+        default: 'dev'
         type: choice
         options:
           - dev
@@ -29,58 +17,54 @@ env:
   TF_VERSION: '1.9.5'
   NODE_VERSION: '18'
   PYTHON_VERSION: '3.11'
-  AUTO_APPROVE: 'true'
 
 jobs:
   #############################################################################
   # PHASE 1: Auto-Detect Environment
   #############################################################################
   detect-env:
-    name: '🔍 Detect Environment'
+    name: 'Detect Environment'
     runs-on: ubuntu-latest
     outputs:
       environment: ${{ steps.detect.outputs.environment }}
-      auto_approve: ${{ steps.detect.outputs.auto_approve }}
     steps:
       - id: detect
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            ENV="${{ github.event.inputs.environment }}"
-            APPROVE="true"
-          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            ENV="prod"
-            APPROVE="true"
-          elif [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
-            ENV="prod"
-            APPROVE="true"
-          else
-            ENV="dev"
-            APPROVE="true"
-          fi
+          ENV="${{ github.event.inputs.environment }}"
           echo "environment=$ENV" >> $GITHUB_OUTPUT
-          echo "auto_approve=$APPROVE" >> $GITHUB_OUTPUT
-          echo "Detected: $ENV (auto_approve=$APPROVE)"
+          echo "Deploying to: $ENV"
 
   #############################################################################
   # PHASE 2: Initialize & Setup
   #############################################################################
   initialize:
-    name: '⚙️ Initialize Environment'
+    name: 'Initialize Environment'
     needs: detect-env
     runs-on: ubuntu-latest
     outputs:
       timestamp: ${{ steps.timestamp.outputs.timestamp }}
+      has_aws: ${{ steps.check-secrets.outputs.has_aws }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - id: timestamp
         run: echo "timestamp=$(date +%Y%m%d_%H%M%S)" >> $GITHUB_OUTPUT
-      - name: 'Configure AWS for ${{ needs.detect-env.outputs.environment }}'
+      - name: Check for AWS secrets
+        id: check-secrets
+        run: |
+          if [ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "has_aws=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_aws=false" >> $GITHUB_OUTPUT
+            echo "::warning::AWS secrets not configured — skipping AWS-dependent steps"
+          fi
+      - name: Configure AWS
+        if: steps.check-secrets.outputs.has_aws == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(needs.detect-env.outputs.environment))] }}
-          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(needs.detect-env.outputs.environment))] }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -88,12 +72,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: 'Verify AWS Access'
-        run: aws sts get-caller-identity
-      - run: echo "✅ ${{ needs.detect-env.outputs.environment }} environment ready"
+      - run: echo "${{ needs.detect-env.outputs.environment }} environment ready"
 
   #############################################################################
   # PHASE 3: Deploy Universal Workflows (13 Repos)
@@ -139,8 +121,8 @@ jobs:
                 - uses: actions/checkout@v4
                 - uses: actions/setup-node@v4
                   with:
-                    node-version: $${{ matrix.node-version }}
-                - uses: actions/setup-python@v4
+                    node-version: ${{ matrix.node-version }}
+                - uses: actions/setup-python@v5
                   with:
                     python-version: '3.11'
                 - run: |
@@ -167,77 +149,65 @@ jobs:
   # PHASE 4: Terraform Validation
   #############################################################################
   terraform-validate:
-    name: '🧸 Terraform Validation'
+    name: 'Terraform Validation'
     needs: initialize
+    if: needs.initialize.outputs.has_aws == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
-      - run: cd terraform && terraform init -upgrade 2>/dev/null || true
-      - run: cd terraform && terraform validate 2>/dev/null || true
+      - run: |
+          if [ -d terraform ]; then
+            cd terraform && terraform init -upgrade 2>/dev/null || true
+            terraform validate 2>/dev/null || true
+          else
+            echo "No terraform/ directory found — skipping"
+          fi
       - name: 'tfsec Security Scan'
+        if: hashFiles('terraform/*.tf') != ''
         uses: aquasecurity/tfsec-action@v1
         with:
           path: terraform/
         continue-on-error: true
-      - name: 'Checkov IaC Scan'
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: terraform/
-          framework: terraform
-        continue-on-error: true
 
-  #############################################################################
-  # PHASE 5: Terraform Plan
-  #############################################################################
   terraform-plan:
-    name: '📄 Terraform Plan'
+    name: 'Terraform Plan'
     needs: [initialize, terraform-validate, detect-env]
+    if: needs.initialize.outputs.has_aws == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
-      - name: 'Configure AWS'
+      - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(needs.detect-env.outputs.environment))] }}
-          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(needs.detect-env.outputs.environment))] }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
       - name: 'Terraform Init & Plan'
         run: |
           cd terraform
           terraform init -upgrade 2>/dev/null || true
           terraform plan -var="environment=${{ needs.detect-env.outputs.environment }}" -out=tfplan 2>/dev/null || true
-      - name: 'Infracost Estimation'
-        if: ${{ needs.detect-env.outputs.environment == 'prod' }}
-        uses: infracost/actions/infracost@latest
-        env:
-          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
-        with:
-          path: terraform/
-        continue-on-error: true
       - uses: actions/upload-artifact@v4
         with:
           name: tfplan-${{ needs.detect-env.outputs.environment }}
           path: terraform/tfplan
         continue-on-error: true
 
-  #############################################################################
-  # PHASE 6: Terraform Apply
-  #############################################################################
   terraform-apply:
-    name: '⚜️ Terraform Apply'
+    name: 'Terraform Apply'
     needs: [terraform-plan, detect-env]
+    if: needs.terraform-plan.result == 'success'
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' || github.event.inputs.auto_approve == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
-      - name: 'Configure AWS'
+      - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(needs.detect-env.outputs.environment))] }}
-          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(needs.detect-env.outputs.environment))] }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
       - name: 'Terraform Init & Apply'
         run: |
@@ -258,98 +228,43 @@ jobs:
   # PHASE 7: Vercel Deployment
   #############################################################################
   vercel-deploy:
-    name: '🚀 Vercel Deploy'
+    name: 'Vercel Deploy'
     needs: [initialize, detect-env]
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: 'Deploy to Vercel'
-        if: ${{ secrets.VERCEL_TOKEN != '' }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::warning::VERCEL_TOKEN not set — skipping Vercel deploy"
+            exit 0
+          fi
           npm install -g vercel
-          vercel --prod --token=${{ secrets.VERCEL_TOKEN }} 2>/dev/null || true
+          vercel --prod --token="$VERCEL_TOKEN" 2>/dev/null || true
         continue-on-error: true
 
-  #############################################################################
-  # PHASE 8: Notifications & Reports
-  #############################################################################
   finalize:
-    name: '📆 Reports & Notifications'
+    name: 'Reports & Summary'
     needs: [initialize, deploy-workflows, terraform-apply, vercel-deploy, detect-env]
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - uses: actions/checkout@v4
-      - name: 'Slack Success Notification'
-        if: ${{ success() && secrets.SLACK_WEBHOOK != '' }}
-        uses: 8398a7/action-slack@v3
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-        with:
-          status: success
-          text: |
-            ✅ FULL STACK AUTO-DEPLOYED
-            Env: ${{ needs.detect-env.outputs.environment }}
-            Repos: 13 ✓ | TF: ✓ | Vercel: ✓
-            Commit: ${{ github.sha }}
-            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      - name: 'Slack Failure Alert'
-        if: ${{ failure() && secrets.SLACK_WEBHOOK != '' }}
-        uses: 8398a7/action-slack@v3
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-        with:
-          status: failure
-          text: |
-            🚨 DEPLOYMENT FAILED
-            Env: ${{ needs.detect-env.outputs.environment }}
-            Check logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       - name: 'Generate Summary'
         run: |
-          echo "# 🚀 Full Stack Auto-Deploy Summary" >> $GITHUB_STEP_SUMMARY
+          echo "# Full Stack Deploy Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Environment**: ${{ needs.detect-env.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           echo "**Timestamp**: ${{ needs.initialize.outputs.timestamp }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- [x] Workflows deployed to 13 repos" >> $GITHUB_STEP_SUMMARY
-          echo "- [x] Terraform validated & applied" >> $GITHUB_STEP_SUMMARY
-          echo "- [x] Vercel functions deployed" >> $GITHUB_STEP_SUMMARY
-          echo "- [x] Notifications sent" >> $GITHUB_STEP_SUMMARY
-
-  #############################################################################
-  # PHASE 9: Auto-Rollback on Failure
-  #############################################################################
-  rollback:
-    name: '🔄 Auto-Rollback'
-    needs: [terraform-apply, detect-env]
-    runs-on: ubuntu-latest
-    if: ${{ failure() && needs.detect-env.outputs.environment == 'prod' }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-      - name: 'Configure AWS'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', upper(needs.detect-env.outputs.environment))] }}
-          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', upper(needs.detect-env.outputs.environment))] }}
-          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
-      - name: 'Terraform Destroy'
-        run: |
-          cd terraform
-          terraform init -upgrade 2>/dev/null || true
-          terraform destroy -auto-approve -var="environment=${{ needs.detect-env.outputs.environment }}" 2>/dev/null || true
-        continue-on-error: true
-      - name: 'Alert Rollback'
-        if: ${{ secrets.SLACK_WEBHOOK != '' }}
-        uses: 8398a7/action-slack@v3
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-        with:
-          status: failure
-          text: '🔄 AUTOMATIC ROLLBACK EXECUTED for ${{ needs.detect-env.outputs.environment }}'
+          echo "| Phase | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Initialize | ${{ needs.initialize.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy Workflows | ${{ needs.deploy-workflows.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Terraform Apply | ${{ needs.terraform-apply.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Vercel Deploy | ${{ needs.vercel-deploy.result }} |" >> $GITHUB_STEP_SUMMARY
