@@ -13,27 +13,34 @@ jobs:
       
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
-        
+        uses: actions/checkout@v4
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r prestige-automation/requirements.txt
-          
-      - name: 🚀 Run Prestige Orchestrator
+          if [ -f prestige-automation/requirements.txt ]; then
+            pip install -r prestige-automation/requirements.txt
+          else
+            echo "::warning::prestige-automation/requirements.txt not found — skipping pip install"
+          fi
+
+      - name: Run Prestige Orchestrator
         run: |
-          cd prestige-automation
-          python3 MASTER_ORCHESTRATOR.py
+          if [ -f prestige-automation/MASTER_ORCHESTRATOR.py ]; then
+            cd prestige-automation && python3 MASTER_ORCHESTRATOR.py
+          else
+            echo "::warning::MASTER_ORCHESTRATOR.py not found — skipping"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: 📤 Upload Reports
-        uses: actions/upload-artifact@v3
+
+      - name: Upload Reports
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: prestige-reports

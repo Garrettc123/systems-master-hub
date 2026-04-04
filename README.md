@@ -93,19 +93,54 @@ systems-master-hub/
 
 ---
 
-## 🛠️ Maintenance
+## GitHub Actions Workflows
 
-| Task | Command |
-|------|---------|
-| Initialize submodules | `make setup` |
-| Build all containers | `make build` |
-| Run all containers | `make run` |
-| Stop all containers | `make stop` |
-| View live status | `./status.sh` |
-| Trigger all deployments | `GITHUB_TOKEN=<token> ./master-deploy.sh` |
-| Sync shared docs | `GITHUB_TOKEN=<token> ./scripts/sync-docs.sh --apply` |
-| Update all submodules | `git submodule foreach git pull origin main` |
-| View container logs | `docker compose logs -f` |
+This hub uses GitHub Actions for CI, validation, packaging, security, and deployment orchestration.
+
+### Automated (run on push/PR/schedule)
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| **CI - Validate Hub** (`ci.yml`) | push, PR, dispatch | YAML lint, shell syntax check, Docker Compose validation, repo structure check |
+| **Build - Package Hub Artifacts** (`hub-build.yml`) | push (config paths), PR, dispatch | Validates compose/Makefile/monitoring configs; packages hub archive on main |
+| **Self-Heal - Hub Health Check** (`self-heal.yml`) | push, daily 7 AM, dispatch | Validates all YAML, shell scripts, JSON files; checks required files exist |
+| **Deploy - All Systems Status** (`auto-deploy-all-systems.yml`) | push, weekdays 9 AM, dispatch | Pre-flight checks, inventory report, repo accessibility, compose validation |
+| **CodeQL Advanced** (`codeql.yml`) | push, PR, weekly | Static analysis for Python and GitHub Actions |
+| **Security - Org-Wide Scan** (`org-security-scan.yml`) | weekly Monday, dispatch | CodeQL, secret scanning, SBOM generation, permissions audit |
+| **Auto-Merge Copilot PRs** (`auto-merge-copilot.yml`) | PR events, check suite | Auto-squash-merges ready PRs |
+
+### Manual Dispatch Only
+
+| Workflow | Purpose |
+|----------|---------|
+| **Operator - Manual Run** (`operator-dispatch.yml`) | Consolidated operator entrypoint: validate-all, inventory-report, check-external-repos, security-scan, dry-run-deploy |
+| **Full Stack Auto-Deploy** (`full-stack-deploy.yml`) | 49-step deployment: Terraform validate/plan/apply, Vercel deploy, notifications. Requires AWS + Vercel + Slack secrets. |
+| **Prestige Check** (`prestige-check.yml`) | Weekly quality check via Prestige orchestrator |
+| **Reusable CI/CD** (`reusable-ci-cd.yml`) | Callable workflow template for node/python stacks |
+| **Pixel 10 Deploy** (`deploy-pixel10.yml`, `pixel10-deploy.yml`) | Deploy Ollama LLM to Pixel 10 device |
+| **Zero-Human Deploy** (`zero-human-deploy.yml`) | Autonomous platform execution (3 paths) |
+| **Terraform** (`terraform.yml`) | Full Terraform pipeline with security scanning |
+
+### Secrets Required for Full Deployment
+
+These secrets are only needed for deployment workflows. CI and validation workflows run without any secrets.
+
+| Secret | Used By |
+|--------|---------|
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Terraform workflows (per environment: DEV_, STAGING_, PROD_) |
+| `AWS_REGION` | Terraform workflows |
+| `VERCEL_TOKEN` | Vercel deployment |
+| `SLACK_WEBHOOK` | Deployment notifications |
+| `INFRACOST_API_KEY` | Cost estimation |
+| `PIXEL10_SSH_KEY` / `PIXEL10_IP` / `PIXEL10_SSH_PORT` | Pixel 10 device deployment |
+
+## Maintenance
+
+- **Update all repos**: `git submodule foreach git pull origin main`
+- **View logs**: `docker-compose logs -f`
+- **Stop everything**: `make stop`
+- **Run full validation**: Go to Actions > "Operator - Manual Run" > select `validate-all`
+- **Generate inventory**: Go to Actions > "Operator - Manual Run" > select `inventory-report`
 
 ---
 

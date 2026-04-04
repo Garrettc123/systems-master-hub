@@ -22,7 +22,7 @@ jobs:
     name: Deploy to Pixel 10
     
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Pre-flight Check
         run: |
@@ -70,7 +70,7 @@ jobs:
           
       - name: Upload Report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deployment-report
           path: deployment-report.md
