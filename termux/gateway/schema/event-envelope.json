@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Source Gateway Event Envelope",
+  "description": "Normalized envelope for all source gateway events — cloud or edge origin",
+  "type": "object",
+  "required": ["schema_version", "event_id", "source", "category", "timestamp", "node_id", "payload"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Envelope schema version"
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this event (UUID v4)"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "web", "notion_mcp", "linear_alt", "github_mcp_direct",
+        "slack_direct", "vercel", "godaddy", "blockscout", "wix",
+        "stripe", "google_drive", "social", "gcal", "outlook",
+        "scholar", "device_telemetry", "ollama_status"
+      ],
+      "description": "Source identifier matching sources.json keys"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["cloud", "edge", "cloud_and_edge"],
+      "description": "Which plane originated this event"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the event was created"
+    },
+    "node_id": {
+      "type": "string",
+      "description": "Identifier of the edge node this event belongs to"
+    },
+    "payload": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Event type within the source (e.g. page_updated, deploy_completed)"
+        },
+        "data": {
+          "type": "object",
+          "description": "Source-specific event data (schema varies by source)"
+        }
+      },
+      "additionalProperties": true
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "adapter_version": {
+          "type": "string",
+          "description": "Version of the adapter that produced this event"
+        },
+        "polling_mode": {
+          "type": "string",
+          "enum": ["scheduled", "webhook", "local", "manual"],
+          "description": "How this event was triggered"
+        },
+        "ttl_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Time-to-live before this event can be garbage collected"
+        },
+        "retry_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of delivery retries (0 = first attempt)"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

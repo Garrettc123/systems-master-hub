@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "event_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+  "source": "device_telemetry",
+  "category": "edge",
+  "timestamp": "2026-04-05T14:30:00Z",
+  "node_id": "pixel10-edge",
+  "payload": {
+    "type": "system_snapshot",
+    "data": {
+      "battery_pct": 78,
+      "battery_status": "CHARGING",
+      "disk_free_gb": 47,
+      "disk_total_gb": 128,
+      "ip": "192.168.1.42",
+      "uptime": "3 days, 7:22",
+      "services": {
+        "sshd": true,
+        "crond": true
+      }
+    }
+  },
+  "metadata": {
+    "adapter_version": "1.0.0",
+    "polling_mode": "local",
+    "ttl_seconds": 86400
+  }
+}

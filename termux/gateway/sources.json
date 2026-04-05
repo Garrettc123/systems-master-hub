@@ -1,0 +1,180 @@
+{
+  "schema_version": "1.0",
+  "description": "Pixel 10 Source Gateway — Approved source manifest and polling configuration",
+  "node_id": "pixel10-edge",
+  "cloud_relay_url": "${CLOUD_RELAY_URL}",
+  "sources": {
+    "web": {
+      "enabled": true,
+      "plane": "cloud",
+      "mode": "poll",
+      "poll_interval_minutes": 60,
+      "description": "General web content via Perplexity search or scraping relay",
+      "cloud_adapter": "adapters/web.sh",
+      "secrets_required": ["PERPLEXITY_API_KEY"],
+      "notes": "Phone cannot run headless browsers; cloud relay fetches and normalizes"
+    },
+    "notion_mcp": {
+      "enabled": true,
+      "plane": "cloud",
+      "mode": "poll",
+      "poll_interval_minutes": 30,
+      "description": "Notion workspace pages and databases via MCP connector",
+      "cloud_adapter": "adapters/notion_mcp.sh",
+      "secrets_required": ["NOTION_MCP_TOKEN"],
+      "notes": "OAuth2 integration token; requires server-side MCP process"
+    },
+    "linear_alt": {
+      "enabled": true,
+      "plane": "cloud",
+      "mode": "poll",
+      "poll_interval_minutes": 15,
+      "description": "Linear issues and project tracking",
+      "cloud_adapter": "adapters/linear_alt.sh",
+      "secrets_required": ["LINEAR_API_KEY"],
+      "notes": "GraphQL API; phone can't maintain persistent auth session"
+    },
+    "github_mcp_direct": {
+      "enabled": true,
+      "plane": "cloud",
+      "mode": "webhook_and_poll",
+      "poll_interval_minutes": 15,
+      "description": "GitHub repos, PRs, issues, and Actions status via MCP",
+      "cloud_adapter": "adapters/github_mcp_direct.sh",
+      "secrets_required": ["GITHUB_PAT"],
+      "notes": "Webhook receiver on cloud; poll fallback for missed events"
+    },
+    "slack_direct": {
+      "enabled": true,
+      "plane": "cloud",
+      "mode": "webhook",
+      "poll_interval_minutes": null,
+      "description": "Slack messages and channel events via Events API",
+      "cloud_adapter": "adapters/slack_direct.sh",
+      "secrets_required": ["SLACK_BOT_TOKEN", "SLACK_SIGNING_SECRET"],
+      "notes": "Webhook-only; Slack requires a publicly routable endpoint"
+    },
+    "vercel": {
+      "enabled": true,
+      "plane": "cloud",
+      "mode": "poll",
+      "poll_interval_minutes": 30,
+      "description": "Vercel deployment status and project metadata",
+      "cloud_adapter": "adapters/vercel.sh",
+      "secrets_required": ["VERCEL_TOKEN"],
+      "notes": "REST API with bearer token auth"
+    },
+    "godaddy": {
+      "enabled": true,
+      "plane": "cloud",
+      "mode": "poll",
+      "poll_interval_minutes": 360,
+      "description": "Domain registration and DNS status",
+      "cloud_adapter": "adapters/godaddy.sh",
+      "secrets_required": ["GODADDY_API_KEY", "GODADDY_API_SECRET"],
+      "notes": "Low-frequency polling; domain status rarely changes"
+    },
+    "blockscout": {
+      "enabled": true,
+      "plane": "cloud_and_edge",
+      "mode": "poll",
+      "poll_interval_minutes": 360,
+      "description": "Blockchain explorer for on-chain transaction data",
+      "cloud_adapter": "adapters/blockscout.sh",
+      "edge_fallback": true,
+      "secrets_required": [],
+      "notes": "Public API; phone can hit read-only endpoints directly as fallback"
+    },
+    "wix": {
+      "enabled": true,
+      "plane": "cloud",
+      "mode": "poll",
+      "poll_interval_minutes": 360,
+      "description": "Wix site analytics and content data",
+      "cloud_adapter": "adapters/wix.sh",
+      "secrets_required": ["WIX_API_KEY"],
+      "notes": "REST API with API key auth"
+    },
+    "stripe": {
+      "enabled": true,
+      "plane": "cloud",
+      "mode": "webhook",
+      "poll_interval_minutes": null,
+      "description": "Payment events — charges, subscriptions, disputes",
+      "cloud_adapter": "adapters/stripe.sh",
+      "secrets_required": ["STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET"],
+      "notes": "Webhook-primary; restricted key scoped to read-only events"
+    },
+    "google_drive": {
+      "enabled": true,
+      "plane": "cloud",
+      "mode": "poll",
+      "poll_interval_minutes": 60,
+      "description": "Google Drive file changes and shared documents",
+      "cloud_adapter": "adapters/google_drive.sh",
+      "secrets_required": ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"],
+      "notes": "OAuth2 with refresh token rotation; cloud-only"
+    },
+    "social": {
+      "enabled": true,
+      "plane": "cloud",
+      "mode": "poll",
+      "poll_interval_minutes": 60,
+      "description": "Aggregated social media metrics (X/Twitter, LinkedIn, etc.)",
+      "cloud_adapter": "adapters/social.sh",
+      "secrets_required": ["SOCIAL_AGGREGATOR_KEY"],
+      "notes": "Uses a social aggregator API to avoid per-platform OAuth complexity"
+    },
+    "gcal": {
+      "enabled": true,
+      "plane": "cloud",
+      "mode": "poll",
+      "poll_interval_minutes": 30,
+      "description": "Google Calendar upcoming events and reminders",
+      "cloud_adapter": "adapters/gcal.sh",
+      "secrets_required": ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"],
+      "notes": "Shares Google OAuth credentials with google_drive"
+    },
+    "outlook": {
+      "enabled": true,
+      "plane": "cloud",
+      "mode": "poll",
+      "poll_interval_minutes": 30,
+      "description": "Outlook calendar and email summary via Microsoft Graph",
+      "cloud_adapter": "adapters/outlook.sh",
+      "secrets_required": ["MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_REFRESH_TOKEN"],
+      "notes": "Microsoft Graph API; OAuth2 with refresh token"
+    },
+    "scholar": {
+      "enabled": true,
+      "plane": "cloud_and_edge",
+      "mode": "poll",
+      "poll_interval_minutes": 360,
+      "description": "Google Scholar citation tracking and paper alerts",
+      "cloud_adapter": "adapters/scholar.sh",
+      "edge_fallback": true,
+      "secrets_required": [],
+      "notes": "Public pages; phone can scrape basic results as fallback"
+    },
+    "device_telemetry": {
+      "enabled": true,
+      "plane": "edge",
+      "mode": "local",
+      "poll_interval_minutes": 5,
+      "description": "On-device battery, storage, network, and sensor data",
+      "edge_script": "ingest-local.sh",
+      "secrets_required": [],
+      "notes": "Runs entirely on-device via termux-api; no cloud dependency"
+    },
+    "ollama_status": {
+      "enabled": true,
+      "plane": "edge",
+      "mode": "local",
+      "poll_interval_minutes": 5,
+      "description": "Ollama LLM server status, loaded models, inference stats",
+      "edge_script": "ingest-local.sh",
+      "secrets_required": [],
+      "notes": "Polls localhost:11434; no network needed"
+    }
+  }
+}
