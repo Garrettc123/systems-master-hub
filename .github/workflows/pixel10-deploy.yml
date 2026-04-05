@@ -131,45 +131,62 @@ jobs:
           HELPERS
           chmod +x /tmp/ssh-retry-helpers.sh
 
+      # This step is advisory — it warns on failure but never blocks the workflow.
+      # "Test Connection" remains the authoritative gate for phone reachability.
       - name: Pre-flight SSH Stabilization
+        id: preflight
         if: steps.check-ssh.outputs.skip != 'true'
         run: |
           source /tmp/ssh-retry-helpers.sh
+          PREFLIGHT_OK=true
 
           echo "::group::Upload ssh-stabilizer.sh (with retry)"
-          scp_retry "Upload ssh-stabilizer.sh" \
+          if ! scp_retry "Upload ssh-stabilizer.sh" \
             ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
             -i ~/.ssh/pixel10_key \
             -P ${{ github.event.inputs.ssh_port }} \
             ${{ env.SSH_OPTS }} \
             termux/ssh-stabilizer.sh \
-            u0_a325@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/ssh-stabilizer.sh
+            u0_a325@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/ssh-stabilizer.sh; then
+            echo "::warning::Pre-flight SCP upload failed after all retries — stabilization skipped due to connectivity"
+            PREFLIGHT_OK=false
+          fi
           echo "::endgroup::"
 
-          echo "::group::Run SSH stabilizer (with retry)"
-          ssh_retry "Run SSH stabilizer" \
-            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
-            ssh -i ~/.ssh/pixel10_key \
-            -p ${{ github.event.inputs.ssh_port }} \
-            ${{ env.SSH_OPTS }} \
-            u0_a325@${{ github.event.inputs.device_ip }} \
-            'chmod +x ~/ssh-stabilizer.sh && bash ~/ssh-stabilizer.sh 2>&1'
-          STABILIZER_RC=$?
-          echo "::endgroup::"
-
-          if [ "$STABILIZER_RC" -ne 0 ]; then
-            echo "::warning::SSH stabilizer could not complete after retries — continuing with deployment"
+          if [ "$PREFLIGHT_OK" = true ]; then
+            echo "::group::Run SSH stabilizer (with retry)"
+            if ! ssh_retry "Run SSH stabilizer" \
+              ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+              ssh -i ~/.ssh/pixel10_key \
+              -p ${{ github.event.inputs.ssh_port }} \
+              ${{ env.SSH_OPTS }} \
+              u0_a325@${{ github.event.inputs.device_ip }} \
+              'chmod +x ~/ssh-stabilizer.sh && bash ~/ssh-stabilizer.sh 2>&1'; then
+              echo "::warning::SSH stabilizer could not complete after retries — continuing with deployment"
+              PREFLIGHT_OK=false
+            fi
+            echo "::endgroup::"
           fi
 
-          echo "::group::Verify stabilizer output"
-          ssh_retry "Read ssh-status.json" \
-            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
-            ssh -i ~/.ssh/pixel10_key \
-            -p ${{ github.event.inputs.ssh_port }} \
-            ${{ env.SSH_OPTS }} \
-            u0_a325@${{ github.event.inputs.device_ip }} \
-            'cat ~/edge-node/ssh-status.json 2>/dev/null || echo "{\"status\": \"no status file\"}"'
-          echo "::endgroup::"
+          if [ "$PREFLIGHT_OK" = true ]; then
+            echo "::group::Verify stabilizer output"
+            if ! ssh_retry "Read ssh-status.json" \
+              ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+              ssh -i ~/.ssh/pixel10_key \
+              -p ${{ github.event.inputs.ssh_port }} \
+              ${{ env.SSH_OPTS }} \
+              u0_a325@${{ github.event.inputs.device_ip }} \
+              'cat ~/edge-node/ssh-status.json 2>/dev/null || echo "{\"status\": \"no status file\"}"'; then
+              echo "::warning::Could not read stabilizer status — continuing with deployment"
+              PREFLIGHT_OK=false
+            fi
+            echo "::endgroup::"
+          fi
+
+          echo "preflight_ok=$PREFLIGHT_OK" >> "$GITHUB_OUTPUT"
+          if [ "$PREFLIGHT_OK" = false ]; then
+            echo "::notice::Pre-flight SSH stabilization was skipped due to connectivity issues. Test Connection will determine if the device is reachable."
+          fi
 
       - name: Test Connection
         if: steps.check-ssh.outputs.skip != 'true'
@@ -264,7 +281,15 @@ jobs:
             echo "| Port | \`${{ github.event.inputs.ssh_port }}\` |"
             echo "| Dry run | \`${{ github.event.inputs.dry_run }}\` |"
             echo "| SSH retry | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s backoff |"
+            echo "| Pre-flight | ${{ steps.preflight.outputs.preflight_ok == 'true' && '✅ Passed' || '⚠️ Skipped (connectivity)' }} |"
             echo ""
+
+            if [ "${{ steps.preflight.outputs.preflight_ok }}" != "true" ]; then
+              echo "> **Note:** Pre-flight SSH stabilization was skipped due to connectivity issues."
+              echo "> Test Connection was used as the authoritative reachability gate."
+              echo ""
+            fi
+
             echo "**Test locally:**"
             echo '```bash'
             echo "curl -X POST http://${{ github.event.inputs.device_ip }}:11434/api/generate \\"
