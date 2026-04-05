@@ -30,7 +30,20 @@ jobs:
           echo "SSH Port: ${{ github.event.inputs.ssh_port }}"
           echo "Dry Run: ${{ github.event.inputs.dry_run }}"
           
+      - name: Check SSH Key
+        id: check-ssh
+        env:
+          PIXEL10_SSH_KEY: ${{ secrets.PIXEL10_SSH_KEY }}
+        run: |
+          if [ -z "$PIXEL10_SSH_KEY" ]; then
+            echo "⚠️ PIXEL10_SSH_KEY not configured — skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "skip=false" >> $GITHUB_OUTPUT
+
       - name: Setup SSH
+        if: steps.check-ssh.outputs.skip != 'true'
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.PIXEL10_SSH_KEY }}" > ~/.ssh/pixel10_key

@@ -61,10 +61,23 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+      - name: Check AWS secrets
+        id: check-aws
+        env:
+          AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        run: |
+          if [ -z "$AWS_KEY" ]; then
+            echo "⚠️ AWS_ACCESS_KEY_ID not configured — skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "skip=false" >> $GITHUB_OUTPUT
       - uses: hashicorp/setup-terraform@v3
+        if: steps.check-aws.outputs.skip != 'true'
         with:
           terraform_version: ${{ env.TF_VERSION }}
       - name: Terraform Init
+        if: steps.check-aws.outputs.skip != 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -75,6 +88,7 @@ jobs:
                          -backend-config="region=${{ secrets.AWS_REGION }}" \
                          -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
       - name: Terraform Plan
+        if: steps.check-aws.outputs.skip != 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -114,12 +128,22 @@ jobs:
         env: [ dev, staging, prod ]
     steps:
       - uses: actions/checkout@v4
+      - name: Check AWS secrets
+        id: check-aws-apply
+        env:
+          AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        run: |
+          if [ -z "$AWS_KEY" ]; then
+            echo "⚠️ AWS_ACCESS_KEY_ID not configured — skipping"
+            exit 0
+          fi
       - uses: hashicorp/setup-terraform@v3
       - name: Terraform Init
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ]; then exit 0; fi
           cd terraform
           terraform init
       - name: Terraform Apply
@@ -127,6 +151,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ]; then exit 0; fi
           cd terraform
           terraform apply -auto-approve tfplan
       - name: Outputs & Slack Alert

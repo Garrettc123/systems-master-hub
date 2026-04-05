@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-  schedule:
-    - cron: '0 9 * * 1-5'  # Weekdays at 9 AM
 
 jobs:
   preflight:

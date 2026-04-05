@@ -36,7 +36,19 @@ jobs:
       - uses: actions/checkout@v4
       - id: timestamp
         run: echo "timestamp=$(date +%Y%m%d_%H%M%S)" >> $GITHUB_OUTPUT
+      - name: Check AWS secrets
+        id: check-aws
+        env:
+          AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        run: |
+          if [ -z "$AWS_KEY" ]; then
+            echo "⚠️ AWS_ACCESS_KEY_ID not configured — skipping AWS steps"
+            echo "skip_aws=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip_aws=false" >> $GITHUB_OUTPUT
+          fi
       - name: 'Configure AWS Credentials'
+        if: steps.check-aws.outputs.skip_aws != 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}

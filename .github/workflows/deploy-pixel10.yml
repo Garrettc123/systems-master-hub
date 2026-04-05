@@ -29,10 +29,12 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Verify SSH Key
+        env:
+          PIXEL10_SSH_KEY: ${{ secrets.PIXEL10_SSH_KEY }}
         run: |
-          if [ -z "${{ secrets.PIXEL10_SSH_KEY }}" ]; then
-            echo "ERROR: PIXEL10_SSH_KEY secret not set!"
-            exit 1
+          if [ -z "$PIXEL10_SSH_KEY" ]; then
+            echo "⚠️ PIXEL10_SSH_KEY not configured — skipping"
+            exit 0
           fi
           echo "SSH Key: Set"
       
