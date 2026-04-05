@@ -7,11 +7,15 @@
 #
 # Usage:  bash status-report.sh            # text report to stdout
 #         bash status-report.sh --json     # JSON to stdout
+#         bash status-report.sh --slack    # Slack-formatted message to stdout
 ###############################################################################
 set -uo pipefail
 
-JSON_MODE=false
-[ "${1:-}" = "--json" ] && JSON_MODE=true
+OUTPUT_MODE="text"
+case "${1:-}" in
+  --json)  OUTPUT_MODE="json" ;;
+  --slack) OUTPUT_MODE="slack" ;;
+esac
 
 EDGE_HOME="${HOME}/edge-node"
 
@@ -59,9 +63,17 @@ if command -v termux-battery-status >/dev/null 2>&1; then
   BATTERY_CHARGING=$(echo "$BATT" | jq -r '.status // "n/a"' 2>/dev/null || echo "n/a")
 fi
 
+# Telemetry (if collector available)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TELEMETRY_JSON='null'
+if [ -f "$SCRIPT_DIR/telemetry-collect.sh" ]; then
+  TELEMETRY_JSON=$(bash "$SCRIPT_DIR/telemetry-collect.sh" 2>/dev/null || echo 'null')
+fi
+
 # --- Output ---
-if [ "$JSON_MODE" = true ]; then
-  cat <<ENDJSON
+case "$OUTPUT_MODE" in
+  json)
+    cat <<ENDJSON
 {
   "timestamp": "$NOW",
   "hostname": "$HOSTNAME",
@@ -78,30 +90,87 @@ if [ "$JSON_MODE" = true ]; then
     "crond": "$CROND_STATUS",
     "ollama": "$OLLAMA_STATUS"
   },
-  "ollama_models": "$OLLAMA_MODELS"
+  "ollama_models": "$OLLAMA_MODELS",
+  "telemetry": $TELEMETRY_JSON
 }
 ENDJSON
-else
-  echo "===== Pixel 10 Edge Node Status ====="
-  echo ""
-  echo "  Timestamp:  $NOW"
-  echo "  Host:       $HOSTNAME ($ARCH)"
-  echo "  User:       $USER"
-  echo "  IP:         $IP"
-  echo "  Uptime:     $UPTIME"
-  echo ""
-  echo "--- Storage ---"
-  echo "  Free:       ${FREE_GB}GB / ${TOTAL_GB}GB"
-  echo ""
-  echo "--- Battery ---"
-  echo "  Level:      ${BATTERY_PCT}%"
-  echo "  Status:     $BATTERY_CHARGING"
-  echo ""
-  echo "--- Services ---"
-  echo "  sshd:       $SSHD_STATUS"
-  echo "  crond:      $CROND_STATUS"
-  echo "  ollama:     $OLLAMA_STATUS"
-  [ -n "$OLLAMA_MODELS" ] && echo "  models:     $OLLAMA_MODELS"
-  echo ""
-  echo "====================================="
-fi
+    ;;
+
+  slack)
+    # Slack mrkdwn formatted message template
+    SSHD_ICON=$( [ "$SSHD_STATUS" = "running" ] && echo ":white_check_mark:" || echo ":x:" )
+    CROND_ICON=$( [ "$CROND_STATUS" = "running" ] && echo ":white_check_mark:" || echo ":x:" )
+    OLLAMA_ICON=$( [ "$OLLAMA_STATUS" = "running" ] && echo ":white_check_mark:" || echo ":x:" )
+
+    BATT_ICON=":battery:"
+    if [ "$BATTERY_PCT" != "n/a" ] && [ "$BATTERY_PCT" -lt 20 ] 2>/dev/null; then
+      BATT_ICON=":low_battery:"
+    fi
+
+    # Extract WiFi info from telemetry if available
+    WIFI_LINE=""
+    if echo "$TELEMETRY_JSON" | jq -e '.wifi.ssid' >/dev/null 2>&1; then
+      WIFI_SSID=$(echo "$TELEMETRY_JSON" | jq -r '.wifi.ssid // "n/a"')
+      WIFI_RSSI=$(echo "$TELEMETRY_JSON" | jq -r '.wifi.rssi // "?"')
+      WIFI_LINE="WiFi: ${WIFI_SSID} (${WIFI_RSSI}dBm)"
+    fi
+    NET_LINE=""
+    if echo "$TELEMETRY_JSON" | jq -e '.telephony.network_type' >/dev/null 2>&1; then
+      NET_TYPE=$(echo "$TELEMETRY_JSON" | jq -r '.telephony.network_type // "n/a"')
+      NET_LINE="Cell: ${NET_TYPE}"
+    fi
+
+    cat <<ENDSLACK
+:satellite: *Pixel 10 Edge Node — ${HOSTNAME}*
+_${NOW}_
+
+*System*
+> IP: \`${IP}\` | Uptime: ${UPTIME}
+> ${BATT_ICON} Battery: ${BATTERY_PCT}% (${BATTERY_CHARGING})
+> :floppy_disk: Disk: ${FREE_GB}GB / ${TOTAL_GB}GB
+
+*Services*
+> ${SSHD_ICON} sshd  ${CROND_ICON} crond  ${OLLAMA_ICON} ollama
+$([ -n "$OLLAMA_MODELS" ] && echo "> Models: ${OLLAMA_MODELS}")
+
+*Network*
+$([ -n "$WIFI_LINE" ] && echo "> ${WIFI_LINE}")
+$([ -n "$NET_LINE" ] && echo "> ${NET_LINE}")
+
+_RHNS self-report_
+ENDSLACK
+    ;;
+
+  *)
+    echo "===== Pixel 10 Edge Node Status ====="
+    echo ""
+    echo "  Timestamp:  $NOW"
+    echo "  Host:       $HOSTNAME ($ARCH)"
+    echo "  User:       $USER"
+    echo "  IP:         $IP"
+    echo "  Uptime:     $UPTIME"
+    echo ""
+    echo "--- Storage ---"
+    echo "  Free:       ${FREE_GB}GB / ${TOTAL_GB}GB"
+    echo ""
+    echo "--- Battery ---"
+    echo "  Level:      ${BATTERY_PCT}%"
+    echo "  Status:     $BATTERY_CHARGING"
+    echo ""
+    echo "--- Services ---"
+    echo "  sshd:       $SSHD_STATUS"
+    echo "  crond:      $CROND_STATUS"
+    echo "  ollama:     $OLLAMA_STATUS"
+    [ -n "$OLLAMA_MODELS" ] && echo "  models:     $OLLAMA_MODELS"
+    echo ""
+    echo "--- Telemetry ---"
+    if echo "$TELEMETRY_JSON" | jq -e '.wifi.ssid' >/dev/null 2>&1; then
+      echo "  WiFi:       $(echo "$TELEMETRY_JSON" | jq -r '.wifi.ssid') ($(echo "$TELEMETRY_JSON" | jq -r '.wifi.rssi')dBm)"
+    fi
+    if echo "$TELEMETRY_JSON" | jq -e '.telephony.network_type' >/dev/null 2>&1; then
+      echo "  Cell:       $(echo "$TELEMETRY_JSON" | jq -r '.telephony.network_type')"
+    fi
+    echo ""
+    echo "====================================="
+    ;;
+esac
