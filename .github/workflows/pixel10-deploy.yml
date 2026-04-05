@@ -56,6 +56,40 @@ jobs:
           ssh-keyscan -p ${{ github.event.inputs.ssh_port }} \
             ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      - name: Pre-flight SSH Stabilization
+        if: steps.check-ssh.outputs.skip != 'true'
+        run: |
+          echo "::group::Upload ssh-stabilizer.sh"
+          scp -i ~/.ssh/pixel10_key \
+            -P ${{ github.event.inputs.ssh_port }} \
+            -o StrictHostKeyChecking=no \
+            termux/ssh-stabilizer.sh \
+            u0_a325@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/ssh-stabilizer.sh
+          echo "::endgroup::"
+
+          echo "::group::Run SSH stabilizer"
+          ssh -i ~/.ssh/pixel10_key \
+            -p ${{ github.event.inputs.ssh_port }} \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            u0_a325@${{ github.event.inputs.device_ip }} \
+            'chmod +x ~/ssh-stabilizer.sh && bash ~/ssh-stabilizer.sh 2>&1'
+          STABILIZER_RC=$?
+          echo "::endgroup::"
+
+          if [ "$STABILIZER_RC" -ne 0 ]; then
+            echo "::warning::SSH stabilizer exited with code $STABILIZER_RC — continuing with deployment"
+          fi
+
+          echo "::group::Verify stabilizer output"
+          ssh -i ~/.ssh/pixel10_key \
+            -p ${{ github.event.inputs.ssh_port }} \
+            -o StrictHostKeyChecking=no \
+            u0_a325@${{ github.event.inputs.device_ip }} \
+            'cat ~/edge-node/ssh-status.json 2>/dev/null || echo "{\"status\": \"no status file\"}"'
+          echo "::endgroup::"
+
       - name: Test Connection
         if: steps.check-ssh.outputs.skip != 'true'
         run: |

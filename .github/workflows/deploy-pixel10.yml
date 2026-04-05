@@ -58,6 +58,39 @@ jobs:
           ssh-keyscan -p ${{ github.event.inputs.ssh_port }} \
             ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      # --- Pre-flight: stabilize SSH + Termux environment on device ---
+      - name: Pre-flight SSH Stabilization
+        if: steps.check-ssh.outputs.skip != 'true'
+        run: |
+          echo "::group::Upload ssh-stabilizer.sh"
+          scp -i ~/.ssh/id_pixel10 \
+            -P ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            termux/ssh-stabilizer.sh \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/ssh-stabilizer.sh
+          echo "::endgroup::"
+
+          echo "::group::Run SSH stabilizer"
+          ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            'chmod +x ~/ssh-stabilizer.sh && bash ~/ssh-stabilizer.sh 2>&1' | tee -a "${{ env.DEPLOY_LOG }}"
+          STABILIZER_RC=${PIPESTATUS[0]}
+          echo "::endgroup::"
+
+          if [ "$STABILIZER_RC" -ne 0 ]; then
+            echo "::warning::SSH stabilizer exited with code $STABILIZER_RC — continuing with deployment"
+          fi
+
+          echo "::group::Verify stabilizer output"
+          ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            'cat ~/edge-node/ssh-status.json 2>/dev/null || echo "{\"status\": \"no status file\"}"' | tee -a "${{ env.DEPLOY_LOG }}"
+          echo "::endgroup::"
+
       # --- Helper: run a remote command and capture output ---
       # We define a reusable shell function via env for all subsequent steps.
       - name: Test SSH Connection
