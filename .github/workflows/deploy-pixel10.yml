@@ -36,6 +36,9 @@ env:
   DEPLOY_LOG: /tmp/pixel10-deploy.log
   SSH_RETRY_MAX: '4'
   SSH_RETRY_DELAY: '10'
+  # Test SSH Connection uses more aggressive retry with exponential backoff
+  SSH_TEST_RETRY_MAX: '5'
+  SSH_TEST_RETRY_BASE_DELAY: '5'
 
 jobs:
   deploy:
@@ -104,6 +107,50 @@ jobs:
             done
             echo "::error::[ssh_retry] $label failed after $max attempts"
             echo "[ssh_retry] $label FAILED after $max attempts" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+            return 1
+          }
+
+          # ssh_retry_exponential — SSH command with true exponential backoff + jitter.
+          # Backoff: base_delay * 2^(attempt-1) + random jitter (0-3s), capped at 120s.
+          # Usage: ssh_retry_exponential <label> <max_attempts> <base_delay_secs> <ssh_args...>
+          ssh_retry_exponential() {
+            local label="$1" max="$2" base_delay="$3"
+            shift 3
+            local attempt=1
+            local total_wait=0
+            while [ "$attempt" -le "$max" ]; do
+              echo "[ssh_retry_exp] Attempt $attempt/$max — $label"
+              echo "[ssh_retry_exp] Attempt $attempt/$max — $label" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+              set +e
+              "$@" 2>&1
+              local rc=$?
+              set -e
+              if [ "$rc" -eq 0 ]; then
+                echo "[ssh_retry_exp] $label succeeded on attempt $attempt (total wait: ${total_wait}s)"
+                echo "[ssh_retry_exp] $label succeeded on attempt $attempt (total wait: ${total_wait}s)" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+                echo "ssh_test_attempts=$attempt" >> "${GITHUB_OUTPUT:-/dev/null}"
+                echo "ssh_test_total_wait=$total_wait" >> "${GITHUB_OUTPUT:-/dev/null}"
+                return 0
+              fi
+              echo "::warning::[ssh_retry_exp] $label failed (attempt $attempt/$max, exit $rc)"
+              echo "[ssh_retry_exp] $label failed (attempt $attempt/$max, exit $rc)" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+              if [ "$attempt" -lt "$max" ]; then
+                # Exponential backoff: base_delay * 2^(attempt-1), capped at 120s
+                local exp=$(( base_delay * (1 << (attempt - 1)) ))
+                local jitter=$(( RANDOM % 4 ))
+                local wait_secs=$(( exp + jitter ))
+                if [ "$wait_secs" -gt 120 ]; then wait_secs=120; fi
+                total_wait=$(( total_wait + wait_secs ))
+                echo "[ssh_retry_exp] Backing off ${wait_secs}s (base=${base_delay}, exp=${exp}, jitter=${jitter}) before attempt $(( attempt + 1 ))..."
+                echo "[ssh_retry_exp] Backing off ${wait_secs}s before attempt $(( attempt + 1 ))" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+                sleep "$wait_secs"
+              fi
+              attempt=$(( attempt + 1 ))
+            done
+            echo "::error::[ssh_retry_exp] $label failed after $max attempts (total wait: ${total_wait}s)"
+            echo "[ssh_retry_exp] $label FAILED after $max attempts (total wait: ${total_wait}s)" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+            echo "ssh_test_attempts=$max" >> "${GITHUB_OUTPUT:-/dev/null}"
+            echo "ssh_test_total_wait=$total_wait" >> "${GITHUB_OUTPUT:-/dev/null}"
             return 1
           }
 
@@ -205,21 +252,28 @@ jobs:
             echo "::notice::Pre-flight SSH stabilization was skipped due to connectivity issues. Test SSH Connection will determine if the device is reachable."
           fi
 
-      # --- Test SSH connectivity with retry ---
+      # --- Test SSH connectivity with exponential backoff ---
+      # This is the authoritative gate — if the device is unreachable after all
+      # retries (exponential backoff: 5s, 10s, 20s, 40s between attempts), the
+      # workflow aborts.  Tailscale connections can take 10-30s to stabilise
+      # after a device wakes from doze, so the backoff curve is tuned for that.
       - name: Test SSH Connection
+        id: ssh-test
         if: steps.check-ssh.outputs.skip != 'true'
         env:
           DEPLOY_LOG: ${{ env.DEPLOY_LOG }}
         run: |
           source /tmp/ssh-retry-helpers.sh
 
-          ssh_retry "SSH connectivity test" \
-            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+          echo "::group::SSH connectivity test (exponential backoff, max ${{ env.SSH_TEST_RETRY_MAX }} attempts)"
+          ssh_retry_exponential "SSH connectivity test" \
+            ${{ env.SSH_TEST_RETRY_MAX }} ${{ env.SSH_TEST_RETRY_BASE_DELAY }} \
             ssh -i ~/.ssh/id_pixel10 \
             -p ${{ github.event.inputs.ssh_port }} \
             ${{ env.SSH_OPTS }} \
             ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
             'echo "SSH OK — $(whoami)@$(hostname) — $(date -Iseconds)"'
+          echo "::endgroup::"
           echo "Connection established successfully."
 
       # --- Bootstrap: full edge-node prerequisite install ---
@@ -368,7 +422,9 @@ jobs:
             echo "| **User** | \`${{ github.event.inputs.ssh_user }}\` |"
             echo "| **Target** | \`${{ github.event.inputs.deploy_target }}\` |"
             echo "| **Dry run** | \`${{ github.event.inputs.dry_run }}\` |"
-            echo "| **SSH retry** | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s backoff |"
+            echo "| **SSH retry (pre-flight)** | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s linear backoff |"
+            echo "| **SSH retry (test)** | max ${{ env.SSH_TEST_RETRY_MAX }} attempts, ${{ env.SSH_TEST_RETRY_BASE_DELAY }}s exponential backoff |"
+            echo "| **SSH test result** | ${{ steps.ssh-test.outputs.ssh_test_attempts || '?' }} attempt(s), ${{ steps.ssh-test.outputs.ssh_test_total_wait || '0' }}s total wait |"
             echo "| **Pre-flight** | ${{ steps.preflight.outputs.preflight_ok == 'true' && '✅ Passed' || '⚠️ Skipped (connectivity)' }} |"
             echo "| **Run** | [\`${GITHUB_RUN_ID}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
             echo ""
@@ -380,10 +436,10 @@ jobs:
             fi
 
             # Extract and display retry activity from the deploy log
-            if [ -f "${{ env.DEPLOY_LOG }}" ] && grep -q '\[ssh_retry\]\|\[scp_retry\]' "${{ env.DEPLOY_LOG }}"; then
+            if [ -f "${{ env.DEPLOY_LOG }}" ] && grep -q '\[ssh_retry\]\|\[ssh_retry_exp\]\|\[scp_retry\]' "${{ env.DEPLOY_LOG }}"; then
               echo "### SSH Retry Activity"
               echo '```'
-              grep '\[ssh_retry\]\|\[scp_retry\]' "${{ env.DEPLOY_LOG }}" | tail -30
+              grep '\[ssh_retry\]\|\[ssh_retry_exp\]\|\[scp_retry\]' "${{ env.DEPLOY_LOG }}" | tail -30
               echo '```'
               echo ""
             fi

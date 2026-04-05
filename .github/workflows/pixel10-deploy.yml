@@ -31,6 +31,9 @@ env:
     -o ConnectionAttempts=3
   SSH_RETRY_MAX: '4'
   SSH_RETRY_DELAY: '10'
+  # Test Connection uses more aggressive retry with exponential backoff
+  SSH_TEST_RETRY_MAX: '5'
+  SSH_TEST_RETRY_BASE_DELAY: '5'
 
 jobs:
   deploy:
@@ -99,6 +102,45 @@ jobs:
               attempt=$(( attempt + 1 ))
             done
             echo "::error::[ssh_retry] $label failed after $max attempts"
+            return 1
+          }
+
+          # ssh_retry_exponential — SSH command with true exponential backoff + jitter.
+          # Backoff: base_delay * 2^(attempt-1) + random jitter (0-3s), capped at 120s.
+          # Usage: ssh_retry_exponential <label> <max_attempts> <base_delay_secs> <ssh_args...>
+          ssh_retry_exponential() {
+            local label="$1" max="$2" base_delay="$3"
+            shift 3
+            local attempt=1
+            local total_wait=0
+            while [ "$attempt" -le "$max" ]; do
+              echo "[ssh_retry_exp] Attempt $attempt/$max — $label"
+              set +e
+              "$@" 2>&1
+              local rc=$?
+              set -e
+              if [ "$rc" -eq 0 ]; then
+                echo "[ssh_retry_exp] $label succeeded on attempt $attempt (total wait: ${total_wait}s)"
+                echo "ssh_test_attempts=$attempt" >> "${GITHUB_OUTPUT:-/dev/null}"
+                echo "ssh_test_total_wait=$total_wait" >> "${GITHUB_OUTPUT:-/dev/null}"
+                return 0
+              fi
+              echo "::warning::[ssh_retry_exp] $label failed (attempt $attempt/$max, exit $rc)"
+              if [ "$attempt" -lt "$max" ]; then
+                # Exponential backoff: base_delay * 2^(attempt-1), capped at 120s
+                local exp=$(( base_delay * (1 << (attempt - 1)) ))
+                local jitter=$(( RANDOM % 4 ))
+                local wait_secs=$(( exp + jitter ))
+                if [ "$wait_secs" -gt 120 ]; then wait_secs=120; fi
+                total_wait=$(( total_wait + wait_secs ))
+                echo "[ssh_retry_exp] Backing off ${wait_secs}s (base=${base_delay}, exp=${exp}, jitter=${jitter}) before attempt $(( attempt + 1 ))..."
+                sleep "$wait_secs"
+              fi
+              attempt=$(( attempt + 1 ))
+            done
+            echo "::error::[ssh_retry_exp] $label failed after $max attempts (total wait: ${total_wait}s)"
+            echo "ssh_test_attempts=$max" >> "${GITHUB_OUTPUT:-/dev/null}"
+            echo "ssh_test_total_wait=$total_wait" >> "${GITHUB_OUTPUT:-/dev/null}"
             return 1
           }
 
@@ -188,19 +230,26 @@ jobs:
             echo "::notice::Pre-flight SSH stabilization was skipped due to connectivity issues. Test Connection will determine if the device is reachable."
           fi
 
+      # --- Test SSH connectivity with exponential backoff ---
+      # This is the authoritative gate — if the device is unreachable after all
+      # retries (exponential backoff: 5s, 10s, 20s, 40s between attempts), the
+      # workflow aborts.  Tailscale connections can take 10-30s to stabilise
+      # after a device wakes from doze, so the backoff curve is tuned for that.
       - name: Test Connection
+        id: ssh-test
         if: steps.check-ssh.outputs.skip != 'true'
         run: |
           source /tmp/ssh-retry-helpers.sh
 
-          echo "Testing SSH connection (with retry)..."
-          ssh_retry "SSH connectivity test" \
-            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+          echo "::group::SSH connectivity test (exponential backoff, max ${{ env.SSH_TEST_RETRY_MAX }} attempts)"
+          ssh_retry_exponential "SSH connectivity test" \
+            ${{ env.SSH_TEST_RETRY_MAX }} ${{ env.SSH_TEST_RETRY_BASE_DELAY }} \
             ssh -i ~/.ssh/pixel10_key \
             -p ${{ github.event.inputs.ssh_port }} \
             ${{ env.SSH_OPTS }} \
             u0_a325@${{ github.event.inputs.device_ip }} \
             'echo "SSH OK — $(whoami)@$(uname -m) — $(date)"'
+          echo "::endgroup::"
           echo "Connection established successfully."
 
       - name: Deploy Ollama
@@ -280,7 +329,9 @@ jobs:
             echo "| Device | \`${{ github.event.inputs.device_ip }}\` |"
             echo "| Port | \`${{ github.event.inputs.ssh_port }}\` |"
             echo "| Dry run | \`${{ github.event.inputs.dry_run }}\` |"
-            echo "| SSH retry | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s backoff |"
+            echo "| SSH retry (pre-flight) | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s linear backoff |"
+            echo "| SSH retry (test) | max ${{ env.SSH_TEST_RETRY_MAX }} attempts, ${{ env.SSH_TEST_RETRY_BASE_DELAY }}s exponential backoff |"
+            echo "| SSH test result | ${{ steps.ssh-test.outputs.ssh_test_attempts || '?' }} attempt(s), ${{ steps.ssh-test.outputs.ssh_test_total_wait || '0' }}s total wait |"
             echo "| Pre-flight | ${{ steps.preflight.outputs.preflight_ok == 'true' && '✅ Passed' || '⚠️ Skipped (connectivity)' }} |"
             echo ""
 
