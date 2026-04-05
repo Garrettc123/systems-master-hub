@@ -69,9 +69,15 @@ jobs:
           echo "[1/5] Updating packages..."
           pkg update -y 2>/dev/null || true
           pkg install -y curl wget git openssl 2>/dev/null || true
-          echo "[2/5] Installing Ollama..."
+          echo "[2/5] Installing Ollama (Termux-compatible)..."
           if ! command -v ollama > /dev/null 2>&1; then
-            curl -fsSL https://ollama.ai/install.sh | sh || true
+            # Ollama's generic install script is not compatible with Termux/Android.
+            # Use the tur-repo community package instead.
+            pkg install -y tur-repo 2>/dev/null || true
+            pkg install -y ollama 2>/dev/null || {
+              echo "ERROR: Failed to install ollama via tur-repo"
+              exit 1
+            }
           fi
           echo "[3/5] Downloading llama3.2:3b model..."
           timeout 1800 ollama pull llama3.2:3b || echo "Model download started (may take time)"
