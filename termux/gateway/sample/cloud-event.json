@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "event_id": "f7e6d5c4-b3a2-4918-8070-605040302010",
+  "source": "github_mcp_direct",
+  "category": "cloud",
+  "timestamp": "2026-04-05T14:15:00Z",
+  "node_id": "pixel10-edge",
+  "payload": {
+    "type": "pr_merged",
+    "data": {
+      "repo": "Garrettc123/systems-master-hub",
+      "pr_number": 13,
+      "title": "feat: add Pixel 10 autonomous edge node bootstrap stack",
+      "author": "Garrettc123",
+      "merged_by": "Garrettc123",
+      "base_branch": "main",
+      "additions": 842,
+      "deletions": 12,
+      "files_changed": 9
+    }
+  },
+  "metadata": {
+    "adapter_version": "1.0.0",
+    "polling_mode": "scheduled",
+    "ttl_seconds": 86400,
+    "retry_count": 0
+  }
+}
