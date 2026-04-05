@@ -28,7 +28,7 @@ EDGE_LOG="${EDGE_HOME}/logs"
 ###############################################################################
 # 1. Package prerequisites
 ###############################################################################
-info "Step 1/6 — Installing prerequisite packages"
+info "Step 1/7 — Installing prerequisite packages"
 
 # Accept all repository updates non-interactively
 pkg update -y 2>/dev/null || true
@@ -75,7 +75,7 @@ fi
 ###############################################################################
 # 2. Directory layout
 ###############################################################################
-info "Step 2/6 — Creating edge-node directory layout"
+info "Step 2/7 — Creating edge-node directory layout"
 
 mkdir -p "$EDGE_HOME"/{logs,data,scripts,config}
 mkdir -p ~/.termux/boot
@@ -85,7 +85,7 @@ ok "Directories ready: $EDGE_HOME"
 ###############################################################################
 # 3. SSH server configuration
 ###############################################################################
-info "Step 3/6 — Configuring SSH server"
+info "Step 3/7 — Configuring SSH server"
 
 mkdir -p ~/.ssh
 chmod 700 ~/.ssh
@@ -132,7 +132,7 @@ fi
 ###############################################################################
 # 4. Storage check
 ###############################################################################
-info "Step 4/6 — Checking storage"
+info "Step 4/7 — Checking storage"
 
 FREE_KB=$(df /data 2>/dev/null | tail -1 | awk '{print $4}')
 FREE_GB=$(( ${FREE_KB:-0} / 1048576 ))
@@ -146,7 +146,7 @@ fi
 ###############################################################################
 # 5. Network info
 ###############################################################################
-info "Step 5/6 — Detecting network"
+info "Step 5/7 — Detecting network"
 
 DEVICE_IP=""
 # Try wlan0, then any non-loopback
@@ -161,9 +161,41 @@ fi
 ok "Device IP: $DEVICE_IP"
 
 ###############################################################################
-# 6. Write node identity file
+# 6. Slack / telemetry environment configuration
 ###############################################################################
-info "Step 6/6 — Writing node identity"
+info "Step 6/7 — Configuring Slack & telemetry environment"
+
+SLACK_ENV_FILE="$EDGE_HOME/config/slack-env.sh"
+if [ ! -f "$SLACK_ENV_FILE" ]; then
+  cat > "$SLACK_ENV_FILE" <<'SLACKENV'
+# Pixel 10 Edge Node — Slack & Telemetry Configuration
+# Source this file from your shell profile or cron wrapper.
+#
+# Auth: set ONE of these (webhook is simplest):
+#   SLACK_WEBHOOK_URL  — Incoming Webhook URL from Slack app config
+#   SLACK_BOT_TOKEN    — xoxb-... Bot User OAuth token
+#   SLACK_TOKEN_FILE   — path to a file containing the bot token
+#
+# Target: self-DM command feed (default). Override to post to a channel.
+export SLACK_CHANNEL_ID="${SLACK_CHANNEL_ID:-U0A6G6YLRDK}"
+
+# Uncomment and set ONE auth method:
+# export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T.../B.../xxx"
+# export SLACK_BOT_TOKEN="xoxb-..."
+# export SLACK_TOKEN_FILE="$HOME/edge-node/config/.slack-token"
+
+# Set to "true" to send Slack reports even when all checks pass:
+# export SLACK_REPORT_ALWAYS="false"
+SLACKENV
+  ok "Slack env template written to $SLACK_ENV_FILE"
+else
+  ok "Slack env config already exists"
+fi
+
+###############################################################################
+# 7. Write node identity file
+###############################################################################
+info "Step 7/7 — Writing node identity"
 
 cat > "$EDGE_HOME/config/node-identity.json" <<IDENTITY
 {
@@ -201,4 +233,6 @@ echo "    1. Copy the PRIVATE key (~/.ssh/pixel10_edge) to GitHub Secrets"
 echo "    2. Install Termux:Boot from F-Droid for auto-start"
 echo "    3. Run: bash ~/boot-init.sh  (installs boot persistence)"
 echo "    4. Run: bash ~/watchdog.sh   (one-shot health check)"
+echo "    5. Edit ~/edge-node/config/slack-env.sh with your Slack webhook/token"
+echo "       (see docs/PIXEL10-EDGE-NODE.md for Slack setup details)"
 echo ""

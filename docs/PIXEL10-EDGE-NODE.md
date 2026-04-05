@@ -70,10 +70,12 @@ bash termux/self-adb-setup.sh
 
 | Script | Location | Purpose |
 |--------|----------|---------|
-| `bootstrap.sh` | `termux/` | One-time idempotent setup: packages, SSH, dirs, identity |
+| `bootstrap.sh` | `termux/` | One-time idempotent setup: packages, SSH, dirs, identity, Slack env |
 | `boot-init.sh` | `termux/` | Termux:Boot auto-start: sshd, crond, Ollama, notification |
-| `watchdog.sh` | `termux/` | Health check + auto-heal (cron every 15 min or manual) |
-| `status-report.sh` | `termux/` | System snapshot (text or `--json` for CI parsing) |
+| `watchdog.sh` | `termux/` | Health check + auto-heal + telemetry + Slack alerts (cron 15 min) |
+| `status-report.sh` | `termux/` | System snapshot (text, `--json`, or `--slack` for Slack format) |
+| `telemetry-collect.sh` | `termux/` | Termux:API telemetry: battery, WiFi, telephony, location, sensors |
+| `slack-notify.sh` | `termux/` | Slack notification helper (webhook or bot token, self-DM default) |
 | `self-adb-setup.sh` | `termux/` | Interactive ADB-over-WiFi pairing for on-device UI automation |
 | `deploy-pixel10-termux.sh` | repo root | Original Termux setup (SSH + Ollama deploy prep) |
 
@@ -169,3 +171,143 @@ Key improvements over the original workflow:
 - **Modular targets**: Deploy just what you need instead of all-or-nothing
 - **SSH keepalive**: Prevents timeout during long operations
 - **Step summaries**: Rich markdown summaries with deploy logs
+
+## Telemetry Collection
+
+The `telemetry-collect.sh` script gathers extended device telemetry via Termux:API
+commands and outputs a compact JSON report. Each sensor is collected independently,
+so missing permissions degrade gracefully (the field shows `"error":"denied_or_unavailable"`
+instead of failing the entire report).
+
+### Telemetry Signals
+
+| Signal | Termux:API Command | Data Collected |
+|--------|-------------------|----------------|
+| Battery | `termux-battery-status` | percentage, status, temperature, plugged, health |
+| WiFi | `termux-wifi-connectioninfo` | SSID, BSSID, RSSI, link speed, frequency, IP |
+| Telephony | `termux-telephony-deviceinfo` | network type, data state, SIM state, phone type |
+| Location | `termux-location` | lat/lon, altitude, accuracy, provider (network) |
+| Sensors | `termux-sensor` | single snapshot from available hardware sensors |
+
+### Usage
+
+```bash
+# Compact JSON (for piping to other tools)
+bash termux/telemetry-collect.sh
+
+# Pretty-printed JSON
+bash termux/telemetry-collect.sh --pretty
+```
+
+The watchdog automatically runs telemetry collection every 15 minutes and saves
+the latest snapshot to `~/edge-node/data/telemetry-latest.json`.
+
+### Android Permissions Required
+
+The following permissions must be granted to the **Termux:API** app (not Termux itself)
+for telemetry to function. Grant them via Android Settings > Apps > Termux:API > Permissions:
+
+| Permission | Required For | Impact if Denied |
+|-----------|-------------|-----------------|
+| **Location** | `termux-location` | Location field returns `"error":"denied_or_unavailable"` |
+| **Phone** | `termux-telephony-deviceinfo` | Telephony field returns error |
+| **Nearby devices / WiFi** | `termux-wifi-connectioninfo` | WiFi SSID may show `<unknown ssid>` |
+
+Battery status and sensors typically work without extra permissions.
+
+> **Tip**: Run `termux-battery-status` manually first. If Android shows a permission
+> prompt, grant it. If nothing happens within 5 seconds, ensure the Termux:API app
+> (separate from Termux) is installed from F-Droid.
+
+## Slack Integration (RHNS Self-Reporting)
+
+The edge node can report its status to Slack using the **self-DM command feed** pattern:
+the default target is the current user's own Slack DM (user ID `U0A6G6YLRDK`), so
+status messages appear as a private command log rather than cluttering team channels.
+
+### How It Fits RHNS
+
+The RHNS (Remote Health & Notification System) watchdog runs every 15 minutes via cron.
+When it detects issues (service down, low battery, low disk), it:
+
+1. Collects full telemetry via `telemetry-collect.sh`
+2. Runs `status-report.sh --json` to build the system snapshot
+3. Sends a Slack Block Kit message via `slack-notify.sh --status-report`
+4. The message lands in your self-DM (or configured channel) with service status
+   icons, battery level, disk usage, and network info
+
+Healthy-state reports can be enabled by setting `SLACK_REPORT_ALWAYS=true`.
+
+### Slack Setup
+
+#### Option A: Incoming Webhook (Simplest)
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) and create an app (or use existing)
+2. Enable **Incoming Webhooks** and add a webhook for your DM or a channel
+3. Set the webhook URL on the device:
+   ```bash
+   # Edit the config file created by bootstrap:
+   nano ~/edge-node/config/slack-env.sh
+   # Uncomment and set:
+   # export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/T.../B.../xxx"
+   ```
+
+#### Option B: Bot Token
+
+1. Create a Slack app with the `chat:write` scope
+2. Install to workspace and copy the `xoxb-...` Bot User OAuth Token
+3. Set on device:
+   ```bash
+   # Either as env var:
+   export SLACK_BOT_TOKEN="xoxb-..."
+   # Or write to a file (more secure):
+   echo "xoxb-..." > ~/edge-node/config/.slack-token
+   chmod 600 ~/edge-node/config/.slack-token
+   export SLACK_TOKEN_FILE="$HOME/edge-node/config/.slack-token"
+   ```
+
+#### Option C: GitHub Actions Secret (for CI-triggered reports)
+
+Add `SLACK_WEBHOOK` or `SLACK_BOT_TOKEN` as a GitHub repository secret.
+The deploy workflow can pass it to the device via SSH environment.
+
+### Configuration Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SLACK_CHANNEL_ID` | `U0A6G6YLRDK` | Target Slack channel or user ID (self-DM) |
+| `SLACK_WEBHOOK_URL` | (none) | Incoming Webhook URL |
+| `SLACK_BOT_TOKEN` | (none) | Bot User OAuth token (`xoxb-...`) |
+| `SLACK_TOKEN_FILE` | (none) | Path to file containing bot token |
+| `SLACK_REPORT_ALWAYS` | `false` | Send Slack reports even when healthy |
+| `SLACK_DRY_RUN` | `false` | Print payload without sending |
+
+### Secret Handling
+
+**No raw secrets are stored in the repository.** The system is deployment-ready:
+
+- `bootstrap.sh` creates a **template** config at `~/edge-node/config/slack-env.sh`
+  with placeholders — the operator fills in the actual webhook/token on-device
+- For file-based token storage, use `~/edge-node/config/.slack-token` with `chmod 600`
+- For GitHub Actions, use repository secrets (`SLACK_WEBHOOK` or `SLACK_BOT_TOKEN`)
+- The `slack-notify.sh` script checks for credentials at runtime and exits cleanly
+  with an error message if none are configured
+
+### Testing Slack Delivery
+
+```bash
+# Source your config
+source ~/edge-node/config/slack-env.sh
+
+# Dry run (prints payload, does not send)
+SLACK_DRY_RUN=true bash termux/slack-notify.sh --status-report
+
+# Send a test message
+bash termux/slack-notify.sh "Hello from Pixel 10 edge node"
+
+# Send full status report
+bash termux/slack-notify.sh --status-report
+
+# View Slack-formatted text output
+bash termux/status-report.sh --slack
+```

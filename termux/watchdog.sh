@@ -96,6 +96,39 @@ if command -v termux-battery-status >/dev/null 2>&1; then
   fi
 fi
 
+# --- Telemetry collection (append to JSON report) ---
+TELEMETRY_JSON='{}'
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$SCRIPT_DIR/telemetry-collect.sh" ]; then
+  TELEMETRY_JSON=$(bash "$SCRIPT_DIR/telemetry-collect.sh" 2>/dev/null || echo '{}')
+  # Persist latest telemetry snapshot
+  mkdir -p "${HOME}/edge-node/data"
+  echo "$TELEMETRY_JSON" > "${HOME}/edge-node/data/telemetry-latest.json"
+  log "OK   Telemetry snapshot saved"
+fi
+
+# --- Slack reporting (if configured) ---
+if [ -f "$SCRIPT_DIR/slack-notify.sh" ]; then
+  SLACK_AVAILABLE=false
+  [ -n "${SLACK_WEBHOOK_URL:-}" ] && SLACK_AVAILABLE=true
+  [ -n "${SLACK_BOT_TOKEN:-}" ] && SLACK_AVAILABLE=true
+  [ -n "${SLACK_TOKEN_FILE:-}" ] && [ -f "${SLACK_TOKEN_FILE:-}" ] && SLACK_AVAILABLE=true
+
+  if [ "$SLACK_AVAILABLE" = true ]; then
+    if [ "$ISSUES" -gt 0 ]; then
+      # Always report issues to Slack
+      bash "$SCRIPT_DIR/slack-notify.sh" --status-report 2>/dev/null \
+        && log "OK   Slack alert sent ($ISSUES issue(s))" \
+        || log "WARN Slack notification failed"
+    elif [ "${SLACK_REPORT_ALWAYS:-false}" = "true" ]; then
+      # Optionally report healthy status too
+      bash "$SCRIPT_DIR/slack-notify.sh" --status-report 2>/dev/null \
+        && log "OK   Slack status sent (healthy)" \
+        || log "WARN Slack notification failed"
+    fi
+  fi
+fi
+
 # --- Summary ---
 if [ "$ISSUES" -eq 0 ]; then
   log "=== All checks passed ==="
