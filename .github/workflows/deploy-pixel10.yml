@@ -25,8 +25,17 @@ on:
         default: 'false'
 
 env:
-  SSH_OPTS: '-o StrictHostKeyChecking=no -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3'
+  # Tailscale SSH options — aggressive keepalives to survive intermittent drops
+  SSH_OPTS: >-
+    -o StrictHostKeyChecking=no
+    -o ConnectTimeout=20
+    -o ServerAliveInterval=5
+    -o ServerAliveCountMax=6
+    -o TCPKeepAlive=yes
+    -o ConnectionAttempts=3
   DEPLOY_LOG: /tmp/pixel10-deploy.log
+  SSH_RETRY_MAX: '4'
+  SSH_RETRY_DELAY: '10'
 
 jobs:
   deploy:
@@ -58,65 +67,139 @@ jobs:
           ssh-keyscan -p ${{ github.event.inputs.ssh_port }} \
             ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      # --- Reusable retry helpers for Tailscale SSH resilience ---
+      # Defined once and sourced by all subsequent steps that need SSH.
+      - name: Create SSH retry helpers
+        if: steps.check-ssh.outputs.skip != 'true'
+        run: |
+          cat > /tmp/ssh-retry-helpers.sh <<'HELPERS'
+          #!/usr/bin/env bash
+          # ssh_retry — run an SSH command with retries and exponential-ish backoff.
+          # Usage: ssh_retry <label> <max_attempts> <delay_secs> <ssh_args...>
+          ssh_retry() {
+            local label="$1" max="$2" delay="$3"
+            shift 3
+            local attempt=1
+            while [ "$attempt" -le "$max" ]; do
+              echo "[ssh_retry] Attempt $attempt/$max — $label"
+              echo "[ssh_retry] Attempt $attempt/$max — $label" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+              set +e
+              "$@" 2>&1
+              local rc=$?
+              set -e
+              if [ "$rc" -eq 0 ]; then
+                echo "[ssh_retry] $label succeeded on attempt $attempt"
+                echo "[ssh_retry] $label succeeded on attempt $attempt" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+                return 0
+              fi
+              echo "::warning::[ssh_retry] $label failed (attempt $attempt/$max, exit $rc)"
+              echo "[ssh_retry] $label failed (attempt $attempt/$max, exit $rc)" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+              if [ "$attempt" -lt "$max" ]; then
+                local wait_secs=$(( delay * attempt ))
+                echo "[ssh_retry] Waiting ${wait_secs}s before retry..."
+                echo "[ssh_retry] Waiting ${wait_secs}s before retry..." >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+                sleep "$wait_secs"
+              fi
+              attempt=$(( attempt + 1 ))
+            done
+            echo "::error::[ssh_retry] $label failed after $max attempts"
+            echo "[ssh_retry] $label FAILED after $max attempts" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+            return 1
+          }
+
+          # scp_retry — run an SCP transfer with retries.
+          # Usage: scp_retry <label> <max_attempts> <delay_secs> <scp_args...>
+          scp_retry() {
+            local label="$1" max="$2" delay="$3"
+            shift 3
+            local attempt=1
+            while [ "$attempt" -le "$max" ]; do
+              echo "[scp_retry] Attempt $attempt/$max — $label"
+              echo "[scp_retry] Attempt $attempt/$max — $label" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+              set +e
+              scp "$@" 2>&1
+              local rc=$?
+              set -e
+              if [ "$rc" -eq 0 ]; then
+                echo "[scp_retry] $label succeeded on attempt $attempt"
+                echo "[scp_retry] $label succeeded on attempt $attempt" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+                return 0
+              fi
+              echo "::warning::[scp_retry] $label failed (attempt $attempt/$max, exit $rc)"
+              echo "[scp_retry] $label failed (attempt $attempt/$max, exit $rc)" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+              if [ "$attempt" -lt "$max" ]; then
+                local wait_secs=$(( delay * attempt ))
+                echo "[scp_retry] Waiting ${wait_secs}s before retry..."
+                sleep "$wait_secs"
+              fi
+              attempt=$(( attempt + 1 ))
+            done
+            echo "::error::[scp_retry] $label failed after $max attempts"
+            echo "[scp_retry] $label FAILED after $max attempts" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+            return 1
+          }
+          HELPERS
+          chmod +x /tmp/ssh-retry-helpers.sh
+          echo "SSH retry helpers installed at /tmp/ssh-retry-helpers.sh"
+
       # --- Pre-flight: stabilize SSH + Termux environment on device ---
       - name: Pre-flight SSH Stabilization
         if: steps.check-ssh.outputs.skip != 'true'
+        env:
+          DEPLOY_LOG: ${{ env.DEPLOY_LOG }}
         run: |
-          echo "::group::Upload ssh-stabilizer.sh"
-          scp -i ~/.ssh/id_pixel10 \
+          source /tmp/ssh-retry-helpers.sh
+
+          echo "::group::Upload ssh-stabilizer.sh (with retry)"
+          scp_retry "Upload ssh-stabilizer.sh" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            -i ~/.ssh/id_pixel10 \
             -P ${{ github.event.inputs.ssh_port }} \
             ${{ env.SSH_OPTS }} \
             termux/ssh-stabilizer.sh \
             ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/ssh-stabilizer.sh
           echo "::endgroup::"
 
-          echo "::group::Run SSH stabilizer"
-          ssh -i ~/.ssh/id_pixel10 \
+          echo "::group::Run SSH stabilizer (with retry)"
+          ssh_retry "Run SSH stabilizer" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            ssh -i ~/.ssh/id_pixel10 \
             -p ${{ github.event.inputs.ssh_port }} \
             ${{ env.SSH_OPTS }} \
             ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
-            'chmod +x ~/ssh-stabilizer.sh && bash ~/ssh-stabilizer.sh 2>&1' | tee -a "${{ env.DEPLOY_LOG }}"
-          STABILIZER_RC=${PIPESTATUS[0]}
+            'chmod +x ~/ssh-stabilizer.sh && bash ~/ssh-stabilizer.sh 2>&1'
+          STABILIZER_RC=$?
           echo "::endgroup::"
 
           if [ "$STABILIZER_RC" -ne 0 ]; then
-            echo "::warning::SSH stabilizer exited with code $STABILIZER_RC — continuing with deployment"
+            echo "::warning::SSH stabilizer could not complete after retries — continuing with deployment"
           fi
 
           echo "::group::Verify stabilizer output"
-          ssh -i ~/.ssh/id_pixel10 \
+          ssh_retry "Read ssh-status.json" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            ssh -i ~/.ssh/id_pixel10 \
             -p ${{ github.event.inputs.ssh_port }} \
             ${{ env.SSH_OPTS }} \
             ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
-            'cat ~/edge-node/ssh-status.json 2>/dev/null || echo "{\"status\": \"no status file\"}"' | tee -a "${{ env.DEPLOY_LOG }}"
+            'cat ~/edge-node/ssh-status.json 2>/dev/null || echo "{\"status\": \"no status file\"}"'
           echo "::endgroup::"
 
-      # --- Helper: run a remote command and capture output ---
-      # We define a reusable shell function via env for all subsequent steps.
+      # --- Test SSH connectivity with retry ---
       - name: Test SSH Connection
         if: steps.check-ssh.outputs.skip != 'true'
+        env:
+          DEPLOY_LOG: ${{ env.DEPLOY_LOG }}
         run: |
-          remote_exec() {
-            local label="$1"; shift
-            echo "::group::$label"
-            local outfile
-            outfile=$(mktemp)
-            set +e
-            ssh -i ~/.ssh/id_pixel10 \
-              -p ${{ github.event.inputs.ssh_port }} \
-              ${{ env.SSH_OPTS }} \
-              ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
-              "$@" > "$outfile" 2>&1
-            local rc=$?
-            set -e
-            cat "$outfile"
-            cat "$outfile" >> "${{ env.DEPLOY_LOG }}"
-            rm -f "$outfile"
-            echo "::endgroup::"
-            return $rc
-          }
+          source /tmp/ssh-retry-helpers.sh
 
-          remote_exec "SSH ping" 'echo "SSH OK — $(whoami)@$(hostname) — $(date -Iseconds)"'
+          ssh_retry "SSH connectivity test" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            'echo "SSH OK — $(whoami)@$(hostname) — $(date -Iseconds)"'
           echo "Connection established successfully."
 
       # --- Bootstrap: full edge-node prerequisite install ---
@@ -265,8 +348,19 @@ jobs:
             echo "| **User** | \`${{ github.event.inputs.ssh_user }}\` |"
             echo "| **Target** | \`${{ github.event.inputs.deploy_target }}\` |"
             echo "| **Dry run** | \`${{ github.event.inputs.dry_run }}\` |"
+            echo "| **SSH retry** | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s backoff |"
             echo "| **Run** | [\`${GITHUB_RUN_ID}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
             echo ""
+
+            # Extract and display retry activity from the deploy log
+            if [ -f "${{ env.DEPLOY_LOG }}" ] && grep -q '\[ssh_retry\]\|\[scp_retry\]' "${{ env.DEPLOY_LOG }}"; then
+              echo "### SSH Retry Activity"
+              echo '```'
+              grep '\[ssh_retry\]\|\[scp_retry\]' "${{ env.DEPLOY_LOG }}" | tail -30
+              echo '```'
+              echo ""
+            fi
+
             if [ -f "${{ env.DEPLOY_LOG }}" ]; then
               echo "<details><summary>Full deploy log (last 60 lines)</summary>"
               echo ""
