@@ -143,47 +143,67 @@ jobs:
           echo "SSH retry helpers installed at /tmp/ssh-retry-helpers.sh"
 
       # --- Pre-flight: stabilize SSH + Termux environment on device ---
+      # This step is advisory — it warns on failure but never blocks the workflow.
+      # "Test SSH Connection" remains the authoritative gate for phone reachability.
       - name: Pre-flight SSH Stabilization
+        id: preflight
         if: steps.check-ssh.outputs.skip != 'true'
         env:
           DEPLOY_LOG: ${{ env.DEPLOY_LOG }}
         run: |
           source /tmp/ssh-retry-helpers.sh
+          PREFLIGHT_OK=true
 
           echo "::group::Upload ssh-stabilizer.sh (with retry)"
-          scp_retry "Upload ssh-stabilizer.sh" \
+          if ! scp_retry "Upload ssh-stabilizer.sh" \
             ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
             -i ~/.ssh/id_pixel10 \
             -P ${{ github.event.inputs.ssh_port }} \
             ${{ env.SSH_OPTS }} \
             termux/ssh-stabilizer.sh \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/ssh-stabilizer.sh
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/ssh-stabilizer.sh; then
+            echo "::warning::Pre-flight SCP upload failed after all retries — stabilization skipped due to connectivity"
+            echo "[preflight] SCP upload failed — stabilization skipped due to connectivity" >> "$DEPLOY_LOG"
+            PREFLIGHT_OK=false
+          fi
           echo "::endgroup::"
 
-          echo "::group::Run SSH stabilizer (with retry)"
-          ssh_retry "Run SSH stabilizer" \
-            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
-            ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
-            ${{ env.SSH_OPTS }} \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
-            'chmod +x ~/ssh-stabilizer.sh && bash ~/ssh-stabilizer.sh 2>&1'
-          STABILIZER_RC=$?
-          echo "::endgroup::"
-
-          if [ "$STABILIZER_RC" -ne 0 ]; then
-            echo "::warning::SSH stabilizer could not complete after retries — continuing with deployment"
+          if [ "$PREFLIGHT_OK" = true ]; then
+            echo "::group::Run SSH stabilizer (with retry)"
+            if ! ssh_retry "Run SSH stabilizer" \
+              ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+              ssh -i ~/.ssh/id_pixel10 \
+              -p ${{ github.event.inputs.ssh_port }} \
+              ${{ env.SSH_OPTS }} \
+              ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+              'chmod +x ~/ssh-stabilizer.sh && bash ~/ssh-stabilizer.sh 2>&1'; then
+              echo "::warning::SSH stabilizer could not complete after retries — continuing with deployment"
+              echo "[preflight] SSH stabilizer execution failed — continuing without stabilization" >> "$DEPLOY_LOG"
+              PREFLIGHT_OK=false
+            fi
+            echo "::endgroup::"
           fi
 
-          echo "::group::Verify stabilizer output"
-          ssh_retry "Read ssh-status.json" \
-            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
-            ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
-            ${{ env.SSH_OPTS }} \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
-            'cat ~/edge-node/ssh-status.json 2>/dev/null || echo "{\"status\": \"no status file\"}"'
-          echo "::endgroup::"
+          if [ "$PREFLIGHT_OK" = true ]; then
+            echo "::group::Verify stabilizer output"
+            if ! ssh_retry "Read ssh-status.json" \
+              ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+              ssh -i ~/.ssh/id_pixel10 \
+              -p ${{ github.event.inputs.ssh_port }} \
+              ${{ env.SSH_OPTS }} \
+              ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+              'cat ~/edge-node/ssh-status.json 2>/dev/null || echo "{\"status\": \"no status file\"}"'; then
+              echo "::warning::Could not read stabilizer status — continuing with deployment"
+              echo "[preflight] Could not read ssh-status.json — continuing without verification" >> "$DEPLOY_LOG"
+              PREFLIGHT_OK=false
+            fi
+            echo "::endgroup::"
+          fi
+
+          echo "preflight_ok=$PREFLIGHT_OK" >> "$GITHUB_OUTPUT"
+          if [ "$PREFLIGHT_OK" = false ]; then
+            echo "::notice::Pre-flight SSH stabilization was skipped due to connectivity issues. Test SSH Connection will determine if the device is reachable."
+          fi
 
       # --- Test SSH connectivity with retry ---
       - name: Test SSH Connection
@@ -349,8 +369,15 @@ jobs:
             echo "| **Target** | \`${{ github.event.inputs.deploy_target }}\` |"
             echo "| **Dry run** | \`${{ github.event.inputs.dry_run }}\` |"
             echo "| **SSH retry** | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s backoff |"
+            echo "| **Pre-flight** | ${{ steps.preflight.outputs.preflight_ok == 'true' && '✅ Passed' || '⚠️ Skipped (connectivity)' }} |"
             echo "| **Run** | [\`${GITHUB_RUN_ID}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
             echo ""
+
+            if [ "${{ steps.preflight.outputs.preflight_ok }}" != "true" ]; then
+              echo "> **Note:** Pre-flight SSH stabilization was skipped due to connectivity issues."
+              echo "> Test SSH Connection was used as the authoritative reachability gate."
+              echo ""
+            fi
 
             # Extract and display retry activity from the deploy log
             if [ -f "${{ env.DEPLOY_LOG }}" ] && grep -q '\[ssh_retry\]\|\[scp_retry\]' "${{ env.DEPLOY_LOG }}"; then
