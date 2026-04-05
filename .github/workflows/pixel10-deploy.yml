@@ -20,6 +20,18 @@ on:
         required: false
         default: 'false'
 
+env:
+  # Tailscale SSH options — aggressive keepalives to survive intermittent drops
+  SSH_OPTS: >-
+    -o StrictHostKeyChecking=no
+    -o ConnectTimeout=20
+    -o ServerAliveInterval=5
+    -o ServerAliveCountMax=6
+    -o TCPKeepAlive=yes
+    -o ConnectionAttempts=3
+  SSH_RETRY_MAX: '4'
+  SSH_RETRY_DELAY: '10'
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -56,36 +68,105 @@ jobs:
           ssh-keyscan -p ${{ github.event.inputs.ssh_port }} \
             ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      # --- Reusable retry helpers for Tailscale SSH resilience ---
+      - name: Create SSH retry helpers
+        if: steps.check-ssh.outputs.skip != 'true'
+        run: |
+          cat > /tmp/ssh-retry-helpers.sh <<'HELPERS'
+          #!/usr/bin/env bash
+          # ssh_retry — run an SSH command with retries and exponential-ish backoff.
+          # Usage: ssh_retry <label> <max_attempts> <delay_secs> <ssh_args...>
+          ssh_retry() {
+            local label="$1" max="$2" delay="$3"
+            shift 3
+            local attempt=1
+            while [ "$attempt" -le "$max" ]; do
+              echo "[ssh_retry] Attempt $attempt/$max — $label"
+              set +e
+              "$@" 2>&1
+              local rc=$?
+              set -e
+              if [ "$rc" -eq 0 ]; then
+                echo "[ssh_retry] $label succeeded on attempt $attempt"
+                return 0
+              fi
+              echo "::warning::[ssh_retry] $label failed (attempt $attempt/$max, exit $rc)"
+              if [ "$attempt" -lt "$max" ]; then
+                local wait_secs=$(( delay * attempt ))
+                echo "[ssh_retry] Waiting ${wait_secs}s before retry..."
+                sleep "$wait_secs"
+              fi
+              attempt=$(( attempt + 1 ))
+            done
+            echo "::error::[ssh_retry] $label failed after $max attempts"
+            return 1
+          }
+
+          # scp_retry — run an SCP transfer with retries.
+          scp_retry() {
+            local label="$1" max="$2" delay="$3"
+            shift 3
+            local attempt=1
+            while [ "$attempt" -le "$max" ]; do
+              echo "[scp_retry] Attempt $attempt/$max — $label"
+              set +e
+              scp "$@" 2>&1
+              local rc=$?
+              set -e
+              if [ "$rc" -eq 0 ]; then
+                echo "[scp_retry] $label succeeded on attempt $attempt"
+                return 0
+              fi
+              echo "::warning::[scp_retry] $label failed (attempt $attempt/$max, exit $rc)"
+              if [ "$attempt" -lt "$max" ]; then
+                local wait_secs=$(( delay * attempt ))
+                echo "[scp_retry] Waiting ${wait_secs}s before retry..."
+                sleep "$wait_secs"
+              fi
+              attempt=$(( attempt + 1 ))
+            done
+            echo "::error::[scp_retry] $label failed after $max attempts"
+            return 1
+          }
+          HELPERS
+          chmod +x /tmp/ssh-retry-helpers.sh
+
       - name: Pre-flight SSH Stabilization
         if: steps.check-ssh.outputs.skip != 'true'
         run: |
-          echo "::group::Upload ssh-stabilizer.sh"
-          scp -i ~/.ssh/pixel10_key \
+          source /tmp/ssh-retry-helpers.sh
+
+          echo "::group::Upload ssh-stabilizer.sh (with retry)"
+          scp_retry "Upload ssh-stabilizer.sh" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            -i ~/.ssh/pixel10_key \
             -P ${{ github.event.inputs.ssh_port }} \
-            -o StrictHostKeyChecking=no \
+            ${{ env.SSH_OPTS }} \
             termux/ssh-stabilizer.sh \
             u0_a325@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/ssh-stabilizer.sh
           echo "::endgroup::"
 
-          echo "::group::Run SSH stabilizer"
-          ssh -i ~/.ssh/pixel10_key \
+          echo "::group::Run SSH stabilizer (with retry)"
+          ssh_retry "Run SSH stabilizer" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            ssh -i ~/.ssh/pixel10_key \
             -p ${{ github.event.inputs.ssh_port }} \
-            -o StrictHostKeyChecking=no \
-            -o ConnectTimeout=15 \
-            -o ServerAliveInterval=10 \
+            ${{ env.SSH_OPTS }} \
             u0_a325@${{ github.event.inputs.device_ip }} \
             'chmod +x ~/ssh-stabilizer.sh && bash ~/ssh-stabilizer.sh 2>&1'
           STABILIZER_RC=$?
           echo "::endgroup::"
 
           if [ "$STABILIZER_RC" -ne 0 ]; then
-            echo "::warning::SSH stabilizer exited with code $STABILIZER_RC — continuing with deployment"
+            echo "::warning::SSH stabilizer could not complete after retries — continuing with deployment"
           fi
 
           echo "::group::Verify stabilizer output"
-          ssh -i ~/.ssh/pixel10_key \
+          ssh_retry "Read ssh-status.json" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            ssh -i ~/.ssh/pixel10_key \
             -p ${{ github.event.inputs.ssh_port }} \
-            -o StrictHostKeyChecking=no \
+            ${{ env.SSH_OPTS }} \
             u0_a325@${{ github.event.inputs.device_ip }} \
             'cat ~/edge-node/ssh-status.json 2>/dev/null || echo "{\"status\": \"no status file\"}"'
           echo "::endgroup::"
@@ -93,16 +174,17 @@ jobs:
       - name: Test Connection
         if: steps.check-ssh.outputs.skip != 'true'
         run: |
-          echo "Testing SSH connection..."
-          ssh -i ~/.ssh/pixel10_key \
+          source /tmp/ssh-retry-helpers.sh
+
+          echo "Testing SSH connection (with retry)..."
+          ssh_retry "SSH connectivity test" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            ssh -i ~/.ssh/pixel10_key \
             -p ${{ github.event.inputs.ssh_port }} \
-            -o ConnectTimeout=15 \
-            -o StrictHostKeyChecking=no \
+            ${{ env.SSH_OPTS }} \
             u0_a325@${{ github.event.inputs.device_ip }} \
-            'echo "SSH OK — $(whoami)@$(uname -m) — $(date)"' 2>&1 || {
-              echo "::error::SSH connection failed"
-              exit 1
-            }
+            'echo "SSH OK — $(whoami)@$(uname -m) — $(date)"'
+          echo "Connection established successfully."
 
       - name: Deploy Ollama
         if: |
@@ -112,8 +194,7 @@ jobs:
           echo "Deploying Ollama to device..."
           ssh -i ~/.ssh/pixel10_key \
             -p ${{ github.event.inputs.ssh_port }} \
-            -o StrictHostKeyChecking=no \
-            -o ServerAliveInterval=10 \
+            ${{ env.SSH_OPTS }} \
             u0_a325@${{ github.event.inputs.device_ip }} 'bash -s' <<'DEPLOY_SCRIPT'
           set -euo pipefail
           echo "[1/6] Installing packages..."
@@ -159,12 +240,16 @@ jobs:
           steps.check-ssh.outputs.skip != 'true' &&
           github.event.inputs.dry_run == 'false'
         run: |
-          echo "::group::Remote verification"
-          ssh -i ~/.ssh/pixel10_key \
+          source /tmp/ssh-retry-helpers.sh
+
+          echo "::group::Remote verification (with retry)"
+          ssh_retry "Verify Ollama deployment" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            ssh -i ~/.ssh/pixel10_key \
             -p ${{ github.event.inputs.ssh_port }} \
-            -o StrictHostKeyChecking=no \
+            ${{ env.SSH_OPTS }} \
             u0_a325@${{ github.event.inputs.device_ip }} \
-            'echo "=== Service ===" && curl -sf http://127.0.0.1:11434/api/tags 2>/dev/null || echo "Service not yet ready"' 2>&1
+            'echo "=== Service ===" && curl -sf http://127.0.0.1:11434/api/tags 2>/dev/null || echo "Service not yet ready"'
           echo "::endgroup::"
 
       - name: Summary
@@ -178,6 +263,7 @@ jobs:
             echo "| Device | \`${{ github.event.inputs.device_ip }}\` |"
             echo "| Port | \`${{ github.event.inputs.ssh_port }}\` |"
             echo "| Dry run | \`${{ github.event.inputs.dry_run }}\` |"
+            echo "| SSH retry | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s backoff |"
             echo ""
             echo "**Test locally:**"
             echo '```bash'
