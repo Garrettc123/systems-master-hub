@@ -1,5 +1,9 @@
 name: Deploy Pixel 10 LLM Platform
 
+# This workflow is kept for backwards compatibility.
+# Prefer using the "Deploy to Pixel 10" workflow (deploy-pixel10.yml)
+# which has richer diagnostics and bootstrap support.
+
 on:
   workflow_dispatch:
     inputs:
@@ -20,27 +24,28 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     name: Deploy to Pixel 10
-    
+    timeout-minutes: 40
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Pre-flight Check
         run: |
           echo "Device IP: ${{ github.event.inputs.device_ip }}"
           echo "SSH Port: ${{ github.event.inputs.ssh_port }}"
           echo "Dry Run: ${{ github.event.inputs.dry_run }}"
-          
+
       - name: Check SSH Key
         id: check-ssh
         env:
           PIXEL10_SSH_KEY: ${{ secrets.PIXEL10_SSH_KEY }}
         run: |
           if [ -z "$PIXEL10_SSH_KEY" ]; then
-            echo "⚠️ PIXEL10_SSH_KEY not configured — skipping"
-            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::error::PIXEL10_SSH_KEY not configured"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "skip=false" >> $GITHUB_OUTPUT
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Setup SSH
         if: steps.check-ssh.outputs.skip != 'true'
@@ -48,49 +53,102 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.PIXEL10_SSH_KEY }}" > ~/.ssh/pixel10_key
           chmod 600 ~/.ssh/pixel10_key
-          ssh-keyscan -p ${{ github.event.inputs.ssh_port }} ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || echo "SSH key scan skipped"
-          
+          ssh-keyscan -p ${{ github.event.inputs.ssh_port }} \
+            ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
       - name: Test Connection
+        if: steps.check-ssh.outputs.skip != 'true'
         run: |
           echo "Testing SSH connection..."
-          ssh -i ~/.ssh/pixel10_key -p ${{ github.event.inputs.ssh_port }} -o ConnectTimeout=10 -o StrictHostKeyChecking=no u0_a325@${{ github.event.inputs.device_ip }} "echo SSH Connection OK" || echo "Connection test inconclusive"
-          
+          ssh -i ~/.ssh/pixel10_key \
+            -p ${{ github.event.inputs.ssh_port }} \
+            -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=no \
+            u0_a325@${{ github.event.inputs.device_ip }} \
+            'echo "SSH OK — $(whoami)@$(uname -m) — $(date)"' 2>&1 || {
+              echo "::error::SSH connection failed"
+              exit 1
+            }
+
       - name: Deploy Ollama
-        if: github.event.inputs.dry_run == 'false'
+        if: |
+          steps.check-ssh.outputs.skip != 'true' &&
+          github.event.inputs.dry_run == 'false'
         run: |
           echo "Deploying Ollama to device..."
-          ssh -i ~/.ssh/pixel10_key -p ${{ github.event.inputs.ssh_port }} -o StrictHostKeyChecking=no u0_a325@${{ github.event.inputs.device_ip }} bash << 'DEPLOY_SCRIPT'
-          set -e
+          ssh -i ~/.ssh/pixel10_key \
+            -p ${{ github.event.inputs.ssh_port }} \
+            -o StrictHostKeyChecking=no \
+            -o ServerAliveInterval=10 \
+            u0_a325@${{ github.event.inputs.device_ip }} 'bash -s' <<'DEPLOY_SCRIPT'
+          set -euo pipefail
           echo "[1/6] Installing packages..."
-          pkg install -y curl wget openssl openssh
+          pkg update -y 2>/dev/null || true
+          pkg install -y curl wget openssl openssh 2>/dev/null || true
+
           echo "[2/6] Installing Ollama (Termux-compatible)..."
-          # Ollama's generic install script is not compatible with Termux/Android.
-          # Use the tur-repo community package instead.
           pkg install -y tur-repo 2>/dev/null || true
-          pkg install -y ollama 2>/dev/null || {
-            echo "ERROR: Failed to install ollama via tur-repo"
+          if ! command -v ollama >/dev/null 2>&1; then
+            pkg install -y ollama 2>/dev/null || {
+              echo "ERROR: Failed to install ollama via tur-repo"
+              exit 1
+            }
+          fi
+
+          echo "[3/6] Downloading model..."
+          timeout 1200 ollama pull llama3.2:3b || {
+            echo "ERROR: Model download timed out"
             exit 1
           }
-          echo "[3/6] Downloading model..."
-          timeout 1200 ollama pull llama3.2:3b || echo "Model download in progress"
+
           echo "[4/6] Starting service..."
-          ollama serve &
+          pkill -f 'ollama serve' 2>/dev/null || true
+          sleep 1
+          nohup ollama serve > /tmp/ollama.log 2>&1 &
           sleep 5
+
           echo "[5/6] Testing..."
-          curl -s http://127.0.0.1:11434/api/ps || echo "Service starting"
+          if curl -sf http://127.0.0.1:11434/api/tags >/dev/null; then
+            echo "Ollama is running"
+            curl -sf http://127.0.0.1:11434/api/tags | head -c 300
+          else
+            echo "ERROR: Ollama not responding"
+            cat /tmp/ollama.log 2>/dev/null | tail -15
+            exit 1
+          fi
+
           echo "[6/6] Complete"
           DEPLOY_SCRIPT
-          
+
       - name: Verify Deployment
-        if: github.event.inputs.dry_run == 'false'
+        if: |
+          steps.check-ssh.outputs.skip != 'true' &&
+          github.event.inputs.dry_run == 'false'
         run: |
-          echo "Verifying..."
-          ssh -i ~/.ssh/pixel10_key -p ${{ github.event.inputs.ssh_port }} -o StrictHostKeyChecking=no u0_a325@${{ github.event.inputs.device_ip }} "curl -s http://127.0.0.1:11434/api/ps || echo Verifying" || true
-          
-      - name: Upload Report
+          echo "::group::Remote verification"
+          ssh -i ~/.ssh/pixel10_key \
+            -p ${{ github.event.inputs.ssh_port }} \
+            -o StrictHostKeyChecking=no \
+            u0_a325@${{ github.event.inputs.device_ip }} \
+            'echo "=== Service ===" && curl -sf http://127.0.0.1:11434/api/tags 2>/dev/null || echo "Service not yet ready"' 2>&1
+          echo "::endgroup::"
+
+      - name: Summary
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: deployment-report
-          path: deployment-report.md
-          retention-days: 30
+        run: |
+          {
+            echo "## Pixel 10 LLM Deployment"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Device | \`${{ github.event.inputs.device_ip }}\` |"
+            echo "| Port | \`${{ github.event.inputs.ssh_port }}\` |"
+            echo "| Dry run | \`${{ github.event.inputs.dry_run }}\` |"
+            echo ""
+            echo "**Test locally:**"
+            echo '```bash'
+            echo "curl -X POST http://${{ github.event.inputs.device_ip }}:11434/api/generate \\"
+            echo "  -H 'Content-Type: application/json' \\"
+            echo "  -d '{\"model\": \"llama3.2:3b\", \"prompt\": \"Hello!\", \"stream\": false}'"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

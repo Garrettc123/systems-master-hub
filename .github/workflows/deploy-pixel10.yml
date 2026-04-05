@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       device_ip:
-        description: 'Device IP (5G)'
+        description: 'Device IP (5G/WiFi)'
         required: true
         default: '100.71.218.79'
       ssh_user:
@@ -15,104 +15,240 @@ on:
         description: 'SSH Port'
         required: true
         default: '8022'
+      deploy_target:
+        description: 'What to deploy (bootstrap | ollama | health-check | all)'
+        required: true
+        default: 'all'
       dry_run:
         description: 'Test only (true/false)'
         required: false
         default: 'false'
 
+env:
+  SSH_OPTS: '-o StrictHostKeyChecking=no -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3'
+  DEPLOY_LOG: /tmp/pixel10-deploy.log
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 45
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Verify SSH Key
+        id: check-ssh
         env:
           PIXEL10_SSH_KEY: ${{ secrets.PIXEL10_SSH_KEY }}
         run: |
           if [ -z "$PIXEL10_SSH_KEY" ]; then
-            echo "⚠️ PIXEL10_SSH_KEY not configured — skipping"
+            echo "::error::PIXEL10_SSH_KEY secret is not configured"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "SSH Key: Set"
-      
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - name: Setup SSH
+        if: steps.check-ssh.outputs.skip != 'true'
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.PIXEL10_SSH_KEY }}" > ~/.ssh/id_pixel10
           chmod 600 ~/.ssh/id_pixel10
-          
-          # Add to known_hosts
-          ssh-keyscan -p ${{ github.event.inputs.ssh_port }} ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
-      
+          ssh-keyscan -p ${{ github.event.inputs.ssh_port }} \
+            ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      # --- Helper: run a remote command and capture output ---
+      # We define a reusable shell function via env for all subsequent steps.
       - name: Test SSH Connection
+        if: steps.check-ssh.outputs.skip != 'true'
         run: |
+          remote_exec() {
+            local label="$1"; shift
+            echo "::group::$label"
+            local outfile
+            outfile=$(mktemp)
+            set +e
+            ssh -i ~/.ssh/id_pixel10 \
+              -p ${{ github.event.inputs.ssh_port }} \
+              ${{ env.SSH_OPTS }} \
+              ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+              "$@" > "$outfile" 2>&1
+            local rc=$?
+            set -e
+            cat "$outfile"
+            cat "$outfile" >> "${{ env.DEPLOY_LOG }}"
+            rm -f "$outfile"
+            echo "::endgroup::"
+            return $rc
+          }
+
+          remote_exec "SSH ping" 'echo "SSH OK — $(whoami)@$(hostname) — $(date -Iseconds)"'
+          echo "Connection established successfully."
+
+      # --- Bootstrap: full edge-node prerequisite install ---
+      - name: Deploy Bootstrap
+        if: |
+          steps.check-ssh.outputs.skip != 'true' &&
+          github.event.inputs.dry_run == 'false' &&
+          (github.event.inputs.deploy_target == 'bootstrap' || github.event.inputs.deploy_target == 'all')
+        run: |
+          echo "::group::Upload bootstrap script"
+          scp -i ~/.ssh/id_pixel10 \
+            -P ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            termux/bootstrap.sh \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/bootstrap.sh
+          echo "::endgroup::"
+
+          echo "::group::Run bootstrap"
           ssh -i ~/.ssh/id_pixel10 \
             -p ${{ github.event.inputs.ssh_port }} \
-            -o StrictHostKeyChecking=no \
-            -o ConnectTimeout=10 \
+            ${{ env.SSH_OPTS }} \
             ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
-            'echo "SSH OK: $(whoami)"' || echo "Connection test failed - continuing anyway"
-      
-      - name: Deploy Ollama
-        if: github.event.inputs.dry_run == 'false'
-        run: |
-          ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
-            -o StrictHostKeyChecking=no \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} 'bash -s' <<'EOF'
-          set -e
-          echo "Starting Pixel 10 LLM Deployment"
-          echo ""
-          echo "[1/5] Updating packages..."
-          pkg update -y 2>/dev/null || true
-          pkg install -y curl wget git openssl 2>/dev/null || true
-          echo "[2/5] Installing Ollama (Termux-compatible)..."
-          if ! command -v ollama > /dev/null 2>&1; then
-            # Ollama's generic install script is not compatible with Termux/Android.
-            # Use the tur-repo community package instead.
-            pkg install -y tur-repo 2>/dev/null || true
-            pkg install -y ollama 2>/dev/null || {
-              echo "ERROR: Failed to install ollama via tur-repo"
-              exit 1
-            }
+            'bash ~/bootstrap.sh 2>&1' | tee -a "${{ env.DEPLOY_LOG }}"
+          REMOTE_RC=${PIPESTATUS[0]}
+          echo "::endgroup::"
+
+          if [ "$REMOTE_RC" -ne 0 ]; then
+            echo "::error::Bootstrap failed with exit code $REMOTE_RC"
+            echo "## Bootstrap FAILED (rc=$REMOTE_RC)" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -30 "${{ env.DEPLOY_LOG }}" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
-          echo "[3/5] Downloading llama3.2:3b model..."
-          timeout 1800 ollama pull llama3.2:3b || echo "Model download started (may take time)"
-          echo "[4/5] Starting Ollama service..."
-          nohup ollama serve > /tmp/ollama.log 2>&1 &
-          sleep 3
-          echo "[5/5] Verifying service..."
-          curl -s http://127.0.0.1:11434/api/ps > /dev/null && echo "Ollama is running" || echo "Ollama service is starting"
-          echo ""
-          echo "Deployment complete!"
-          EOF
-      
-      - name: Verify Deployment
-        if: github.event.inputs.dry_run == 'false'
+
+      # --- Boot persistence + watchdog install ---
+      - name: Deploy Boot & Watchdog Scripts
+        if: |
+          steps.check-ssh.outputs.skip != 'true' &&
+          github.event.inputs.dry_run == 'false' &&
+          (github.event.inputs.deploy_target == 'bootstrap' || github.event.inputs.deploy_target == 'all')
         run: |
-          echo "Waiting for service to stabilize..."
-          sleep 5
+          echo "::group::Upload support scripts"
+          scp -i ~/.ssh/id_pixel10 \
+            -P ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            termux/boot-init.sh \
+            termux/watchdog.sh \
+            termux/status-report.sh \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/
+          echo "::endgroup::"
+
+          echo "::group::Install boot persistence"
           ssh -i ~/.ssh/id_pixel10 \
             -p ${{ github.event.inputs.ssh_port }} \
-            -o StrictHostKeyChecking=no \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} 'bash -s' <<'BOOTSETUP'
+          set -e
+          mkdir -p ~/.termux/boot
+          # Symlink boot-init into Termux:Boot directory
+          ln -sf ~/boot-init.sh ~/.termux/boot/start-edge-node.sh
+          chmod +x ~/boot-init.sh ~/watchdog.sh ~/status-report.sh
+          echo "Boot persistence installed."
+          BOOTSETUP
+          echo "::endgroup::"
+
+      # --- Ollama LLM deploy ---
+      - name: Deploy Ollama
+        if: |
+          steps.check-ssh.outputs.skip != 'true' &&
+          github.event.inputs.dry_run == 'false' &&
+          (github.event.inputs.deploy_target == 'ollama' || github.event.inputs.deploy_target == 'all')
+        run: |
+          echo "::group::Install Ollama"
+          ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} 'bash -s' <<'OLLAMA'
+          set -euo pipefail
+          echo "[1/4] Ensuring tur-repo for Ollama..."
+          pkg install -y tur-repo 2>/dev/null || true
+
+          echo "[2/4] Installing Ollama..."
+          if ! command -v ollama >/dev/null 2>&1; then
+            pkg install -y ollama 2>/dev/null || {
+              echo "ERROR: Failed to install ollama via tur-repo"; exit 1
+            }
+          else
+            echo "Ollama already installed: $(ollama --version 2>/dev/null || echo unknown)"
+          fi
+
+          echo "[3/4] Pulling llama3.2:3b model..."
+          timeout 1800 ollama pull llama3.2:3b || {
+            echo "WARNING: Model pull timed out — may still be downloading in background"; exit 1
+          }
+
+          echo "[4/4] Starting Ollama service..."
+          pkill -f 'ollama serve' 2>/dev/null || true
+          sleep 1
+          nohup ollama serve > /tmp/ollama.log 2>&1 &
+          sleep 4
+
+          if curl -sf http://127.0.0.1:11434/api/tags >/dev/null; then
+            echo "Ollama is running. Models:"
+            curl -sf http://127.0.0.1:11434/api/tags | head -c 500
+            echo ""
+          else
+            echo "ERROR: Ollama not responding on :11434"
+            cat /tmp/ollama.log 2>/dev/null | tail -20
+            exit 1
+          fi
+          echo "Ollama deployment complete."
+          OLLAMA
+          REMOTE_RC=${PIPESTATUS[0]}
+          echo "::endgroup::"
+
+          if [ "${REMOTE_RC:-0}" -ne 0 ]; then
+            echo "::error::Ollama deployment failed"
+            exit 1
+          fi
+
+      # --- Health check ---
+      - name: Run Remote Health Check
+        if: |
+          steps.check-ssh.outputs.skip != 'true' &&
+          github.event.inputs.dry_run == 'false'
+        run: |
+          echo "::group::Health check"
+          ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
             ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
-            'echo "Service Status:" && curl -s http://127.0.0.1:11434/api/ps 2>/dev/null | head -20 || echo "Service initializing..."'
-      
-      - name: Summary
+            'bash ~/status-report.sh 2>&1' | tee -a "${{ env.DEPLOY_LOG }}"
+          echo "::endgroup::"
+
+      # --- Summary ---
+      - name: Build Summary
         if: always()
         run: |
-          echo "## Pixel 10 LLM Deployment" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Device:** ${{ github.event.inputs.device_ip }}" >> $GITHUB_STEP_SUMMARY
-          echo "**User:** ${{ github.event.inputs.ssh_user }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Port:** ${{ github.event.inputs.ssh_port }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Test Command:**" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "curl -X POST http://${{ github.event.inputs.device_ip }}:11434/api/generate \\" >> $GITHUB_STEP_SUMMARY
-          echo "  -H 'Content-Type: application/json' \\" >> $GITHUB_STEP_SUMMARY
-          echo "  -d '{\"model\": \"llama3.2:3b\", \"prompt\": \"Hello!\", \"stream\": false}'" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Pixel 10 Edge Node Deployment"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| **Device** | \`${{ github.event.inputs.device_ip }}:${{ github.event.inputs.ssh_port }}\` |"
+            echo "| **User** | \`${{ github.event.inputs.ssh_user }}\` |"
+            echo "| **Target** | \`${{ github.event.inputs.deploy_target }}\` |"
+            echo "| **Dry run** | \`${{ github.event.inputs.dry_run }}\` |"
+            echo "| **Run** | [\`${GITHUB_RUN_ID}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
+            echo ""
+            if [ -f "${{ env.DEPLOY_LOG }}" ]; then
+              echo "<details><summary>Full deploy log (last 60 lines)</summary>"
+              echo ""
+              echo '```'
+              tail -60 "${{ env.DEPLOY_LOG }}"
+              echo '```'
+              echo "</details>"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Deploy Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixel10-deploy-log
+          path: /tmp/pixel10-deploy.log
+          retention-days: 14
+          if-no-files-found: ignore
