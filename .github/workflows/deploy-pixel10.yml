@@ -36,9 +36,6 @@ env:
   DEPLOY_LOG: /tmp/pixel10-deploy.log
   SSH_RETRY_MAX: '4'
   SSH_RETRY_DELAY: '10'
-  # Test SSH Connection uses more aggressive retry with exponential backoff
-  SSH_TEST_RETRY_MAX: '5'
-  SSH_TEST_RETRY_BASE_DELAY: '5'
 
 jobs:
   deploy:
@@ -190,8 +187,11 @@ jobs:
           echo "SSH retry helpers installed at /tmp/ssh-retry-helpers.sh"
 
       # --- Pre-flight: stabilize SSH + Termux environment on device ---
-      # This step is advisory — it warns on failure but never blocks the workflow.
-      # "Test SSH Connection" remains the authoritative gate for phone reachability.
+      # This step is the connectivity signal for downstream deploy steps.
+      # If stabilization succeeds, deploy steps proceed directly.
+      # If stabilization soft-fails (connectivity issues), a lightweight SSH
+      # probe determines basic reachability so deploy steps can still attempt
+      # using their own retry logic.
       - name: Pre-flight SSH Stabilization
         id: preflight
         if: steps.check-ssh.outputs.skip != 'true'
@@ -247,52 +247,59 @@ jobs:
             echo "::endgroup::"
           fi
 
-          echo "preflight_ok=$PREFLIGHT_OK" >> "$GITHUB_OUTPUT"
-          if [ "$PREFLIGHT_OK" = false ]; then
-            echo "::notice::Pre-flight SSH stabilization was skipped due to connectivity issues. Test SSH Connection will determine if the device is reachable."
+          # When full stabilization failed, run a lightweight SSH probe so
+          # downstream deploy steps know whether the device is basically reachable.
+          CONNECTIVITY=false
+          if [ "$PREFLIGHT_OK" = true ]; then
+            CONNECTIVITY=true
+          else
+            echo "::group::Lightweight SSH connectivity probe"
+            if ssh_retry "SSH connectivity probe" \
+              ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+              ssh -i ~/.ssh/id_pixel10 \
+              -p ${{ github.event.inputs.ssh_port }} \
+              ${{ env.SSH_OPTS }} \
+              ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+              'echo "SSH OK — $(whoami)@$(hostname) — $(date -Iseconds)"'; then
+              CONNECTIVITY=true
+              echo "[preflight] Stabilization skipped but device is reachable — deploy steps will proceed with retry logic" >> "$DEPLOY_LOG"
+              echo "::notice::Pre-flight stabilization skipped but device is reachable. Deploy steps will proceed with their own retry logic."
+            else
+              echo "::warning::Device unreachable after pre-flight probe — deploy steps will still attempt with retry logic"
+              echo "[preflight] Device unreachable after probe — deploy steps will attempt with retry logic" >> "$DEPLOY_LOG"
+            fi
+            echo "::endgroup::"
           fi
 
-      # --- Test SSH connectivity with exponential backoff ---
-      # This is the authoritative gate — if the device is unreachable after all
-      # retries (exponential backoff: 5s, 10s, 20s, 40s between attempts), the
-      # workflow aborts.  Tailscale connections can take 10-30s to stabilise
-      # after a device wakes from doze, so the backoff curve is tuned for that.
-      - name: Test SSH Connection
-        id: ssh-test
-        if: steps.check-ssh.outputs.skip != 'true'
-        env:
-          DEPLOY_LOG: ${{ env.DEPLOY_LOG }}
-        run: |
-          source /tmp/ssh-retry-helpers.sh
-
-          echo "::group::SSH connectivity test (exponential backoff, max ${{ env.SSH_TEST_RETRY_MAX }} attempts)"
-          ssh_retry_exponential "SSH connectivity test" \
-            ${{ env.SSH_TEST_RETRY_MAX }} ${{ env.SSH_TEST_RETRY_BASE_DELAY }} \
-            ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
-            ${{ env.SSH_OPTS }} \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
-            'echo "SSH OK — $(whoami)@$(hostname) — $(date -Iseconds)"'
-          echo "::endgroup::"
-          echo "Connection established successfully."
+          echo "preflight_ok=$PREFLIGHT_OK" >> "$GITHUB_OUTPUT"
+          echo "connectivity=$CONNECTIVITY" >> "$GITHUB_OUTPUT"
 
       # --- Bootstrap: full edge-node prerequisite install ---
+      # Runs directly after pre-flight stabilization. Uses its own SCP/SSH retry
+      # logic so it can tolerate transient connectivity even when pre-flight
+      # only achieved partial success.
       - name: Deploy Bootstrap
         if: |
           steps.check-ssh.outputs.skip != 'true' &&
           github.event.inputs.dry_run == 'false' &&
           (github.event.inputs.deploy_target == 'bootstrap' || github.event.inputs.deploy_target == 'all')
         run: |
-          echo "::group::Upload bootstrap script"
-          scp -i ~/.ssh/id_pixel10 \
+          source /tmp/ssh-retry-helpers.sh
+
+          echo "::group::Upload bootstrap script (with retry)"
+          scp_retry "Upload bootstrap.sh" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            -i ~/.ssh/id_pixel10 \
             -P ${{ github.event.inputs.ssh_port }} \
             ${{ env.SSH_OPTS }} \
             termux/bootstrap.sh \
             ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/bootstrap.sh
           echo "::endgroup::"
 
-          echo "::group::Run bootstrap"
-          ssh -i ~/.ssh/id_pixel10 \
+          echo "::group::Run bootstrap (with retry)"
+          ssh_retry "Run bootstrap" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            ssh -i ~/.ssh/id_pixel10 \
             -p ${{ github.event.inputs.ssh_port }} \
             ${{ env.SSH_OPTS }} \
             ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
@@ -422,16 +429,18 @@ jobs:
             echo "| **User** | \`${{ github.event.inputs.ssh_user }}\` |"
             echo "| **Target** | \`${{ github.event.inputs.deploy_target }}\` |"
             echo "| **Dry run** | \`${{ github.event.inputs.dry_run }}\` |"
-            echo "| **SSH retry (pre-flight)** | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s linear backoff |"
-            echo "| **SSH retry (test)** | max ${{ env.SSH_TEST_RETRY_MAX }} attempts, ${{ env.SSH_TEST_RETRY_BASE_DELAY }}s exponential backoff |"
-            echo "| **SSH test result** | ${{ steps.ssh-test.outputs.ssh_test_attempts || '?' }} attempt(s), ${{ steps.ssh-test.outputs.ssh_test_total_wait || '0' }}s total wait |"
-            echo "| **Pre-flight** | ${{ steps.preflight.outputs.preflight_ok == 'true' && '✅ Passed' || '⚠️ Skipped (connectivity)' }} |"
+            echo "| **SSH retry** | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s linear backoff |"
+            echo "| **Pre-flight stabilization** | ${{ steps.preflight.outputs.preflight_ok == 'true' && '✅ Passed' || '⚠️ Skipped (connectivity)' }} |"
+            echo "| **Pre-flight connectivity** | ${{ steps.preflight.outputs.connectivity == 'true' && '✅ Reachable' || '⚠️ Unreachable (deploy steps will retry)' }} |"
             echo "| **Run** | [\`${GITHUB_RUN_ID}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
             echo ""
 
-            if [ "${{ steps.preflight.outputs.preflight_ok }}" != "true" ]; then
-              echo "> **Note:** Pre-flight SSH stabilization was skipped due to connectivity issues."
-              echo "> Test SSH Connection was used as the authoritative reachability gate."
+            if [ "${{ steps.preflight.outputs.preflight_ok }}" != "true" ] && [ "${{ steps.preflight.outputs.connectivity }}" = "true" ]; then
+              echo "> **Note:** Pre-flight SSH stabilization was skipped but the device is reachable."
+              echo "> Deploy steps proceeded with their own retry logic."
+              echo ""
+            elif [ "${{ steps.preflight.outputs.connectivity }}" != "true" ]; then
+              echo "> **Note:** Device was unreachable during pre-flight. Deploy steps attempted with retry logic."
               echo ""
             fi
 
