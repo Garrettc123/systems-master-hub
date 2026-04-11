@@ -252,6 +252,7 @@ jobs:
           echo "connectivity=$CONNECTIVITY" >> "$GITHUB_OUTPUT"
 
       - name: Deploy Ollama
+        id: ollama
         if: |
           steps.check-ssh.outputs.skip != 'true' &&
           github.event.inputs.dry_run == 'false'
@@ -301,6 +302,7 @@ jobs:
           DEPLOY_SCRIPT
 
       - name: Verify Deployment
+        id: verify
         if: |
           steps.check-ssh.outputs.skip != 'true' &&
           github.event.inputs.dry_run == 'false'
@@ -316,6 +318,28 @@ jobs:
             u0_a325@${{ github.event.inputs.device_ip }} \
             'echo "=== Service ===" && curl -sf http://127.0.0.1:11434/api/tags 2>/dev/null || echo "Service not yet ready"'
           echo "::endgroup::"
+
+      # --- Notion deployment run sync ---
+      - name: Sync to Notion Deployment Runs
+        if: always()
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ vars.NOTION_DEPLOY_DB_ID }}
+          RUN_NAME: "Pixel 10 LLM Deploy #${{ github.run_number }}"
+          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          RUN_STATUS: "${{ job.status }}"
+          RUN_STARTED: "${{ github.event.repository.updated_at || github.event.head_commit.timestamp || '' }}"
+          STEP_SSH: "${{ steps.check-ssh.outcome }}"
+          STEP_PREFLIGHT: "${{ steps.preflight.outcome }}"
+          STEP_BOOTSTRAP: "skipped"
+          STEP_WATCHDOG: "skipped"
+          STEP_BOOT_PERSISTENCE: "skipped"
+          STEP_OLLAMA: "${{ steps.ollama.outcome }}"
+          STEP_RHNS: "skipped"
+          STEP_HEALTH_CHECK: "${{ steps.verify.outcome }}"
+          NODE_IP: "${{ github.event.inputs.device_ip }}"
+          DEPLOY_SUMMARY: "legacy workflow, dry_run=${{ github.event.inputs.dry_run }} preflight=${{ steps.preflight.outputs.preflight_ok }} connectivity=${{ steps.preflight.outputs.connectivity }}"
+        run: bash scripts/notify-notion-deploy.sh
 
       - name: Summary
         if: always()
