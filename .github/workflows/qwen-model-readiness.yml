@@ -1,0 +1,254 @@
+name: Qwen Model Readiness — Pixel 10
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_ip:
+        description: 'Device IP (Tailscale/WiFi)'
+        required: true
+        default: '100.71.218.79'
+      ssh_user:
+        description: 'SSH Username'
+        required: true
+        default: 'u0_a325'
+      ssh_port:
+        description: 'SSH Port'
+        required: true
+        default: '8022'
+      model_override:
+        description: 'Model tag override (blank = use default qwen2.5:0.5b-instruct)'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry run — upload scripts but skip pull (true/false)'
+        required: false
+        default: 'false'
+
+env:
+  SSH_OPTS: >-
+    -o StrictHostKeyChecking=no
+    -o ConnectTimeout=20
+    -o ServerAliveInterval=5
+    -o ServerAliveCountMax=6
+    -o TCPKeepAlive=yes
+    -o ConnectionAttempts=3
+  SSH_RETRY_MAX: '4'
+  SSH_RETRY_DELAY: '10'
+  SSH_TEST_RETRY_MAX: '5'
+  SSH_TEST_RETRY_BASE_DELAY: '5'
+
+jobs:
+  qwen-readiness:
+    runs-on: ubuntu-latest
+    name: Pull & verify Qwen model
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify SSH Key
+        id: check-ssh
+        env:
+          PIXEL10_SSH_KEY: ${{ secrets.PIXEL10_SSH_KEY }}
+        run: |
+          if [ -z "$PIXEL10_SSH_KEY" ]; then
+            echo "::error::PIXEL10_SSH_KEY secret is not configured"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Setup SSH
+        if: steps.check-ssh.outputs.skip != 'true'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PIXEL10_SSH_KEY }}" > ~/.ssh/id_pixel10
+          chmod 600 ~/.ssh/id_pixel10
+          ssh-keyscan -p ${{ github.event.inputs.ssh_port }} \
+            ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Create SSH retry helpers
+        if: steps.check-ssh.outputs.skip != 'true'
+        run: |
+          cat > /tmp/ssh-retry-helpers.sh <<'HELPERS'
+          #!/usr/bin/env bash
+          ssh_retry() {
+            local label="$1" max="$2" delay="$3"
+            shift 3
+            local attempt=1
+            while [ "$attempt" -le "$max" ]; do
+              echo "[ssh_retry] Attempt $attempt/$max — $label"
+              set +e; "$@" 2>&1; local rc=$?; set -e
+              [ "$rc" -eq 0 ] && echo "[ssh_retry] $label succeeded" && return 0
+              echo "::warning::[ssh_retry] $label failed (attempt $attempt/$max, rc=$rc)"
+              [ "$attempt" -lt "$max" ] && sleep $(( delay * attempt ))
+              attempt=$(( attempt + 1 ))
+            done
+            echo "::error::[ssh_retry] $label failed after $max attempts"
+            return 1
+          }
+
+          ssh_retry_exponential() {
+            local label="$1" max="$2" base_delay="$3"
+            shift 3
+            local attempt=1
+            while [ "$attempt" -le "$max" ]; do
+              echo "[ssh_retry_exp] Attempt $attempt/$max — $label"
+              set +e; "$@" 2>&1; local rc=$?; set -e
+              [ "$rc" -eq 0 ] && echo "[ssh_retry_exp] $label succeeded" && return 0
+              echo "::warning::[ssh_retry_exp] $label failed (attempt $attempt/$max, rc=$rc)"
+              if [ "$attempt" -lt "$max" ]; then
+                local wait=$(( base_delay * (1 << (attempt - 1)) + RANDOM % 4 ))
+                [ "$wait" -gt 120 ] && wait=120
+                echo "[ssh_retry_exp] Backing off ${wait}s..."
+                sleep "$wait"
+              fi
+              attempt=$(( attempt + 1 ))
+            done
+            echo "::error::[ssh_retry_exp] $label failed after $max attempts"
+            return 1
+          }
+
+          scp_retry() {
+            local label="$1" max="$2" delay="$3"
+            shift 3
+            local attempt=1
+            while [ "$attempt" -le "$max" ]; do
+              echo "[scp_retry] Attempt $attempt/$max — $label"
+              set +e; scp "$@" 2>&1; local rc=$?; set -e
+              [ "$rc" -eq 0 ] && echo "[scp_retry] $label succeeded" && return 0
+              echo "::warning::[scp_retry] $label failed (attempt $attempt/$max, rc=$rc)"
+              [ "$attempt" -lt "$max" ] && sleep $(( delay * attempt ))
+              attempt=$(( attempt + 1 ))
+            done
+            echo "::error::[scp_retry] $label failed after $max attempts"
+            return 1
+          }
+          HELPERS
+          chmod +x /tmp/ssh-retry-helpers.sh
+
+      - name: Test SSH Connection
+        if: steps.check-ssh.outputs.skip != 'true'
+        run: |
+          source /tmp/ssh-retry-helpers.sh
+          echo "::group::SSH connectivity test"
+          ssh_retry_exponential "SSH connectivity" \
+            ${{ env.SSH_TEST_RETRY_MAX }} ${{ env.SSH_TEST_RETRY_BASE_DELAY }} \
+            ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            'echo "SSH OK — $(whoami)@$(hostname) — $(date -Iseconds)"'
+          echo "::endgroup::"
+
+      - name: Verify Ollama health
+        if: steps.check-ssh.outputs.skip != 'true'
+        run: |
+          source /tmp/ssh-retry-helpers.sh
+          echo "::group::Ollama health check"
+          ssh_retry "Ollama health check" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            'curl -sf --max-time 10 http://127.0.0.1:11434/api/tags && echo "" && echo "Ollama is healthy"'
+          echo "::endgroup::"
+
+      - name: Upload Qwen scripts
+        if: steps.check-ssh.outputs.skip != 'true'
+        run: |
+          source /tmp/ssh-retry-helpers.sh
+          echo "::group::Upload Qwen scripts"
+          scp_retry "Upload Qwen scripts" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            -i ~/.ssh/id_pixel10 \
+            -P ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            termux/qwen-model-pull.sh \
+            termux/qwen-endpoint-check.sh \
+            termux/qwen-health-probe.sh \
+            termux/qwen-model-config.json \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/
+          echo "::endgroup::"
+
+          echo "::group::Set permissions"
+          ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            'chmod +x ~/qwen-model-pull.sh ~/qwen-endpoint-check.sh ~/qwen-health-probe.sh'
+          echo "::endgroup::"
+
+      - name: Pull Qwen model
+        if: |
+          steps.check-ssh.outputs.skip != 'true' &&
+          github.event.inputs.dry_run == 'false'
+        run: |
+          MODEL_ENV=""
+          if [ -n "${{ github.event.inputs.model_override }}" ]; then
+            MODEL_ENV="QWEN_MODEL='${{ github.event.inputs.model_override }}'"
+          fi
+
+          echo "::group::Pull Qwen model"
+          ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            "${MODEL_ENV} bash ~/qwen-model-pull.sh 2>&1"
+          echo "::endgroup::"
+
+      - name: Verify Qwen endpoint
+        if: |
+          steps.check-ssh.outputs.skip != 'true' &&
+          github.event.inputs.dry_run == 'false'
+        run: |
+          source /tmp/ssh-retry-helpers.sh
+          echo "::group::Endpoint verification"
+          ssh_retry "Qwen endpoint check" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            'bash ~/qwen-endpoint-check.sh --json 2>&1'
+          echo "::endgroup::"
+
+      - name: Run health probe
+        if: |
+          steps.check-ssh.outputs.skip != 'true' &&
+          github.event.inputs.dry_run == 'false'
+        run: |
+          echo "::group::Health probe"
+          ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            'bash ~/qwen-health-probe.sh --json 2>&1'
+          echo "::endgroup::"
+
+      - name: Summary
+        if: always()
+        run: |
+          MODEL_TAG="${{ github.event.inputs.model_override }}"
+          [ -z "$MODEL_TAG" ] && MODEL_TAG="qwen2.5:0.5b-instruct (default)"
+
+          {
+            echo "## Qwen Model Readiness — Pixel 10"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| **Device** | \`${{ github.event.inputs.device_ip }}:${{ github.event.inputs.ssh_port }}\` |"
+            echo "| **User** | \`${{ github.event.inputs.ssh_user }}\` |"
+            echo "| **Model** | \`${MODEL_TAG}\` |"
+            echo "| **Dry run** | \`${{ github.event.inputs.dry_run }}\` |"
+            echo "| **Run** | [\`${GITHUB_RUN_ID}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
+            echo ""
+            echo "**Test locally:**"
+            echo '```bash'
+            echo "curl -X POST http://${{ github.event.inputs.device_ip }}:11434/api/generate \\"
+            echo "  -H 'Content-Type: application/json' \\"
+            echo "  -d '{\"model\": \"qwen2.5:0.5b-instruct\", \"prompt\": \"Hello!\", \"stream\": false}'"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

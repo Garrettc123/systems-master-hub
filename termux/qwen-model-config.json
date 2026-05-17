@@ -1,0 +1,36 @@
+{
+  "model": {
+    "primary": "qwen2.5:0.5b-instruct",
+    "fallback": "qwen2.5:0.5b",
+    "family": "qwen2.5",
+    "parameter_size": "0.5B",
+    "quantization": "Q4_K_M",
+    "estimated_disk_mb": 400,
+    "estimated_ram_mb": 600
+  },
+  "ollama": {
+    "host": "127.0.0.1",
+    "port": 11434,
+    "base_url": "http://127.0.0.1:11434"
+  },
+  "pull": {
+    "timeout_seconds": 900,
+    "min_disk_free_mb": 600,
+    "retry_attempts": 2
+  },
+  "endpoint": {
+    "inference_path": "/api/generate",
+    "tags_path": "/api/tags",
+    "chat_path": "/api/chat",
+    "default_options": {
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "num_predict": 256
+    }
+  },
+  "health_probe": {
+    "interval_seconds": 900,
+    "inference_timeout_seconds": 15,
+    "probe_prompt": "ping"
+  }
+}

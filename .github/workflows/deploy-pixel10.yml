@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       device_ip:
-        description: 'Device IP (5G)'
+        description: 'Device IP (5G/WiFi)'
         required: true
         default: '100.71.218.79'
       ssh_user:
@@ -15,96 +15,485 @@ on:
         description: 'SSH Port'
         required: true
         default: '8022'
+      deploy_target:
+        description: 'What to deploy (bootstrap | ollama | health-check | all)'
+        required: true
+        default: 'all'
       dry_run:
         description: 'Test only (true/false)'
         required: false
         default: 'false'
 
+env:
+  # Tailscale SSH options — aggressive keepalives to survive intermittent drops
+  SSH_OPTS: >-
+    -o StrictHostKeyChecking=no
+    -o ConnectTimeout=20
+    -o ServerAliveInterval=5
+    -o ServerAliveCountMax=6
+    -o TCPKeepAlive=yes
+    -o ConnectionAttempts=3
+  DEPLOY_LOG: /tmp/pixel10-deploy.log
+  SSH_RETRY_MAX: '4'
+  SSH_RETRY_DELAY: '10'
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 45
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Verify SSH Key
+        id: check-ssh
+        env:
+          PIXEL10_SSH_KEY: ${{ secrets.PIXEL10_SSH_KEY }}
         run: |
-          if [ -z "${{ secrets.PIXEL10_SSH_KEY }}" ]; then
-            echo "ERROR: PIXEL10_SSH_KEY secret not set!"
-            exit 1
+          if [ -z "$PIXEL10_SSH_KEY" ]; then
+            echo "::error::PIXEL10_SSH_KEY secret is not configured"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          echo "SSH Key: Set"
-      
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - name: Setup SSH
+        if: steps.check-ssh.outputs.skip != 'true'
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.PIXEL10_SSH_KEY }}" > ~/.ssh/id_pixel10
           chmod 600 ~/.ssh/id_pixel10
-          
-          # Add to known_hosts
-          ssh-keyscan -p ${{ github.event.inputs.ssh_port }} ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
-      
-      - name: Test SSH Connection
+          ssh-keyscan -p ${{ github.event.inputs.ssh_port }} \
+            ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      # --- Reusable retry helpers for Tailscale SSH resilience ---
+      # Defined once and sourced by all subsequent steps that need SSH.
+      - name: Create SSH retry helpers
+        if: steps.check-ssh.outputs.skip != 'true'
         run: |
-          ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
-            -o StrictHostKeyChecking=no \
-            -o ConnectTimeout=10 \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
-            'echo "SSH OK: $(whoami)"' || echo "Connection test failed - continuing anyway"
-      
-      - name: Deploy Ollama
-        if: github.event.inputs.dry_run == 'false'
+          cat > /tmp/ssh-retry-helpers.sh <<'HELPERS'
+          #!/usr/bin/env bash
+          # ssh_retry — run an SSH command with retries and exponential-ish backoff.
+          # Usage: ssh_retry <label> <max_attempts> <delay_secs> <ssh_args...>
+          ssh_retry() {
+            local label="$1" max="$2" delay="$3"
+            shift 3
+            local attempt=1
+            while [ "$attempt" -le "$max" ]; do
+              echo "[ssh_retry] Attempt $attempt/$max — $label"
+              echo "[ssh_retry] Attempt $attempt/$max — $label" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+              set +e
+              "$@" 2>&1
+              local rc=$?
+              set -e
+              if [ "$rc" -eq 0 ]; then
+                echo "[ssh_retry] $label succeeded on attempt $attempt"
+                echo "[ssh_retry] $label succeeded on attempt $attempt" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+                return 0
+              fi
+              echo "::warning::[ssh_retry] $label failed (attempt $attempt/$max, exit $rc)"
+              echo "[ssh_retry] $label failed (attempt $attempt/$max, exit $rc)" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+              if [ "$attempt" -lt "$max" ]; then
+                local wait_secs=$(( delay * attempt ))
+                echo "[ssh_retry] Waiting ${wait_secs}s before retry..."
+                echo "[ssh_retry] Waiting ${wait_secs}s before retry..." >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+                sleep "$wait_secs"
+              fi
+              attempt=$(( attempt + 1 ))
+            done
+            echo "::error::[ssh_retry] $label failed after $max attempts"
+            echo "[ssh_retry] $label FAILED after $max attempts" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+            return 1
+          }
+
+          # ssh_retry_exponential — SSH command with true exponential backoff + jitter.
+          # Backoff: base_delay * 2^(attempt-1) + random jitter (0-3s), capped at 120s.
+          # Usage: ssh_retry_exponential <label> <max_attempts> <base_delay_secs> <ssh_args...>
+          ssh_retry_exponential() {
+            local label="$1" max="$2" base_delay="$3"
+            shift 3
+            local attempt=1
+            local total_wait=0
+            while [ "$attempt" -le "$max" ]; do
+              echo "[ssh_retry_exp] Attempt $attempt/$max — $label"
+              echo "[ssh_retry_exp] Attempt $attempt/$max — $label" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+              set +e
+              "$@" 2>&1
+              local rc=$?
+              set -e
+              if [ "$rc" -eq 0 ]; then
+                echo "[ssh_retry_exp] $label succeeded on attempt $attempt (total wait: ${total_wait}s)"
+                echo "[ssh_retry_exp] $label succeeded on attempt $attempt (total wait: ${total_wait}s)" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+                echo "ssh_test_attempts=$attempt" >> "${GITHUB_OUTPUT:-/dev/null}"
+                echo "ssh_test_total_wait=$total_wait" >> "${GITHUB_OUTPUT:-/dev/null}"
+                return 0
+              fi
+              echo "::warning::[ssh_retry_exp] $label failed (attempt $attempt/$max, exit $rc)"
+              echo "[ssh_retry_exp] $label failed (attempt $attempt/$max, exit $rc)" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+              if [ "$attempt" -lt "$max" ]; then
+                # Exponential backoff: base_delay * 2^(attempt-1), capped at 120s
+                local exp=$(( base_delay * (1 << (attempt - 1)) ))
+                local jitter=$(( RANDOM % 4 ))
+                local wait_secs=$(( exp + jitter ))
+                if [ "$wait_secs" -gt 120 ]; then wait_secs=120; fi
+                total_wait=$(( total_wait + wait_secs ))
+                echo "[ssh_retry_exp] Backing off ${wait_secs}s (base=${base_delay}, exp=${exp}, jitter=${jitter}) before attempt $(( attempt + 1 ))..."
+                echo "[ssh_retry_exp] Backing off ${wait_secs}s before attempt $(( attempt + 1 ))" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+                sleep "$wait_secs"
+              fi
+              attempt=$(( attempt + 1 ))
+            done
+            echo "::error::[ssh_retry_exp] $label failed after $max attempts (total wait: ${total_wait}s)"
+            echo "[ssh_retry_exp] $label FAILED after $max attempts (total wait: ${total_wait}s)" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+            echo "ssh_test_attempts=$max" >> "${GITHUB_OUTPUT:-/dev/null}"
+            echo "ssh_test_total_wait=$total_wait" >> "${GITHUB_OUTPUT:-/dev/null}"
+            return 1
+          }
+
+          # scp_retry — run an SCP transfer with retries.
+          # Usage: scp_retry <label> <max_attempts> <delay_secs> <scp_args...>
+          scp_retry() {
+            local label="$1" max="$2" delay="$3"
+            shift 3
+            local attempt=1
+            while [ "$attempt" -le "$max" ]; do
+              echo "[scp_retry] Attempt $attempt/$max — $label"
+              echo "[scp_retry] Attempt $attempt/$max — $label" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+              set +e
+              scp "$@" 2>&1
+              local rc=$?
+              set -e
+              if [ "$rc" -eq 0 ]; then
+                echo "[scp_retry] $label succeeded on attempt $attempt"
+                echo "[scp_retry] $label succeeded on attempt $attempt" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+                return 0
+              fi
+              echo "::warning::[scp_retry] $label failed (attempt $attempt/$max, exit $rc)"
+              echo "[scp_retry] $label failed (attempt $attempt/$max, exit $rc)" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+              if [ "$attempt" -lt "$max" ]; then
+                local wait_secs=$(( delay * attempt ))
+                echo "[scp_retry] Waiting ${wait_secs}s before retry..."
+                sleep "$wait_secs"
+              fi
+              attempt=$(( attempt + 1 ))
+            done
+            echo "::error::[scp_retry] $label failed after $max attempts"
+            echo "[scp_retry] $label FAILED after $max attempts" >> "${DEPLOY_LOG:-/tmp/pixel10-deploy.log}"
+            return 1
+          }
+          HELPERS
+          chmod +x /tmp/ssh-retry-helpers.sh
+          echo "SSH retry helpers installed at /tmp/ssh-retry-helpers.sh"
+
+      # --- Pre-flight: stabilize SSH + Termux environment on device ---
+      # This step is the connectivity signal for downstream deploy steps.
+      # If stabilization succeeds, deploy steps proceed directly.
+      # If stabilization soft-fails (connectivity issues), a lightweight SSH
+      # probe determines basic reachability so deploy steps can still attempt
+      # using their own retry logic.
+      - name: Pre-flight SSH Stabilization
+        id: preflight
+        if: steps.check-ssh.outputs.skip != 'true'
+        env:
+          DEPLOY_LOG: ${{ env.DEPLOY_LOG }}
         run: |
-          ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
-            -o StrictHostKeyChecking=no \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} 'bash -s' <<'EOF'
-          set -e
-          echo "Starting Pixel 10 LLM Deployment"
-          echo ""
-          echo "[1/5] Updating packages..."
-          pkg update -y 2>/dev/null || true
-          pkg install -y curl wget git openssl 2>/dev/null || true
-          echo "[2/5] Installing Ollama..."
-          if ! command -v ollama > /dev/null 2>&1; then
-            curl -fsSL https://ollama.ai/install.sh | sh || true
+          source /tmp/ssh-retry-helpers.sh
+          PREFLIGHT_OK=true
+
+          echo "::group::Upload ssh-stabilizer.sh (with retry)"
+          if ! scp_retry "Upload ssh-stabilizer.sh" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            -i ~/.ssh/id_pixel10 \
+            -P ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            termux/ssh-stabilizer.sh \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/ssh-stabilizer.sh; then
+            echo "::warning::Pre-flight SCP upload failed after all retries — stabilization skipped due to connectivity"
+            echo "[preflight] SCP upload failed — stabilization skipped due to connectivity" >> "$DEPLOY_LOG"
+            PREFLIGHT_OK=false
           fi
-          echo "[3/5] Downloading llama3.2:3b model..."
-          timeout 1800 ollama pull llama3.2:3b || echo "Model download started (may take time)"
-          echo "[4/5] Starting Ollama service..."
-          nohup ollama serve > /tmp/ollama.log 2>&1 &
-          sleep 3
-          echo "[5/5] Verifying service..."
-          curl -s http://127.0.0.1:11434/api/ps > /dev/null && echo "Ollama is running" || echo "Ollama service is starting"
-          echo ""
-          echo "Deployment complete!"
-          EOF
-      
-      - name: Verify Deployment
-        if: github.event.inputs.dry_run == 'false'
+          echo "::endgroup::"
+
+          if [ "$PREFLIGHT_OK" = true ]; then
+            echo "::group::Run SSH stabilizer (with retry)"
+            if ! ssh_retry "Run SSH stabilizer" \
+              ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+              ssh -i ~/.ssh/id_pixel10 \
+              -p ${{ github.event.inputs.ssh_port }} \
+              ${{ env.SSH_OPTS }} \
+              ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+              'chmod +x ~/ssh-stabilizer.sh && bash ~/ssh-stabilizer.sh 2>&1'; then
+              echo "::warning::SSH stabilizer could not complete after retries — continuing with deployment"
+              echo "[preflight] SSH stabilizer execution failed — continuing without stabilization" >> "$DEPLOY_LOG"
+              PREFLIGHT_OK=false
+            fi
+            echo "::endgroup::"
+          fi
+
+          if [ "$PREFLIGHT_OK" = true ]; then
+            echo "::group::Verify stabilizer output"
+            if ! ssh_retry "Read ssh-status.json" \
+              ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+              ssh -i ~/.ssh/id_pixel10 \
+              -p ${{ github.event.inputs.ssh_port }} \
+              ${{ env.SSH_OPTS }} \
+              ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+              'cat ~/edge-node/ssh-status.json 2>/dev/null || echo "{\"status\": \"no status file\"}"'; then
+              echo "::warning::Could not read stabilizer status — continuing with deployment"
+              echo "[preflight] Could not read ssh-status.json — continuing without verification" >> "$DEPLOY_LOG"
+              PREFLIGHT_OK=false
+            fi
+            echo "::endgroup::"
+          fi
+
+          # When full stabilization failed, run a lightweight SSH probe so
+          # downstream deploy steps know whether the device is basically reachable.
+          CONNECTIVITY=false
+          if [ "$PREFLIGHT_OK" = true ]; then
+            CONNECTIVITY=true
+          else
+            echo "::group::Lightweight SSH connectivity probe"
+            if ssh_retry "SSH connectivity probe" \
+              ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+              ssh -i ~/.ssh/id_pixel10 \
+              -p ${{ github.event.inputs.ssh_port }} \
+              ${{ env.SSH_OPTS }} \
+              ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+              'echo "SSH OK — $(whoami)@$(hostname) — $(date -Iseconds)"'; then
+              CONNECTIVITY=true
+              echo "[preflight] Stabilization skipped but device is reachable — deploy steps will proceed with retry logic" >> "$DEPLOY_LOG"
+              echo "::notice::Pre-flight stabilization skipped but device is reachable. Deploy steps will proceed with their own retry logic."
+            else
+              echo "::warning::Device unreachable after pre-flight probe — deploy steps will still attempt with retry logic"
+              echo "[preflight] Device unreachable after probe — deploy steps will attempt with retry logic" >> "$DEPLOY_LOG"
+            fi
+            echo "::endgroup::"
+          fi
+
+          echo "preflight_ok=$PREFLIGHT_OK" >> "$GITHUB_OUTPUT"
+          echo "connectivity=$CONNECTIVITY" >> "$GITHUB_OUTPUT"
+
+      # --- Bootstrap: full edge-node prerequisite install ---
+      # Runs directly after pre-flight stabilization. Uses its own SCP/SSH retry
+      # logic so it can tolerate transient connectivity even when pre-flight
+      # only achieved partial success.
+      - name: Deploy Bootstrap
+        id: bootstrap
+        if: |
+          steps.check-ssh.outputs.skip != 'true' &&
+          github.event.inputs.dry_run == 'false' &&
+          (github.event.inputs.deploy_target == 'bootstrap' || github.event.inputs.deploy_target == 'all')
         run: |
-          echo "Waiting for service to stabilize..."
-          sleep 5
+          source /tmp/ssh-retry-helpers.sh
+
+          echo "::group::Upload bootstrap script (with retry)"
+          scp_retry "Upload bootstrap.sh" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            -i ~/.ssh/id_pixel10 \
+            -P ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            termux/bootstrap.sh \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/bootstrap.sh
+          echo "::endgroup::"
+
+          echo "::group::Run bootstrap (with retry)"
+          ssh_retry "Run bootstrap" \
+            ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
+            ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            'bash ~/bootstrap.sh 2>&1' | tee -a "${{ env.DEPLOY_LOG }}"
+          REMOTE_RC=${PIPESTATUS[0]}
+          echo "::endgroup::"
+
+          if [ "$REMOTE_RC" -ne 0 ]; then
+            echo "::error::Bootstrap failed with exit code $REMOTE_RC"
+            echo "## Bootstrap FAILED (rc=$REMOTE_RC)" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -30 "${{ env.DEPLOY_LOG }}" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      # --- Boot persistence + watchdog install ---
+      - name: Deploy Boot & Watchdog Scripts
+        id: watchdog
+        if: |
+          steps.check-ssh.outputs.skip != 'true' &&
+          github.event.inputs.dry_run == 'false' &&
+          (github.event.inputs.deploy_target == 'bootstrap' || github.event.inputs.deploy_target == 'all')
+        run: |
+          echo "::group::Upload support scripts"
+          scp -i ~/.ssh/id_pixel10 \
+            -P ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            termux/boot-init.sh \
+            termux/watchdog.sh \
+            termux/status-report.sh \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/
+          echo "::endgroup::"
+
+          echo "::group::Install boot persistence"
           ssh -i ~/.ssh/id_pixel10 \
             -p ${{ github.event.inputs.ssh_port }} \
-            -o StrictHostKeyChecking=no \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} 'bash -s' <<'BOOTSETUP'
+          set -e
+          mkdir -p ~/.termux/boot
+          # Symlink boot-init into Termux:Boot directory
+          ln -sf ~/boot-init.sh ~/.termux/boot/start-edge-node.sh
+          chmod +x ~/boot-init.sh ~/watchdog.sh ~/status-report.sh
+          echo "Boot persistence installed."
+          BOOTSETUP
+          echo "::endgroup::"
+
+      # --- Ollama LLM deploy ---
+      - name: Deploy Ollama
+        id: ollama
+        if: |
+          steps.check-ssh.outputs.skip != 'true' &&
+          github.event.inputs.dry_run == 'false' &&
+          (github.event.inputs.deploy_target == 'ollama' || github.event.inputs.deploy_target == 'all')
+        run: |
+          echo "::group::Install Ollama"
+          ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
+            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} 'bash -s' <<'OLLAMA'
+          set -euo pipefail
+          echo "[1/4] Ensuring tur-repo for Ollama..."
+          pkg install -y tur-repo 2>/dev/null || true
+
+          echo "[2/4] Installing Ollama..."
+          if ! command -v ollama >/dev/null 2>&1; then
+            pkg install -y ollama 2>/dev/null || {
+              echo "ERROR: Failed to install ollama via tur-repo"; exit 1
+            }
+          else
+            echo "Ollama already installed: $(ollama --version 2>/dev/null || echo unknown)"
+          fi
+
+          echo "[3/4] Pulling llama3.2:3b model..."
+          timeout 1800 ollama pull llama3.2:3b || {
+            echo "WARNING: Model pull timed out — may still be downloading in background"; exit 1
+          }
+
+          echo "[4/4] Starting Ollama service..."
+          pkill -f 'ollama serve' 2>/dev/null || true
+          sleep 1
+          nohup ollama serve > /tmp/ollama.log 2>&1 &
+          sleep 4
+
+          if curl -sf http://127.0.0.1:11434/api/tags >/dev/null; then
+            echo "Ollama is running. Models:"
+            curl -sf http://127.0.0.1:11434/api/tags | head -c 500
+            echo ""
+          else
+            echo "ERROR: Ollama not responding on :11434"
+            cat /tmp/ollama.log 2>/dev/null | tail -20
+            exit 1
+          fi
+          echo "Ollama deployment complete."
+          OLLAMA
+          REMOTE_RC=${PIPESTATUS[0]}
+          echo "::endgroup::"
+
+          if [ "${REMOTE_RC:-0}" -ne 0 ]; then
+            echo "::error::Ollama deployment failed"
+            exit 1
+          fi
+
+      # --- Health check ---
+      - name: Run Remote Health Check
+        id: healthcheck
+        if: |
+          steps.check-ssh.outputs.skip != 'true' &&
+          github.event.inputs.dry_run == 'false'
+        run: |
+          echo "::group::Health check"
+          ssh -i ~/.ssh/id_pixel10 \
+            -p ${{ github.event.inputs.ssh_port }} \
+            ${{ env.SSH_OPTS }} \
             ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
-            'echo "Service Status:" && curl -s http://127.0.0.1:11434/api/ps 2>/dev/null | head -20 || echo "Service initializing..."'
-      
-      - name: Summary
+            'bash ~/status-report.sh 2>&1' | tee -a "${{ env.DEPLOY_LOG }}"
+          echo "::endgroup::"
+
+      # --- Summary ---
+      - name: Build Summary
         if: always()
         run: |
-          echo "## Pixel 10 LLM Deployment" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Device:** ${{ github.event.inputs.device_ip }}" >> $GITHUB_STEP_SUMMARY
-          echo "**User:** ${{ github.event.inputs.ssh_user }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Port:** ${{ github.event.inputs.ssh_port }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Test Command:**" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "curl -X POST http://${{ github.event.inputs.device_ip }}:11434/api/generate \\" >> $GITHUB_STEP_SUMMARY
-          echo "  -H 'Content-Type: application/json' \\" >> $GITHUB_STEP_SUMMARY
-          echo "  -d '{\"model\": \"llama3.2:3b\", \"prompt\": \"Hello!\", \"stream\": false}'" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Pixel 10 Edge Node Deployment"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| **Device** | \`${{ github.event.inputs.device_ip }}:${{ github.event.inputs.ssh_port }}\` |"
+            echo "| **User** | \`${{ github.event.inputs.ssh_user }}\` |"
+            echo "| **Target** | \`${{ github.event.inputs.deploy_target }}\` |"
+            echo "| **Dry run** | \`${{ github.event.inputs.dry_run }}\` |"
+            echo "| **SSH retry** | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s linear backoff |"
+            echo "| **Pre-flight stabilization** | ${{ steps.preflight.outputs.preflight_ok == 'true' && '✅ Passed' || '⚠️ Skipped (connectivity)' }} |"
+            echo "| **Pre-flight connectivity** | ${{ steps.preflight.outputs.connectivity == 'true' && '✅ Reachable' || '⚠️ Unreachable (deploy steps will retry)' }} |"
+            echo "| **Run** | [\`${GITHUB_RUN_ID}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
+            echo ""
+
+            if [ "${{ steps.preflight.outputs.preflight_ok }}" != "true" ] && [ "${{ steps.preflight.outputs.connectivity }}" = "true" ]; then
+              echo "> **Note:** Pre-flight SSH stabilization was skipped but the device is reachable."
+              echo "> Deploy steps proceeded with their own retry logic."
+              echo ""
+            elif [ "${{ steps.preflight.outputs.connectivity }}" != "true" ]; then
+              echo "> **Note:** Device was unreachable during pre-flight. Deploy steps attempted with retry logic."
+              echo ""
+            fi
+
+            # Extract and display retry activity from the deploy log
+            if [ -f "${{ env.DEPLOY_LOG }}" ] && grep -q '\[ssh_retry\]\|\[ssh_retry_exp\]\|\[scp_retry\]' "${{ env.DEPLOY_LOG }}"; then
+              echo "### SSH Retry Activity"
+              echo '```'
+              grep '\[ssh_retry\]\|\[ssh_retry_exp\]\|\[scp_retry\]' "${{ env.DEPLOY_LOG }}" | tail -30
+              echo '```'
+              echo ""
+            fi
+
+            if [ -f "${{ env.DEPLOY_LOG }}" ]; then
+              echo "<details><summary>Full deploy log (last 60 lines)</summary>"
+              echo ""
+              echo '```'
+              tail -60 "${{ env.DEPLOY_LOG }}"
+              echo '```'
+              echo "</details>"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # --- Notion deployment run sync ---
+      - name: Sync to Notion Deployment Runs
+        if: always()
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ vars.NOTION_DEPLOY_DB_ID }}
+          RUN_NAME: "Deploy to Pixel 10 #${{ github.run_number }}"
+          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          RUN_STATUS: "${{ job.status }}"
+          RUN_STARTED: "${{ github.event.repository.updated_at || github.event.head_commit.timestamp || '' }}"
+          STEP_SSH: "${{ steps.check-ssh.outcome }}"
+          STEP_PREFLIGHT: "${{ steps.preflight.outcome }}"
+          STEP_BOOTSTRAP: "${{ steps.bootstrap.outcome }}"
+          STEP_WATCHDOG: "${{ steps.watchdog.outcome }}"
+          STEP_BOOT_PERSISTENCE: "${{ steps.watchdog.outcome }}"
+          STEP_OLLAMA: "${{ steps.ollama.outcome }}"
+          STEP_RHNS: "skipped"
+          STEP_HEALTH_CHECK: "${{ steps.healthcheck.outcome }}"
+          NODE_IP: "${{ github.event.inputs.device_ip }}"
+          DEPLOY_SUMMARY: "target=${{ github.event.inputs.deploy_target }} dry_run=${{ github.event.inputs.dry_run }} preflight=${{ steps.preflight.outputs.preflight_ok }} connectivity=${{ steps.preflight.outputs.connectivity }}"
+        run: bash scripts/notify-notion-deploy.sh
+
+      - name: Upload Deploy Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixel10-deploy-log
+          path: /tmp/pixel10-deploy.log
+          retention-days: 14
+          if-no-files-found: ignore
