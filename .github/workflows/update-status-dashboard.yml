@@ -1,0 +1,65 @@
+name: 📊 Update Status Dashboard
+
+on:
+  schedule:
+    # Runs daily at 07:00 UTC
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      format:
+        description: 'Output format (table or json)'
+        required: false
+        default: 'table'
+
+permissions:
+  contents: write
+
+jobs:
+  update-dashboard:
+    name: Refresh System Status
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run status dashboard
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x ./status.sh
+          ./status.sh --format json > /tmp/status-raw.json || true
+          ./status.sh || true
+
+      - name: Update SYSTEMS_STATUS.md timestamp
+        run: |
+          TIMESTAMP="$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          # Update the "Last updated" placeholder in SYSTEMS_STATUS.md
+          sed -i "s|<!-- LAST_UPDATED -->|${TIMESTAMP}|g" SYSTEMS_STATUS.md
+
+          # If there's already a real timestamp, replace it too
+          sed -i "s|[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\} [0-9]\{2\}:[0-9]\{2\}:[0-9]\{2\} UTC|${TIMESTAMP}|g" SYSTEMS_STATUS.md
+
+      - name: Build status summary for BUILD-STATUS.md header
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TIMESTAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          # Update the last-updated line in BUILD-STATUS.md
+          if [ -f BUILD-STATUS.md ]; then
+            sed -i "s|Last Updated:.*|Last Updated: ${TIMESTAMP}|" BUILD-STATUS.md
+          fi
+
+      - name: Commit updated status files
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add SYSTEMS_STATUS.md BUILD-STATUS.md || true
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: auto-update status dashboard [skip ci]"
+            git push
+          fi
