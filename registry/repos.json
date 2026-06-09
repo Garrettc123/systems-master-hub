@@ -1,0 +1,96 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "owner": "Garrettc123",
+    "description": "Garcar Enterprise canonical repo registry. Every Tier-1 and Tier-2 system is listed here. The deploy engine reads this file to resolve plain-English deploy commands to concrete repos.",
+    "lastUpdated": "2026-06-09",
+    "secretsSpec": "docs/SECRETSAPI.md",
+    "schema": "schema/deploy-contract.schema.json"
+  },
+  "tier1": {
+    "description": "Critical revenue and control systems. Always deploy first. Zero downtime tolerance.",
+    "repos": {
+      "systems-master-hub": {
+        "repo": "Garrettc123/systems-master-hub",
+        "contract": "contracts/systems-master-hub.json",
+        "role": "control-plane",
+        "platform": "github-actions",
+        "dispatchEvent": null,
+        "requiredSecrets": ["GITHUB_TOKEN", "LINEAR_API_KEY", "SLACK_WEBHOOK_URL"]
+      },
+      "garcar-payments": {
+        "repo": "Garrettc123/garcar-payments",
+        "contract": "contracts/garcar-payments.json",
+        "role": "payment-service",
+        "platform": "railway",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "APP_URL", "RAILWAY_TOKEN"]
+      },
+      "garcar-payment-loop": {
+        "repo": "Garrettc123/garcar-payment-loop",
+        "contract": "contracts/garcar-payment-loop.json",
+        "role": "payment-event-bridge",
+        "platform": "railway",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "RAILWAY_TOKEN"]
+      },
+      "mars-api": {
+        "repo": "Garrettc123/mars-api",
+        "contract": "contracts/mars-api.json",
+        "role": "billable-api",
+        "platform": "railway",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": ["RAILWAY_TOKEN", "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "LINEAR_API_KEY"]
+      },
+      "enterprise-mlops-platform": {
+        "repo": "Garrettc123/enterprise-mlops-platform",
+        "contract": "contracts/enterprise-mlops-platform.json",
+        "role": "ml-lifecycle",
+        "platform": "railway",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": ["RAILWAY_TOKEN", "SUPABASE_URL", "SUPABASE_SERVICE_KEY"]
+      }
+    }
+  },
+  "tier2": {
+    "description": "Core operational systems. Deploy after Tier-1 is healthy.",
+    "repos": {
+      "TITAN-Autonomous-Business-Empire": {
+        "repo": "Garrettc123/TITAN-Autonomous-Business-Empire",
+        "contract": "contracts/titan.json",
+        "role": "orchestration-engine",
+        "platform": "railway",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": ["RAILWAY_TOKEN", "STRIPE_SECRET_KEY", "SUPABASE_URL", "LINEAR_API_KEY"]
+      },
+      "atlas-dashboard": {
+        "repo": "Garrettc123/atlas-dashboard",
+        "contract": "contracts/atlas-dashboard.json",
+        "role": "revenue-analytics",
+        "platform": "vercel",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": ["VERCEL_TOKEN", "SUPABASE_URL", "SUPABASE_SERVICE_KEY"]
+      },
+      "zeus-dashboard": {
+        "repo": "Garrettc123/zeus-dashboard",
+        "contract": "contracts/zeus-dashboard.json",
+        "role": "cognitive-control-plane",
+        "platform": "vercel",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": ["VERCEL_TOKEN", "SUPABASE_URL", "LINEAR_API_KEY"]
+      },
+      "neural-mesh": {
+        "repo": "Garrettc123/neural-mesh",
+        "contract": "contracts/neural-mesh.json",
+        "role": "self-healing-cicd",
+        "platform": "github-actions",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": ["GITHUB_TOKEN", "SLACK_WEBHOOK_URL"]
+      }
+    }
+  },
+  "tier3": {
+    "description": "Experimental and support systems.",
+    "repos": {}
+  }
+}

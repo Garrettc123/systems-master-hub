@@ -1,0 +1,80 @@
+{
+  "$schema": "../schema/deploy-contract.schema.json",
+  "repo": "Garrettc123/garcar-payments",
+  "name": "garcar-payments",
+  "tier": 1,
+  "role": "payment-service",
+  "description": "Garcar Enterprise payment execution rail. Owns Stripe checkout sessions, webhook verification, customer provisioning, Supabase persistence, and billing fulfillment.",
+  "platform": "railway",
+  "runtime": "node",
+  "entrypoint": "server.js",
+  "startCommand": "node server.js",
+  "port": 3000,
+  "health": {
+    "type": "http",
+    "path": "/health",
+    "port": 3000,
+    "expectedStatus": 200,
+    "checks": [
+      "database-connectivity",
+      "stripe-verified",
+      "webhook-reachable",
+      "app-ready"
+    ]
+  },
+  "integrations": [
+    "Stripe",
+    "Supabase",
+    "Slack",
+    "Linear"
+  ],
+  "requiredSecrets": [
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_PUBLISHABLE_KEY",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_KEY",
+    "APP_URL",
+    "RAILWAY_TOKEN",
+    "SLACK_WEBHOOK_URL",
+    "LINEAR_API_KEY"
+  ],
+  "migrations": [
+    "supabase-schema.sql"
+  ],
+  "stripeWebhookEvents": [
+    "checkout.session.completed",
+    "customer.subscription.updated",
+    "customer.subscription.deleted",
+    "invoice.payment_succeeded",
+    "invoice.payment_failed"
+  ],
+  "postPaymentActions": [
+    "upsert-customer-record",
+    "provision-access",
+    "send-confirmation-email",
+    "sync-to-linear",
+    "log-to-gc-ledger"
+  ],
+  "ciWorkflows": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/deploy.yml",
+    ".github/workflows/smoke-test.yml",
+    ".github/workflows/drift-detection.yml"
+  ],
+  "environments": {
+    "staging": {
+      "branch": "staging",
+      "baseUrl": "https://staging.garcar-payments.up.railway.app"
+    },
+    "production": {
+      "branch": "main",
+      "baseUrl": "https://garcar-payments.up.railway.app"
+    }
+  },
+  "meta": {
+    "owner": "Garrettc123",
+    "created": "2026-06-09",
+    "lastUpdated": "2026-06-09"
+  }
+}
