@@ -1,0 +1,92 @@
+# ===========================================================================
+# GARCAR AUTOKEY — Automated Secret Rotation Workflow
+# Rotates internal auto-generatable secrets on schedule and on demand.
+# External secrets (Stripe, Supabase, Railway) require manual dashboard
+# rotation + vault update.
+# ===========================================================================
+name: "🔐 AutoKey — Rotate Secrets"
+
+on:
+  # Run every 90 days at midnight UTC
+  schedule:
+    - cron: '0 0 1 */3 *'
+
+  # Allow manual trigger with options
+  workflow_dispatch:
+    inputs:
+      target_repo:
+        description: 'Target repo (leave blank for all repos)'
+        required: false
+        default: ''
+      target_secret:
+        description: 'Specific secret to rotate (leave blank for all internal secrets)'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry run (true/false)'
+        required: false
+        default: 'false'
+
+jobs:
+  rotate:
+    name: Rotate Internal Secrets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      secrets: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate gh CLI
+        run: gh --version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Make scripts executable
+        run: |
+          chmod +x vault/rotate-secrets.sh
+          chmod +x vault/validate-secrets.sh
+
+      - name: Rotate internal secrets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.target_repo }}" ]; then
+            ARGS="$ARGS --repo ${{ github.event.inputs.target_repo }}"
+          fi
+          if [ -n "${{ github.event.inputs.target_secret }}" ]; then
+            ARGS="$ARGS --secret ${{ github.event.inputs.target_secret }}"
+          fi
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          bash vault/rotate-secrets.sh $ARGS
+
+      - name: Post-rotation validation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash vault/validate-secrets.sh
+        continue-on-error: true
+
+      - name: Notify Slack on rotation complete
+        if: success()
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H 'Content-type: application/json' \
+            --data '{
+              "text": "🔐 *AutoKey Rotation Complete*\n• Repo: systems-master-hub\n• Time: '"$(date -u)"'\n• Status: ✅ Success\n• Run: <https://github.com/Garrettc123/systems-master-hub/actions|View Run>"
+            }'
+        continue-on-error: true
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H 'Content-type: application/json' \
+            --data '{
+              "text": "🚨 *AutoKey Rotation FAILED*\n• Repo: systems-master-hub\n• Time: '"$(date -u)"'\n• Status: ❌ Failed\n• Action needed: Check run logs\n• Run: <https://github.com/Garrettc123/systems-master-hub/actions|View Run>"
+            }'
+        continue-on-error: true

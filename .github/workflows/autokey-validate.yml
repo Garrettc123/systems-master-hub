@@ -1,0 +1,80 @@
+# ===========================================================================
+# GARCAR AUTOKEY — Secret Presence Validation Workflow
+# Validates all required secrets exist across all Tier-1 repos.
+# Runs daily and after any push to vault/ or .github/workflows/.
+# ===========================================================================
+name: "🔐 AutoKey — Validate Secrets"
+
+on:
+  push:
+    paths:
+      - 'vault/**'
+      - '.github/workflows/autokey-*.yml'
+      - 'registry/repos.json'
+      - 'contracts/**'
+
+  schedule:
+    # Daily check at 6am UTC
+    - cron: '0 6 * * *'
+
+  workflow_dispatch:
+    inputs:
+      target_repo:
+        description: 'Target repo to validate (blank = all)'
+        required: false
+        default: ''
+
+jobs:
+  validate:
+    name: Validate Secret Presence
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Make script executable
+        run: chmod +x vault/validate-secrets.sh
+
+      - name: Validate all required secrets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.target_repo }}" ]; then
+            ARGS="--repo ${{ github.event.inputs.target_repo }}"
+          fi
+          bash vault/validate-secrets.sh $ARGS
+
+      - name: Post validation matrix to summary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "## 🔐 AutoKey Secret Validation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Time:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "**Org:** Garrettc123" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Repo | Tier | Required Secrets |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|-----------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| systems-master-hub | T1 | GITHUB_TOKEN, LINEAR_API_KEY, SLACK_WEBHOOK_URL, RAILWAY_TOKEN |" >> $GITHUB_STEP_SUMMARY
+          echo "| garcar-payments | T1 | STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, SUPABASE_URL, SUPABASE_SERVICE_KEY, APP_URL, RAILWAY_TOKEN |" >> $GITHUB_STEP_SUMMARY
+          echo "| garcar-payment-loop | T1 | STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, SUPABASE_URL, RAILWAY_TOKEN |" >> $GITHUB_STEP_SUMMARY
+          echo "| mars-api | T1 | SUPABASE_URL, APP_URL, RAILWAY_TOKEN |" >> $GITHUB_STEP_SUMMARY
+          echo "| enterprise-mlops-platform | T1 | SUPABASE_URL, RAILWAY_TOKEN |" >> $GITHUB_STEP_SUMMARY
+          echo "| TITAN | T2 | STRIPE_SECRET_KEY, SUPABASE_URL, RAILWAY_TOKEN, LINEAR_API_KEY |" >> $GITHUB_STEP_SUMMARY
+          echo "| atlas-dashboard | T2 | SUPABASE_URL, VERCEL_TOKEN |" >> $GITHUB_STEP_SUMMARY
+          echo "| zeus-dashboard | T2 | SUPABASE_URL, LINEAR_API_KEY, VERCEL_TOKEN |" >> $GITHUB_STEP_SUMMARY
+          echo "| neural-mesh | T2 | GITHUB_TOKEN, SLACK_WEBHOOK_URL |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H 'Content-type: application/json' \
+            --data '{
+              "text": "🚨 *AutoKey Validation FAILED*\n• One or more required secrets are MISSING\n• Time: '"$(date -u)"'\n• Action needed: Run bash vault/vault-setup.sh\n• Run: <https://github.com/Garrettc123/systems-master-hub/actions|View Logs>"
+            }'
+        continue-on-error: true
