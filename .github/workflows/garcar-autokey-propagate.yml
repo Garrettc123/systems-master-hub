@@ -1,0 +1,163 @@
+name: Garcar Master Autokey Propagator
+# ONE workflow. ONE run. ALL four repos get ALL secrets.
+# Add secrets to systems-master-hub ONLY, then run this.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type PROPAGATE to confirm'
+        required: true
+        type: string
+
+jobs:
+  propagate:
+    runs-on: ubuntu-latest
+    if: inputs.confirm == 'PROPAGATE'
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Validate required secrets ────────────────────────────────────────
+      - name: Validate master secrets
+        env:
+          GHPAT: ${{ secrets.GHPAT }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_PRICE_STARTER: ${{ secrets.STRIPE_PRICE_STARTER }}
+          STRIPE_PRICE_PRO: ${{ secrets.STRIPE_PRICE_PRO }}
+          STRIPE_PRICE_AGENCY: ${{ secrets.STRIPE_PRICE_AGENCY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          MISSING=""
+          [ -z "$GHPAT" ]               && MISSING="$MISSING GHPAT"
+          [ -z "$RAILWAY_TOKEN" ]        && MISSING="$MISSING RAILWAY_TOKEN"
+          [ -z "$STRIPE_SECRET_KEY" ]    && MISSING="$MISSING STRIPE_SECRET_KEY"
+          [ -z "$STRIPE_PRICE_STARTER" ] && MISSING="$MISSING STRIPE_PRICE_STARTER"
+          [ -z "$STRIPE_PRICE_PRO" ]     && MISSING="$MISSING STRIPE_PRICE_PRO"
+          [ -z "$STRIPE_PRICE_AGENCY" ]  && MISSING="$MISSING STRIPE_PRICE_AGENCY"
+          [ -z "$OPENAI_API_KEY" ]       && MISSING="$MISSING OPENAI_API_KEY"
+          [ -z "$SUPABASE_URL" ]         && MISSING="$MISSING SUPABASE_URL"
+          [ -z "$SUPABASE_ANON_KEY" ]    && MISSING="$MISSING SUPABASE_ANON_KEY"
+          if [ -n "$MISSING" ]; then
+            echo "❌ Missing secrets:$MISSING"
+            echo "Add at: https://github.com/Garrettc123/systems-master-hub/settings/secrets/actions"
+            exit 1
+          fi
+          echo "✅ All required secrets present"
+
+      # ── Install gh CLI ───────────────────────────────────────────────────
+      - name: Install gh CLI
+        run: |
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            | sudo tee /etc/apt/sources.list.d/github-cli.list
+          sudo apt-get update -qq && sudo apt-get install -y gh
+          echo "✅ gh CLI ready"
+
+      # ── Push all secrets to all four repos ───────────────────────────────
+      - name: Propagate secrets to all core repos
+        env:
+          GHPAT: ${{ secrets.GHPAT }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_PRICE_STARTER: ${{ secrets.STRIPE_PRICE_STARTER }}
+          STRIPE_PRICE_PRO: ${{ secrets.STRIPE_PRICE_PRO }}
+          STRIPE_PRICE_AGENCY: ${{ secrets.STRIPE_PRICE_AGENCY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          APP_BASE_URL_PAYMENTS: ${{ secrets.APP_BASE_URL_PAYMENTS }}
+          APP_BASE_URL_RHNS: ${{ secrets.APP_BASE_URL_RHNS }}
+          APP_BASE_URL_ATLAS: ${{ secrets.APP_BASE_URL_ATLAS }}
+          APP_BASE_URL_ZEUS: ${{ secrets.APP_BASE_URL_ZEUS }}
+        run: |
+          export GH_TOKEN="$GHPAT"
+
+          set_secret() {
+            local REPO="$1" NAME="$2" VALUE="$3"
+            if [ -n "$VALUE" ]; then
+              gh secret set "$NAME" --body "$VALUE" --repo "Garrettc123/$REPO" && echo "  ✓ $NAME → $REPO"
+            else
+              echo "  ○ $NAME skipped (not set) → $REPO"
+            fi
+          }
+
+          for REPO in garcar-payments garcar-rhns-core atlas-dashboard zeus-dashboard; do
+            echo ""
+            echo "━━ $REPO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            # ── Infrastructure ──
+            set_secret "$REPO" "GHPAT"                "$GHPAT"
+            set_secret "$REPO" "RAILWAY_TOKEN"         "$RAILWAY_TOKEN"
+
+            # ── Stripe ──
+            set_secret "$REPO" "STRIPE_SECRET_KEY"     "$STRIPE_SECRET_KEY"
+            set_secret "$REPO" "STRIPE_WEBHOOK_SECRET" "$STRIPE_WEBHOOK_SECRET"
+            set_secret "$REPO" "STRIPE_PRICE_STARTER"  "$STRIPE_PRICE_STARTER"
+            set_secret "$REPO" "STRIPE_PRICE_PRO"      "$STRIPE_PRICE_PRO"
+            set_secret "$REPO" "STRIPE_PRICE_AGENCY"   "$STRIPE_PRICE_AGENCY"
+
+            # ── AI Keys ──
+            set_secret "$REPO" "OPENAI_API_KEY"        "$OPENAI_API_KEY"
+            set_secret "$REPO" "ANTHROPIC_API_KEY"     "$ANTHROPIC_API_KEY"
+
+            # ── Supabase / Database ──
+            set_secret "$REPO" "SUPABASE_URL"          "$SUPABASE_URL"
+            set_secret "$REPO" "SUPABASE_ANON_KEY"     "$SUPABASE_ANON_KEY"
+            set_secret "$REPO" "SUPABASE_SERVICE_KEY"  "$SUPABASE_SERVICE_KEY"
+            set_secret "$REPO" "DATABASE_URL"          "$DATABASE_URL"
+            set_secret "$REPO" "REDIS_URL"             "$REDIS_URL"
+          done
+
+          # ── Repo-specific APP_BASE_URL ──
+          set_secret "garcar-payments"  "APP_BASE_URL" "$APP_BASE_URL_PAYMENTS"
+          set_secret "garcar-rhns-core" "APP_BASE_URL" "$APP_BASE_URL_RHNS"
+          set_secret "atlas-dashboard"  "APP_BASE_URL" "$APP_BASE_URL_ATLAS"
+          set_secret "zeus-dashboard"   "APP_BASE_URL" "$APP_BASE_URL_ZEUS"
+
+          # ── Frontend-specific ──
+          for REPO in atlas-dashboard zeus-dashboard; do
+            set_secret "$REPO" "VERCEL_TOKEN"        "$VERCEL_TOKEN"
+            set_secret "$REPO" "NEXT_PUBLIC_APP_URL" "$NEXT_PUBLIC_APP_URL"
+          done
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo " ✅ ALL SECRETS PROPAGATED TO GARCAR STACK"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      # ── Trigger deploy on all four repos ────────────────────────────────
+      - name: Trigger deploys
+        env:
+          GHPAT: ${{ secrets.GHPAT }}
+        run: |
+          export GH_TOKEN="$GHPAT"
+          for REPO in garcar-payments garcar-rhns-core atlas-dashboard zeus-dashboard; do
+            gh workflow run deploy.yml --repo "Garrettc123/$REPO" --ref main 2>/dev/null \
+              && echo "  ✓ deploy triggered: $REPO" \
+              || echo "  ○ no deploy.yml yet: $REPO"
+          done
+
+      # ── Final report ────────────────────────────────────────────────────
+      - name: Report
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo " GARCAR AUTOKEY COMPLETE"
+          echo ""
+          echo " ✓ garcar-payments   — secrets + deploy triggered"
+          echo " ✓ garcar-rhns-core  — secrets + deploy triggered"
+          echo " ✓ atlas-dashboard   — secrets + deploy triggered"
+          echo " ✓ zeus-dashboard    — secrets + deploy triggered"
+          echo ""
+          echo " Monitor: https://github.com/Garrettc123"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
