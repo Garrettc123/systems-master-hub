@@ -1,23 +1,23 @@
-# ═══════════════════════════════════════════════════════════════
-# GARCAR APEX — Daily Evolution Engine v3.0
-# Fires every morning at 6AM UTC across all 332 systems.
-# Each system gets measurably better every single day.
-# Philosophy: Never repeat. Only upgrade. Converge to mastery.
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
+# GARCAR APEX — Daily Evolution Engine
+# Fires at 6AM UTC every day. Evolves all 20 registered systems in
+# parallel. Each system gets exactly one new capability per day.
+# Rule: Never repeat. Only upgrade. Converge to mastery.
+# ═══════════════════════════════════════════════════════════════════════
 
 name: 🧬 GARCAR Daily Evolution Engine
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # 6AM UTC daily
+    - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:
       target_system:
-        description: 'Specific system to evolve (blank = all)'
+        description: 'Evolve a specific system (leave blank for all 20)'
         required: false
         default: ''
       dry_run:
-        description: 'Preview without writing files'
+        description: 'Dry run — preview without writing'
         type: boolean
         default: false
 
@@ -27,71 +27,54 @@ env:
 
 jobs:
 
-  # ── PHASE 1: Assess ecosystem, build evolution matrix ──────────
   assess:
     name: 🔍 Ecosystem Assessment
     runs-on: ubuntu-latest
     outputs:
       evolution_matrix: ${{ steps.scan.outputs.matrix }}
       total_systems: ${{ steps.scan.outputs.count }}
-      avg_maturity: ${{ steps.scan.outputs.avg_maturity }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Scan systems and build evolution matrix
+      - name: Build evolution matrix from registry
         id: scan
         run: |
-          python3 << 'PYEOF'
+          python3 << 'EOF'
           import json, urllib.request, os
 
           with urllib.request.urlopen(os.environ['REGISTRY_URL'], timeout=15) as r:
               registry = json.loads(r.read())
 
-          all_systems = registry.get('systems', {})
+          systems = sorted(registry.get('systems', {}).keys())
           target = "${{ github.event.inputs.target_system }}"
-          systems = [s for s in all_systems if not target or s == target]
+          if target:
+              systems = [s for s in systems if s == target]
 
-          # Sort by priority (lowest number = highest priority)
-          systems.sort(key=lambda s: all_systems[s].get('priority', 999))
-
-          scores = [all_systems[s].get('maturity_score', 0) for s in systems]
-          avg = round(sum(scores) / len(scores), 1) if scores else 0
-
-          matrix = {"include": [{"system": s, "priority": all_systems[s].get('priority', 99)} for s in systems]}
-
+          matrix = {"include": [{"system": s} for s in systems]}
           print(f"::set-output name=matrix::{json.dumps(matrix)}")
           print(f"::set-output name=count::{len(systems)}")
-          print(f"::set-output name=avg_maturity::{avg}")
-
-          print(f"\n🎯 GARCAR Ecosystem Assessment")
-          print(f"   Systems to evolve : {len(systems)}")
-          print(f"   Avg maturity score: {avg}%")
-          print(f"\n   Priority  System                               Score  Missing")
-          print(f"   ────────  ─────────────────────────────────   ─────  ───────")
+          print(f"\n🎯 Evolution targets: {len(systems)} systems")
           for s in systems:
-              d = all_systems[s]
-              missing = len(d.get('capabilities_missing', []))
-              score = d.get('maturity_score', 0)
-              print(f"   #{d.get('priority','?'):2}       {s:<40} {score:>5}%  {missing} caps")
-          PYEOF
+              data = registry['systems'][s]
+              print(f"  → {s}: {data.get('maturity_score', 0)}% mature | missing: {len(data.get('capabilities_missing', []))} capabilities")
+          EOF
 
-  # ── PHASE 2: Evolve each system in parallel ────────────────────
   evolve:
-    name: 🧬 ${{ matrix.system }}
+    name: 🧬 Evolve ${{ matrix.system }}
     needs: assess
     runs-on: ubuntu-latest
     if: needs.assess.outputs.total_systems > 0
     strategy:
       matrix: ${{ fromJson(needs.assess.outputs.evolution_matrix) }}
-      max-parallel: 15
+      max-parallel: 20
       fail-fast: false
     steps:
-      - name: Checkout systems-master-hub (contains evolve.py)
+      - name: Checkout systems-master-hub
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GARCAR_PAT || secrets.GITHUB_TOKEN }}
 
-      - name: Checkout ${{ matrix.system }}
+      - name: Checkout target system
         uses: actions/checkout@v4
         with:
           repository: ${{ env.GARCAR_ORG }}/${{ matrix.system }}
@@ -102,24 +85,25 @@ jobs:
 
       - name: Run GARCAR Evolution Agent
         run: |
+          DRY=""
+          [ "${{ github.event.inputs.dry_run }}" = "true" ] && DRY="--dry-run"
           python3 .garcar/evolve.py \
             --system "${{ matrix.system }}" \
             --path ./target-system \
             --registry "${{ env.REGISTRY_URL }}" \
             --log-to . \
-            ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+            $DRY
 
       - name: Commit evolved system
         if: github.event.inputs.dry_run != 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           repository: ./target-system
-          commit_message: "🧬 auto-evolve[${{ matrix.system }}]: +capability $(date +%Y-%m-%d)"
+          commit_message: "🧬 auto-evolve: ${{ matrix.system }} +capability $(date +%Y-%m-%d)"
           commit_user_name: "GARCAR Evolution Agent"
           commit_user_email: "apex@garcar.ai"
         continue-on-error: true
 
-  # ── PHASE 3: Master log + ATLAS notification ───────────────────
   report:
     name: 📊 Evolution Report
     needs: [assess, evolve]
@@ -130,25 +114,20 @@ jobs:
         with:
           token: ${{ secrets.GARCAR_PAT || secrets.GITHUB_TOKEN }}
 
-      - name: Write master evolution summary
+      - name: Append master evolution summary
         run: |
           DATE=$(date +%Y-%m-%d)
-          COUNT="${{ needs.assess.outputs.total_systems }}"
-          AVG="${{ needs.assess.outputs.avg_maturity }}"
-          cat >> DAILY_EVOLUTION_LOG.md << EOF
-
-          ## 🧬 GARCAR Evolution Cycle — $DATE
-          - **Systems evolved:** $COUNT
-          - **Avg ecosystem maturity:** ${AVG}%
-          - **Run ID:** ${{ github.run_id }}
-          - **Rule:** Never repeat. Only upgrade. Converge to mastery.
-          ---
-          EOF
+          echo "" >> DAILY_EVOLUTION_LOG.md
+          echo "# 🧬 GARCAR Evolution Report — $DATE" >> DAILY_EVOLUTION_LOG.md
+          echo "**Systems evolved:** ${{ needs.assess.outputs.total_systems }}" >> DAILY_EVOLUTION_LOG.md
+          echo "**Workflow run:** ${{ github.run_id }}" >> DAILY_EVOLUTION_LOG.md
+          echo "**Rule:** Never repeat. Only upgrade. Converge to mastery." >> DAILY_EVOLUTION_LOG.md
+          echo "---" >> DAILY_EVOLUTION_LOG.md
 
       - name: Commit evolution log
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "📊 evolution-report: ${{ needs.assess.outputs.total_systems }} systems — $(date +%Y-%m-%d)"
+          commit_message: "📊 evolution-log: daily report $(date +%Y-%m-%d)"
           commit_user_name: "GARCAR Evolution Agent"
           commit_user_email: "apex@garcar.ai"
         continue-on-error: true
@@ -158,6 +137,5 @@ jobs:
           curl -sf -X POST \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.GARCAR_INTERNAL_TOKEN }}" \
-            -d '{"event":"evolution.cycle.completed","date":"'$(date +%Y-%m-%d)'","systems_evolved":${{ needs.assess.outputs.total_systems }},"avg_maturity":${{ needs.assess.outputs.avg_maturity }}}' \
-            https://atlas-dashboard.vercel.app/api/events \
-            || echo "ATLAS ping skipped (deploy pending)"
+            -d '{"event":"evolution.cycle.completed","date":"'$(date +%Y-%m-%d)'","systems_evolved":${{ needs.assess.outputs.total_systems }}}' \
+            https://atlas-dashboard.vercel.app/api/events || echo "ATLAS ping skipped (deploy pending)"
