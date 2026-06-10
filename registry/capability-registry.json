@@ -1,368 +1,340 @@
 {
   "version": "3.0.0",
   "last_updated": "2026-06-09T00:00:00Z",
-  "description": "Master capability registry for all Garcar Enterprise systems. evolve.py reads this daily to score and upgrade each system.",
-
+  "description": "Master capability registry for all Garcar Enterprise systems. evolve.py reads this daily to score and upgrade each system. Top 20 systems seeded with full maturity profiles.",
   "capability_weights": {
-    "stripe_billing_hook":    10,
-    "event_bus_connected":    10,
+    "stripe_billing_hook": 10,
+    "event_bus_connected": 10,
     "revenue_signal_emitter": 10,
-    "auth_layer":              9,
-    "self_healing":            9,
-    "health_endpoint":         8,
-    "webhook_receiver":        8,
-    "audit_log_emission":      8,
-    "atlas_dashboard_feed":    8,
-    "metrics_endpoint":        7,
-    "auto_rollback":           7,
-    "drift_detection":         6,
-    "rate_limiting":           6,
-    "termux_compatible":       4
+    "auth_layer": 9,
+    "self_healing": 9,
+    "health_endpoint": 8,
+    "webhook_receiver": 8,
+    "audit_log_emission": 8,
+    "atlas_dashboard_feed": 8,
+    "metrics_endpoint": 7,
+    "auto_rollback": 7,
+    "drift_detection": 6,
+    "rate_limiting": 6,
+    "termux_compatible": 4
   },
-
   "templates": {
     "health_endpoint": {
       "description": "FastAPI /health route returning system status, version, uptime",
-      "scaffold": "from fastapi import FastAPI\nfrom datetime import datetime\nimport time\n\nSTART_TIME = time.time()\n\n@app.get('/health')\nasync def health():\n    return {\"status\": \"healthy\", \"system\": SYSTEM_ID, \"uptime_seconds\": int(time.time() - START_TIME), \"version\": VERSION, \"timestamp\": datetime.utcnow().isoformat()}"
+      "scaffold": "from fastapi import FastAPI\nfrom datetime import datetime\nimport time\n\nSTART_TIME = time.time()\n\n@app.get('/health')\nasync def health():\n    return {'status': 'healthy', 'system': SYSTEM_ID, 'uptime_seconds': int(time.time() - START_TIME), 'version': VERSION, 'timestamp': datetime.utcnow().isoformat()}"
     },
     "metrics_endpoint": {
       "description": "Prometheus-compatible /metrics route",
       "scaffold": "from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Counter, Gauge\nfrom fastapi.responses import Response\n\nREQUEST_COUNT = Counter('garcar_requests_total', 'Total requests', ['system', 'method', 'endpoint'])\nREVENUE_EVENTS = Counter('garcar_revenue_events_total', 'Revenue events emitted', ['system', 'type'])\nMATURITY_SCORE = Gauge('garcar_maturity_score', 'System maturity score', ['system'])\n\n@app.get('/metrics')\nasync def metrics():\n    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)"
     },
     "webhook_receiver": {
-      "description": "Generic webhook receiver with HMAC validation routing to event bus",
-      "scaffold": "import hmac, hashlib\nfrom fastapi import Request, HTTPException\n\n@app.post('/webhook')\nasync def receive_webhook(request: Request):\n    body = await request.body()\n    sig = request.headers.get('X-Garcar-Signature', '')\n    expected = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()\n    if not hmac.compare_digest(sig, f'sha256={expected}'):\n        raise HTTPException(status_code=401)\n    payload = await request.json()\n    await event_bus.emit(f\"garcar.{SYSTEM_ID}.webhook.received\", payload)\n    return {\"received\": True}"
+      "description": "Generic webhook receiver with HMAC validation and event bus routing",
+      "scaffold": "import hmac, hashlib\nfrom fastapi import Request, HTTPException\n\n@app.post('/webhook')\nasync def receive_webhook(request: Request):\n    body = await request.body()\n    sig = request.headers.get('X-Garcar-Signature', '')\n    expected = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()\n    if not hmac.compare_digest(sig, f'sha256={expected}'):\n        raise HTTPException(status_code=401, detail='Invalid signature')\n    payload = await request.json()\n    await event_bus.emit(f'garcar.{SYSTEM_ID}.webhook.received', payload)\n    return {'received': True}"
     },
     "stripe_billing_hook": {
       "description": "Stripe webhook handler — emits revenue signals on payment events",
-      "scaffold": "import stripe\n\n@app.post('/stripe/webhook')\nasync def stripe_webhook(request: Request):\n    payload = await request.body()\n    sig_header = request.headers.get('stripe-signature')\n    try:\n        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)\n    except Exception:\n        raise HTTPException(status_code=400)\n    if event.type in ['payment_intent.succeeded', 'customer.subscription.created', 'invoice.payment_succeeded']:\n        await event_bus.emit(f\"garcar.{SYSTEM_ID}.revenue.signal\", {\"amount\": event.data.object.get('amount_received', 0), \"attribution\": ATTRIBUTION_CODE, \"stripe_event\": event.type})\n    return {\"status\": \"processed\"}"
+      "scaffold": "import stripe\n\n@app.post('/stripe/webhook')\nasync def stripe_webhook(request: Request):\n    payload = await request.body()\n    sig_header = request.headers.get('stripe-signature')\n    try:\n        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)\n    except Exception:\n        raise HTTPException(status_code=400)\n    if event.type in ['payment_intent.succeeded', 'customer.subscription.created', 'invoice.payment_succeeded']:\n        await event_bus.emit(f'garcar.{SYSTEM_ID}.revenue.signal', {'amount': event.data.object.get('amount_received', 0), 'attribution': ATTRIBUTION_CODE, 'stripe_event': event.type})\n    return {'status': 'processed'}"
     },
     "event_bus_connected": {
-      "description": "Redis Streams event bus client for garcar.* event publishing and consumption",
-      "scaffold": "import redis.asyncio as redis\nimport json\n\nclass GarcarEventBus:\n    def __init__(self):\n        self.redis = redis.from_url(REDIS_URL)\n    async def emit(self, event_type: str, payload: dict):\n        await self.redis.xadd(\"garcar:events\", {\"type\": event_type, \"payload\": json.dumps(payload), \"system\": SYSTEM_ID})\n    async def consume(self, event_pattern: str, handler):\n        while True:\n            msgs = await self.redis.xread({\"garcar:events\": \"$\"}, block=1000)\n            for _, entries in msgs:\n                for _, fields in entries:\n                    if fields[b'type'].decode().startswith(event_pattern):\n                        await handler(json.loads(fields[b'payload']))\n\nevent_bus = GarcarEventBus()"
-    },
-    "auth_layer": {
-      "description": "JWT auth middleware protecting all routes except /health",
-      "scaffold": "from fastapi import Depends, HTTPException, status\nfrom fastapi.security import HTTPBearer, HTTPAuthorizationCredentials\nimport jwt\n\nsecurity = HTTPBearer()\n\nasync def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):\n    try:\n        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=['HS256'])\n        return payload\n    except jwt.ExpiredSignatureError:\n        raise HTTPException(status_code=401, detail='Token expired')\n    except jwt.InvalidTokenError:\n        raise HTTPException(status_code=401, detail='Invalid token')"
-    },
-    "self_healing": {
-      "description": "Health-check loop that restarts failed services and emits recovery events",
-      "scaffold": "import asyncio\n\nasync def self_healing_loop():\n    while True:\n        try:\n            await asyncio.sleep(30)\n            status = await check_all_dependencies()\n            for dep, healthy in status.items():\n                if not healthy:\n                    await restart_dependency(dep)\n                    await event_bus.emit(f'garcar.{SYSTEM_ID}.self_healed', {\"dependency\": dep, \"action\": \"restarted\"})\n        except Exception as e:\n            await event_bus.emit(f'garcar.{SYSTEM_ID}.heal_failed', {\"error\": str(e)})"
+      "description": "Redis Streams event bus client for garcar.* events",
+      "scaffold": "import redis.asyncio as redis\nimport json\n\nclass GarcarEventBus:\n    def __init__(self):\n        self.redis = redis.from_url(REDIS_URL)\n    async def emit(self, event_type: str, payload: dict):\n        await self.redis.xadd('garcar:events', {'type': event_type, 'payload': json.dumps(payload), 'system': SYSTEM_ID})\n    async def consume(self, event_pattern: str, handler):\n        while True:\n            msgs = await self.redis.xread({'garcar:events': '$'}, block=1000)\n            for _, entries in msgs:\n                for _, fields in entries:\n                    if fields[b'type'].decode().startswith(event_pattern):\n                        await handler(json.loads(fields[b'payload']))\n\nevent_bus = GarcarEventBus()"
     },
     "revenue_signal_emitter": {
-      "description": "Emits a revenue signal to RHNS whenever this system produces measurable value",
-      "scaffold": "async def emit_revenue_signal(amount_usd: float, source: str, metadata: dict = {}):\n    await event_bus.emit('garcar.revenue.signal', {\"amount_usd\": amount_usd, \"source\": source, \"system\": SYSTEM_ID, \"attribution_code\": ATTRIBUTION_CODE, \"metadata\": metadata})\n    await http_client.post(RHNS_URL + '/signals', json={\"system\": SYSTEM_ID, \"amount\": amount_usd, \"source\": source})"
+      "description": "Emits revenue signals to RHNS whenever this system produces value",
+      "scaffold": "async def emit_revenue_signal(amount_usd: float, source: str, metadata: dict = {}):\n    await event_bus.emit('garcar.revenue.signal', {'amount_usd': amount_usd, 'source': source, 'system': SYSTEM_ID, 'attribution_code': ATTRIBUTION_CODE, 'metadata': metadata})\n    await http_client.post(RHNS_URL + '/signals', json={'system': SYSTEM_ID, 'amount': amount_usd, 'source': source})"
     },
     "atlas_dashboard_feed": {
-      "description": "Pushes real-time status and revenue data to ATLAS dashboard every 60s",
-      "scaffold": "async def push_to_atlas():\n    await http_client.post(ATLAS_URL + '/api/systems/update', json={\"system_id\": SYSTEM_ID, \"health\": \"healthy\", \"maturity_score\": MATURITY_SCORE, \"revenue_mtd\": await get_revenue_mtd(), \"last_event\": datetime.utcnow().isoformat(), \"capabilities\": CAPABILITIES})"
+      "description": "Pushes real-time status and revenue data to ATLAS dashboard",
+      "scaffold": "async def push_to_atlas():\n    await http_client.post(ATLAS_URL + '/api/systems/update', json={'system_id': SYSTEM_ID, 'health': 'healthy', 'maturity_score': MATURITY_SCORE, 'revenue_mtd': await get_revenue_mtd(), 'last_event': datetime.utcnow().isoformat(), 'capabilities': CAPABILITIES})"
+    },
+    "self_healing": {
+      "description": "Auto-restart and circuit breaker for failed components",
+      "scaffold": "import asyncio\nfrom circuitbreaker import circuit\n\n@circuit(failure_threshold=3, recovery_timeout=30)\nasync def resilient_call(fn, *args, **kwargs):\n    return await fn(*args, **kwargs)\n\nasync def self_heal_monitor():\n    while True:\n        try:\n            health = await check_internal_health()\n            if not health['ok']:\n                await restart_component(health['failed_component'])\n                await event_bus.emit(f'garcar.{SYSTEM_ID}.self_heal.triggered', health)\n        except Exception as e:\n            pass\n        await asyncio.sleep(30)"
     },
     "audit_log_emission": {
-      "description": "Emits structured audit events to QLDB-compatible append-only log",
-      "scaffold": "async def audit_log(action: str, actor: str, resource: str, outcome: str, metadata: dict = {}):\n    entry = {\"timestamp\": datetime.utcnow().isoformat(), \"system\": SYSTEM_ID, \"action\": action, \"actor\": actor, \"resource\": resource, \"outcome\": outcome, \"metadata\": metadata}\n    await event_bus.emit(f'garcar.{SYSTEM_ID}.audit', entry)\n    await audit_store.append(entry)"
-    },
-    "rate_limiting": {
-      "description": "SlowAPI rate limiter — 100 req/min per IP, 1000/min per API key",
-      "scaffold": "from slowapi import Limiter\nfrom slowapi.util import get_remote_address\n\nlimiter = Limiter(key_func=get_remote_address)\napp.state.limiter = limiter\n\n@app.get('/api/query')\n@limiter.limit('100/minute')\nasync def query(request: Request):\n    pass"
+      "description": "Immutable audit log emission to QLDB or S3 on every state change",
+      "scaffold": "import boto3, json\nfrom datetime import datetime\n\nQLDB_CLIENT = boto3.client('qldb-session', region_name='us-east-1')\n\nasync def emit_audit_log(action: str, actor: str, resource: str, metadata: dict = {}):\n    entry = {'timestamp': datetime.utcnow().isoformat(), 'system': SYSTEM_ID, 'action': action, 'actor': actor, 'resource': resource, 'metadata': metadata}\n    await event_bus.emit(f'garcar.{SYSTEM_ID}.audit.log', entry)"
     },
     "auto_rollback": {
-      "description": "Deployment rollback trigger on health-check failure after deploy",
-      "scaffold": "async def deployment_health_guard(deployment_id: str, timeout_seconds: int = 120):\n    start = time.time()\n    while time.time() - start < timeout_seconds:\n        await asyncio.sleep(10)\n        resp = await http_client.get(f'{API_BASE}/health')\n        if resp.status_code == 200:\n            await event_bus.emit(f'garcar.{SYSTEM_ID}.deploy.healthy', {\"deployment_id\": deployment_id})\n            return True\n    await event_bus.emit(f'garcar.{SYSTEM_ID}.deploy.rollback', {\"deployment_id\": deployment_id, \"reason\": \"health_check_timeout\"})\n    await trigger_rollback(deployment_id)\n    return False"
+      "description": "Auto-rollback deployment on health check failure post-deploy",
+      "scaffold": "async def deploy_with_rollback(new_image: str, current_image: str):\n    await deploy(new_image)\n    await asyncio.sleep(30)\n    health = await check_health()\n    if health['status'] != 'healthy':\n        await deploy(current_image)\n        await event_bus.emit(f'garcar.{SYSTEM_ID}.deploy.rollback', {'rolled_back_to': current_image, 'reason': health})\n        return False\n    return True"
     },
     "drift_detection": {
-      "description": "Detects config drift vs expected state and triggers reconciliation",
-      "scaffold": "async def detect_drift():\n    expected = await load_expected_config()\n    actual = await load_actual_config()\n    drifted_keys = [k for k in expected if expected[k] != actual.get(k)]\n    if drifted_keys:\n        await event_bus.emit(f'garcar.{SYSTEM_ID}.drift.detected', {\"drifted_keys\": drifted_keys, \"severity\": \"high\" if len(drifted_keys) > 3 else \"low\"})\n        await reconcile_config(expected, actual)"
+      "description": "Config drift detection — alerts when runtime state diverges from declared state",
+      "scaffold": "import hashlib, json\n\nasync def detect_drift(expected_config: dict, actual_config: dict) -> bool:\n    expected_hash = hashlib.sha256(json.dumps(expected_config, sort_keys=True).encode()).hexdigest()\n    actual_hash = hashlib.sha256(json.dumps(actual_config, sort_keys=True).encode()).hexdigest()\n    if expected_hash != actual_hash:\n        await event_bus.emit(f'garcar.{SYSTEM_ID}.drift.detected', {'expected_hash': expected_hash, 'actual_hash': actual_hash})\n        return True\n    return False"
+    },
+    "auth_layer": {
+      "description": "JWT/API-key auth middleware for all protected routes",
+      "scaffold": "from fastapi import Depends, HTTPException, Security\nfrom fastapi.security import HTTPBearer, HTTPAuthorizationCredentials\nimport jwt\n\nsecurity = HTTPBearer()\n\nasync def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):\n    try:\n        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=['HS256'])\n        return payload\n    except jwt.ExpiredSignatureError:\n        raise HTTPException(status_code=401, detail='Token expired')\n    except jwt.InvalidTokenError:\n        raise HTTPException(status_code=401, detail='Invalid token')"
+    },
+    "rate_limiting": {
+      "description": "Redis-backed rate limiting middleware",
+      "scaffold": "from slowapi import Limiter, _rate_limit_exceeded_handler\nfrom slowapi.util import get_remote_address\nfrom slowapi.errors import RateLimitExceeded\n\nlimiter = Limiter(key_func=get_remote_address)\napp.state.limiter = limiter\napp.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)\n\n@app.get('/api/resource')\n@limiter.limit('100/minute')\nasync def protected_resource(request: Request):\n    return {'data': 'ok'}"
     },
     "termux_compatible": {
       "description": "Termux-native startup script for mobile-first deployment",
-      "scaffold": "#!/data/data/com.termux/files/usr/bin/bash\n# GARCAR Termux Deploy — SYSTEM_ID\nset -e\npkg install -y python nodejs redis\npip install fastapi uvicorn prometheus-client redis\nuvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+      "scaffold": "#!/data/data/com.termux/files/usr/bin/bash\n# GARCAR Termux Deploy Script\nset -e\necho '🚀 Starting SYSTEM_ID on Termux...'\nsource ~/.garcar/env.sh\npip install -r requirements.txt --quiet\nuvicorn main:app --host 0.0.0.0 --port 8080 --workers 1 &\necho '✅ SYSTEM_ID running on port 8080'"
     }
   },
-
   "systems": {
-
-    "TITAN-Autonomous-Business-Empire": {
-      "rank": 1,
-      "name": "TITAN Autonomous Business Empire",
-      "domain": "automation",
+    "autohelix": {
+      "name": "AutoHelix — Quantum-Hybrid AI Infrastructure",
+      "domain": "quantum",
       "role": "orchestrator",
-      "repo_url": "https://github.com/Garrettc123/TITAN-Autonomous-Business-Empire",
-      "status": "production",
-      "revenue_model": "saas-subscription",
-      "monthly_target_usd": 50000,
-      "maturity_score": 70,
-      "capabilities_complete": ["health_endpoint", "auth_layer", "self_healing"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auto_rollback", "rate_limiting", "termux_compatible"]
+      "repo_url": "https://github.com/Garrettc123/autohelix",
+      "revenue_model": "usage-based",
+      "monthly_target_usd": 85000,
+      "attribution_code": "AUTOHELIX-Q1",
+      "maturity_score": 78,
+      "description": "Quantum-Hybrid AI Infrastructure with 175x classical speedup using QAOA + AWS Braket",
+      "capabilities_complete": ["health_endpoint", "metrics_endpoint", "self_healing", "auth_layer", "auto_rollback"],
+      "capabilities_missing": ["stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "webhook_receiver", "rate_limiting", "termux_compatible"]
     },
-
-    "enterprise-unified-platform": {
-      "rank": 2,
-      "name": "Enterprise Unified Platform",
-      "domain": "api-gateway",
+    "nwu-protocol": {
+      "name": "NWU Protocol — Decentralized Intelligence & Verified Truth",
+      "domain": "blockchain",
       "role": "gateway",
+      "repo_url": "https://github.com/Garrettc123/nwu-protocol",
+      "revenue_model": "api-calls",
+      "monthly_target_usd": 50000,
+      "attribution_code": "NWU-PROTO-01",
+      "maturity_score": 62,
+      "description": "Decentralized AI-powered verification and blockchain immutability protocol on Polygon + IPFS",
+      "capabilities_complete": ["health_endpoint", "webhook_receiver", "auth_layer", "audit_log_emission", "termux_compatible"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "self_healing", "auto_rollback", "drift_detection", "rate_limiting"]
+    },
+    "enterprise-unified-platform": {
+      "name": "Enterprise Unified Platform — $104M+ Multi-System Hub",
+      "domain": "api-gateway",
+      "role": "orchestrator",
       "repo_url": "https://github.com/Garrettc123/enterprise-unified-platform",
-      "status": "live",
       "revenue_model": "saas-subscription",
       "monthly_target_usd": 104000,
-      "maturity_score": 68,
-      "capabilities_complete": ["health_endpoint", "auth_layer", "rate_limiting"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auto_rollback", "self_healing", "termux_compatible"]
+      "attribution_code": "EUP-CORE-01",
+      "maturity_score": 70,
+      "description": "Enterprise-Grade Unified Platform tracking $104M+ ARR across all connected systems",
+      "capabilities_complete": ["health_endpoint", "auth_layer", "rate_limiting", "webhook_receiver", "metrics_endpoint"],
+      "capabilities_missing": ["stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "self_healing", "auto_rollback", "drift_detection", "audit_log_emission", "termux_compatible"]
     },
-
-    "autohelix": {
-      "rank": 3,
-      "name": "AutoHelix — Quantum-Hybrid AI Infrastructure",
-      "domain": "infrastructure",
-      "role": "processor",
-      "repo_url": "https://github.com/Garrettc123/autohelix",
-      "status": "production_ready",
-      "revenue_model": "usage-based",
-      "monthly_target_usd": 30000,
+    "ai-business-platform": {
+      "name": "AI Business Platform — Billion-Dollar Scale",
+      "domain": "ai-agents",
+      "role": "orchestrator",
+      "repo_url": "https://github.com/Garrettc123/ai-business-platform",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 200000,
+      "attribution_code": "ABP-CORE-01",
       "maturity_score": 65,
-      "capabilities_complete": ["health_endpoint", "metrics_endpoint", "self_healing"],
-      "capabilities_missing": ["stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auto_rollback", "auth_layer", "rate_limiting", "termux_compatible"]
+      "description": "Enterprise AI Business Automation Platform built for billion-dollar scale operations",
+      "capabilities_complete": ["health_endpoint", "auth_layer", "self_healing", "webhook_receiver"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "auto_rollback", "drift_detection", "audit_log_emission", "rate_limiting", "termux_compatible"]
     },
-
     "APEX-Universal-AI-Operating-System": {
-      "rank": 4,
       "name": "APEX Universal AI Operating System",
       "domain": "ai-agents",
       "role": "orchestrator",
       "repo_url": "https://github.com/Garrettc123/APEX-Universal-AI-Operating-System",
       "homepage": "https://apex-universal-ai-operating-system.vercel.app",
-      "status": "production",
       "revenue_model": "saas-subscription",
-      "monthly_target_usd": 83333,
-      "maturity_score": 62,
-      "capabilities_complete": ["health_endpoint", "auth_layer"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auto_rollback", "self_healing", "rate_limiting", "termux_compatible"]
+      "monthly_target_usd": 833000,
+      "attribution_code": "APEX-UAOS-01",
+      "maturity_score": 72,
+      "description": "Universal AI OS orchestrating all 26+ repositories with self-evolving superintelligence and quantum-neural fusion",
+      "capabilities_complete": ["health_endpoint", "auth_layer", "self_healing", "auto_rollback", "webhook_receiver"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "drift_detection", "audit_log_emission", "rate_limiting", "termux_compatible"]
     },
-
     "zero-human-enterprise-grid": {
-      "rank": 5,
       "name": "Zero-Human Enterprise Grid",
-      "domain": "automation",
-      "role": "orchestrator",
-      "repo_url": "https://github.com/Garrettc123/zero-human-enterprise-grid",
-      "status": "autonomous",
-      "revenue_model": "saas-subscription",
-      "monthly_target_usd": 12917,
-      "maturity_score": 58,
-      "capabilities_complete": ["health_endpoint", "auto_rollback"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auth_layer", "self_healing", "rate_limiting", "termux_compatible"]
-    },
-
-    "enterprise-mlops-platform": {
-      "rank": 6,
-      "name": "Enterprise MLOps Platform",
-      "domain": "ml-platform",
-      "role": "processor",
-      "repo_url": "https://github.com/Garrettc123/enterprise-mlops-platform",
-      "status": "production",
-      "revenue_model": "saas-subscription",
-      "monthly_target_usd": 25000,
-      "maturity_score": 62,
-      "capabilities_complete": ["health_endpoint", "metrics_endpoint", "auto_rollback"],
-      "capabilities_missing": ["stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auth_layer", "self_healing", "rate_limiting", "termux_compatible"]
-    },
-
-    "ai-business-platform": {
-      "rank": 7,
-      "name": "AI Business Platform — Billion Dollar Scale",
       "domain": "ai-agents",
       "role": "orchestrator",
-      "repo_url": "https://github.com/Garrettc123/ai-business-platform",
-      "status": "production",
+      "repo_url": "https://github.com/Garrettc123/zero-human-enterprise-grid",
       "revenue_model": "saas-subscription",
-      "monthly_target_usd": 40000,
-      "maturity_score": 55,
-      "capabilities_complete": ["health_endpoint", "auth_layer"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auto_rollback", "self_healing", "rate_limiting", "termux_compatible"]
+      "monthly_target_usd": 129167,
+      "attribution_code": "ZHEG-CORE-01",
+      "maturity_score": 60,
+      "description": "World's first self-building AI business platform. Creates, deploys, and monetizes AI products autonomously. $1.55M ARR potential.",
+      "capabilities_complete": ["health_endpoint", "self_healing", "auto_rollback"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "webhook_receiver", "auth_layer", "drift_detection", "audit_log_emission", "rate_limiting", "termux_compatible"]
     },
-
     "hypervelocity-orchestrator": {
-      "rank": 8,
       "name": "Hypervelocity Orchestrator — 50x Parallel Execution",
       "domain": "devops-cicd",
       "role": "orchestrator",
       "repo_url": "https://github.com/Garrettc123/hypervelocity-orchestrator",
-      "status": "ultra_high_speed",
-      "revenue_model": "saas-subscription",
-      "monthly_target_usd": 15000,
-      "maturity_score": 52,
-      "capabilities_complete": ["health_endpoint", "auto_rollback"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auth_layer", "self_healing", "rate_limiting", "termux_compatible"]
+      "revenue_model": "usage-based",
+      "monthly_target_usd": 45000,
+      "attribution_code": "HVELO-ORC-01",
+      "maturity_score": 55,
+      "description": "50x parallel task execution orchestrator with intelligent auto-fixing, auto-deployment, and GitHub automation",
+      "capabilities_complete": ["health_endpoint", "webhook_receiver", "auto_rollback"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "auth_layer", "self_healing", "drift_detection", "audit_log_emission", "rate_limiting", "termux_compatible"]
     },
-
-    "nwu-protocol": {
-      "rank": 9,
-      "name": "NWU Protocol — Decentralized Intelligence & Verified Truth",
-      "domain": "blockchain",
-      "role": "gateway",
-      "repo_url": "https://github.com/Garrettc123/nwu-protocol",
-      "status": "deployed",
-      "revenue_model": "api-calls",
-      "monthly_target_usd": 20000,
-      "maturity_score": 50,
-      "capabilities_complete": ["health_endpoint", "webhook_receiver"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auth_layer", "self_healing", "auto_rollback", "rate_limiting", "termux_compatible"]
-    },
-
-    "ai-ops-studio": {
-      "rank": 10,
-      "name": "AI Ops Studio — Multi-Agent Workflow Automation",
-      "domain": "automation",
-      "role": "orchestrator",
-      "repo_url": "https://github.com/Garrettc123/ai-ops-studio",
-      "status": "enterprise_ready",
-      "revenue_model": "saas-subscription",
-      "monthly_target_usd": 18000,
-      "maturity_score": 50,
-      "capabilities_complete": ["health_endpoint", "auth_layer"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auto_rollback", "self_healing", "rate_limiting", "termux_compatible"]
-    },
-
-    "zero-human-governance-core": {
-      "rank": 11,
-      "name": "Zero-Human Governance Core — Cryptographic Governance",
-      "domain": "governance",
-      "role": "processor",
-      "repo_url": "https://github.com/Garrettc123/zero-human-governance-core",
-      "status": "architecture_ready",
-      "revenue_model": "saas-subscription",
-      "monthly_target_usd": 12000,
-      "maturity_score": 45,
-      "capabilities_complete": ["health_endpoint", "audit_log_emission"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "drift_detection", "auth_layer", "self_healing", "auto_rollback", "rate_limiting", "termux_compatible"]
-    },
-
-    "zero-human-ai-platform": {
-      "rank": 12,
-      "name": "Zero-Human AI Platform — Autonomous Business Builder",
-      "domain": "ai-agents",
-      "role": "producer",
-      "repo_url": "https://github.com/Garrettc123/zero-human-ai-platform",
-      "status": "production_ready",
-      "revenue_model": "saas-subscription",
-      "monthly_target_usd": 22000,
-      "maturity_score": 48,
-      "capabilities_complete": ["health_endpoint", "auth_layer"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auto_rollback", "self_healing", "rate_limiting", "termux_compatible"]
-    },
-
     "process-copilot": {
-      "rank": 13,
-      "name": "Process Copilot — AI Ops Studio SaaS",
-      "domain": "automation",
+      "name": "Process Copilot — Enterprise AI Ops Studio SaaS",
+      "domain": "ai-agents",
       "role": "processor",
       "repo_url": "https://github.com/Garrettc123/process-copilot",
-      "status": "complete_saas",
       "revenue_model": "saas-subscription",
-      "monthly_target_usd": 10000,
-      "maturity_score": 48,
-      "capabilities_complete": ["health_endpoint", "auth_layer", "rate_limiting"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auto_rollback", "self_healing", "termux_compatible"]
+      "monthly_target_usd": 30000,
+      "attribution_code": "PROCP-SAAS-01",
+      "maturity_score": 58,
+      "description": "Complete AI Ops Studio SaaS platform targeting small businesses and agencies",
+      "capabilities_complete": ["health_endpoint", "auth_layer", "stripe_billing_hook", "webhook_receiver"],
+      "capabilities_missing": ["metrics_endpoint", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "self_healing", "auto_rollback", "drift_detection", "audit_log_emission", "rate_limiting", "termux_compatible"]
     },
-
+    "enterprise-mlops-platform": {
+      "name": "Enterprise MLOps Platform — 50x Faster Model Deployment",
+      "domain": "mlops",
+      "role": "processor",
+      "repo_url": "https://github.com/Garrettc123/enterprise-mlops-platform",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 75000,
+      "attribution_code": "EMLOPS-CORE-01",
+      "maturity_score": 67,
+      "description": "Complete MLOps lifecycle: experiment tracking, model versioning, A/B testing, monitoring, auto-retraining. Deploy 50x faster.",
+      "capabilities_complete": ["health_endpoint", "metrics_endpoint", "auto_rollback", "auth_layer", "drift_detection"],
+      "capabilities_missing": ["stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "self_healing", "webhook_receiver", "audit_log_emission", "rate_limiting", "termux_compatible"]
+    },
+    "ai-ops-studio": {
+      "name": "AI Ops Studio — Multi-Agent Workflow Automation",
+      "domain": "mlops",
+      "role": "orchestrator",
+      "repo_url": "https://github.com/Garrettc123/ai-ops-studio",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 60000,
+      "attribution_code": "AIOPS-STD-01",
+      "maturity_score": 63,
+      "description": "Enterprise AI Ops Studio with multi-agent workflow automation using LangGraph, Temporal, and comprehensive observability",
+      "capabilities_complete": ["health_endpoint", "metrics_endpoint", "auth_layer", "webhook_receiver"],
+      "capabilities_missing": ["stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "self_healing", "auto_rollback", "drift_detection", "audit_log_emission", "rate_limiting", "termux_compatible"]
+    },
+    "TITAN-Autonomous-Business-Empire": {
+      "name": "TITAN — Autonomous Business Empire",
+      "domain": "ai-agents",
+      "role": "orchestrator",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 500000,
+      "attribution_code": "TITAN-ABE-01",
+      "maturity_score": 70,
+      "description": "TITAN autonomous business empire — the top-level economic orchestrator of the Garcar ecosystem",
+      "capabilities_complete": ["health_endpoint", "auth_layer", "self_healing", "webhook_receiver"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "auto_rollback", "drift_detection", "audit_log_emission", "rate_limiting", "termux_compatible"]
+    },
     "neural-mesh-pipeline": {
-      "rank": 14,
       "name": "Neural Mesh Pipeline — Self-Healing AI Pipeline",
-      "domain": "infrastructure",
+      "domain": "neural-pipeline",
       "role": "processor",
       "repo_url": "https://github.com/Garrettc123/neural-mesh-pipeline",
-      "status": "production_ready",
       "revenue_model": "internal-cost-center",
       "monthly_target_usd": 0,
-      "maturity_score": 55,
-      "capabilities_complete": ["health_endpoint", "self_healing", "auto_rollback", "termux_compatible"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auth_layer", "rate_limiting"]
+      "attribution_code": "NMP-CORE-01",
+      "maturity_score": 62,
+      "description": "Production-ready self-healing neural mesh pipeline with AI-powered code repair, retry logic, and state persistence. Termux-native.",
+      "capabilities_complete": ["health_endpoint", "self_healing", "auto_rollback", "termux_compatible", "audit_log_emission"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "webhook_receiver", "auth_layer", "drift_detection", "rate_limiting"]
     },
-
+    "zero-human-governance-core": {
+      "name": "Zero-Human Governance Core — Cryptographic AI Governance",
+      "domain": "governance",
+      "role": "orchestrator",
+      "repo_url": "https://github.com/Garrettc123/zero-human-governance-core",
+      "revenue_model": "internal-cost-center",
+      "monthly_target_usd": 0,
+      "attribution_code": "ZHGC-GOV-01",
+      "maturity_score": 55,
+      "description": "Cryptographic governance and orchestration for autonomous AI agents — immutable audit trail layer",
+      "capabilities_complete": ["health_endpoint", "auth_layer", "audit_log_emission"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "webhook_receiver", "self_healing", "auto_rollback", "drift_detection", "rate_limiting", "termux_compatible"]
+    },
+    "zero-human-ai-platform": {
+      "name": "Zero-Human AI Platform — Autonomous Business Builder",
+      "domain": "ai-agents",
+      "role": "orchestrator",
+      "repo_url": "https://github.com/Garrettc123/zero-human-ai-platform",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 150000,
+      "attribution_code": "ZHAP-CORE-01",
+      "maturity_score": 58,
+      "description": "Enterprise-Grade Autonomous AI with Cryptographic Governance. Builds businesses autonomously.",
+      "capabilities_complete": ["health_endpoint", "auth_layer", "audit_log_emission", "self_healing"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "webhook_receiver", "auto_rollback", "drift_detection", "rate_limiting", "termux_compatible"]
+    },
     "tree-of-life-system": {
-      "rank": 15,
       "name": "Tree of Life System — Multiplex AI Business Platform",
       "domain": "frontend-ui",
       "role": "gateway",
       "repo_url": "https://github.com/Garrettc123/tree-of-life-system",
       "homepage": "https://tree-of-life-system.vercel.app",
-      "status": "live",
       "revenue_model": "saas-subscription",
-      "monthly_target_usd": 8000,
-      "maturity_score": 42,
-      "capabilities_complete": ["health_endpoint"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auth_layer", "self_healing", "auto_rollback", "rate_limiting", "termux_compatible"]
+      "monthly_target_usd": 25000,
+      "attribution_code": "TOL-SYS-01",
+      "maturity_score": 52,
+      "description": "Multiplex AI Business Platform integrated with GitHub, Linear, Notion & Perplexity ecosystem",
+      "capabilities_complete": ["health_endpoint", "auth_layer", "webhook_receiver"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "self_healing", "auto_rollback", "drift_detection", "audit_log_emission", "rate_limiting", "termux_compatible"]
     },
-
-    "nexusai-platform": {
-      "rank": 16,
-      "name": "NexusAI Platform — Foundation Architecture",
-      "domain": "ai-agents",
-      "role": "orchestrator",
-      "repo_url": "https://github.com/Garrettc123/nexusai-platform",
-      "status": "historical_foundation",
-      "revenue_model": "saas-subscription",
-      "monthly_target_usd": 5000,
-      "maturity_score": 38,
-      "capabilities_complete": ["health_endpoint"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auth_layer", "self_healing", "auto_rollback", "rate_limiting", "termux_compatible"]
-    },
-
     "multimodal-input-api": {
-      "rank": 17,
       "name": "Multimodal Input API",
       "domain": "api-gateway",
       "role": "gateway",
       "repo_url": "https://github.com/Garrettc123/multimodal-input-api",
-      "status": "development",
       "revenue_model": "api-calls",
-      "monthly_target_usd": 8000,
-      "maturity_score": 30,
-      "capabilities_complete": ["health_endpoint"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auth_layer", "self_healing", "auto_rollback", "rate_limiting", "termux_compatible"]
+      "monthly_target_usd": 20000,
+      "attribution_code": "MMAPI-CORE-01",
+      "maturity_score": 45,
+      "description": "Multimodal input processing API — voice, image, text, and structured data ingestion layer",
+      "capabilities_complete": ["health_endpoint", "auth_layer", "rate_limiting"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "webhook_receiver", "self_healing", "auto_rollback", "drift_detection", "audit_log_emission", "termux_compatible"]
     },
-
-    "portfolio-website": {
-      "rank": 18,
-      "name": "Portfolio — 16 Production Systems Showcase",
-      "domain": "frontend-ui",
-      "role": "gateway",
-      "repo_url": "https://github.com/Garrettc123/portfolio-website",
-      "homepage": "https://portfolio-website-nine-lovat-26.vercel.app",
-      "status": "live",
-      "revenue_model": "none",
+    "nexusai-platform": {
+      "name": "NexusAI Platform — Historical Foundation",
+      "domain": "ai-agents",
+      "role": "processor",
+      "repo_url": "https://github.com/Garrettc123/nexusai-platform",
+      "revenue_model": "internal-cost-center",
       "monthly_target_usd": 0,
-      "maturity_score": 28,
-      "capabilities_complete": ["health_endpoint"],
-      "capabilities_missing": ["metrics_endpoint", "webhook_receiver", "event_bus_connected", "atlas_dashboard_feed", "audit_log_emission", "auth_layer", "rate_limiting", "termux_compatible"]
+      "attribution_code": "NEXUS-FOUND-01",
+      "maturity_score": 48,
+      "description": "NexusAI historical foundation platform — largest repo at 37MB, core architectural DNA of the ecosystem",
+      "capabilities_complete": ["health_endpoint", "auth_layer", "self_healing"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "webhook_receiver", "auto_rollback", "drift_detection", "audit_log_emission", "rate_limiting", "termux_compatible"]
     },
-
+    "garcar-payments": {
+      "name": "Garcar Payments — Revenue Gateway",
+      "domain": "payments",
+      "role": "gateway",
+      "revenue_model": "revenue-share",
+      "monthly_target_usd": 250000,
+      "attribution_code": "GC-PAY-CORE",
+      "maturity_score": 72,
+      "description": "Core Stripe-native payments gateway for all Garcar billing flows",
+      "capabilities_complete": ["health_endpoint", "stripe_billing_hook", "auth_layer", "webhook_receiver", "rate_limiting"],
+      "capabilities_missing": ["metrics_endpoint", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "self_healing", "auto_rollback", "drift_detection", "audit_log_emission", "termux_compatible"]
+    },
+    "revenue-intelligence-engine": {
+      "name": "Revenue Intelligence Engine — RHNS Core",
+      "domain": "revenue-intelligence",
+      "role": "orchestrator",
+      "revenue_model": "internal-cost-center",
+      "monthly_target_usd": 0,
+      "attribution_code": "RIE-RHNS-01",
+      "maturity_score": 65,
+      "description": "Revenue Hyper-Network System core — aggregates all revenue signals across 332 systems",
+      "capabilities_complete": ["health_endpoint", "webhook_receiver", "stripe_billing_hook", "auth_layer"],
+      "capabilities_missing": ["metrics_endpoint", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "self_healing", "auto_rollback", "drift_detection", "audit_log_emission", "rate_limiting", "termux_compatible"]
+    },
     "systems-master-hub": {
-      "rank": 19,
-      "name": "Systems Master Hub — GARCAR APEX Orchestration Core",
+      "name": "Systems Master Hub — GARCAR APEX Orchestrator",
       "domain": "infrastructure",
       "role": "orchestrator",
       "repo_url": "https://github.com/Garrettc123/systems-master-hub",
-      "status": "live",
       "revenue_model": "internal-cost-center",
       "monthly_target_usd": 0,
-      "maturity_score": 75,
-      "capabilities_complete": ["health_endpoint", "audit_log_emission", "drift_detection", "termux_compatible", "auto_rollback"],
-      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "auth_layer", "self_healing", "rate_limiting"]
-    },
-
-    "garcar-deploy-engine": {
-      "rank": 20,
-      "name": "GARCAR Deploy Engine",
-      "domain": "devops-cicd",
-      "role": "orchestrator",
-      "repo_url": "https://github.com/Garrettc123/garcar-deploy-engine",
-      "status": "scaffolded",
-      "revenue_model": "internal-cost-center",
-      "monthly_target_usd": 0,
-      "maturity_score": 25,
-      "capabilities_complete": [],
-      "capabilities_missing": ["health_endpoint", "metrics_endpoint", "stripe_billing_hook", "webhook_receiver", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection", "auth_layer", "self_healing", "auto_rollback", "rate_limiting", "termux_compatible"]
+      "attribution_code": "SMH-APEX-01",
+      "maturity_score": 80,
+      "description": "The master hub — registry, evolve agent, schema, and daily evolution workflow for the entire Garcar ecosystem",
+      "capabilities_complete": ["health_endpoint", "webhook_receiver", "auth_layer", "audit_log_emission", "drift_detection", "termux_compatible", "self_healing"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "auto_rollback", "rate_limiting"]
     }
-
   }
 }
