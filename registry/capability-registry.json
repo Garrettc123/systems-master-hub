@@ -1,0 +1,369 @@
+{
+  "version": "3.0.0",
+  "last_updated": "2026-06-09T21:43:00Z",
+  "description": "Master capability registry for all 332 Garcar Enterprise systems. The evolve.py agent reads this daily to score and upgrade each system. Never repeat — only upgrade.",
+
+  "capability_weights": {
+    "stripe_billing_hook":    10,
+    "event_bus_connected":    10,
+    "revenue_signal_emitter": 10,
+    "auth_layer":              9,
+    "self_healing":            9,
+    "health_endpoint":         8,
+    "webhook_receiver":        8,
+    "audit_log_emission":      8,
+    "atlas_dashboard_feed":    8,
+    "metrics_endpoint":        7,
+    "auto_rollback":           7,
+    "drift_detection":         6,
+    "rate_limiting":           6,
+    "termux_compatible":       4
+  },
+
+  "templates": {
+    "health_endpoint": {
+      "description": "FastAPI /health route returning system status, version, uptime",
+      "scaffold": "from fastapi import FastAPI\nfrom datetime import datetime\nimport time\n\nSTART_TIME = time.time()\n\n@app.get('/health')\nasync def health():\n    return {\"status\": \"healthy\", \"system\": SYSTEM_ID, \"uptime_seconds\": int(time.time() - START_TIME), \"timestamp\": datetime.utcnow().isoformat()}"
+    },
+    "metrics_endpoint": {
+      "description": "Prometheus-compatible /metrics route",
+      "scaffold": "from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Counter, Gauge\nfrom fastapi.responses import Response\n\nREQUEST_COUNT = Counter('garcar_requests_total', 'Total requests', ['system', 'endpoint'])\nREVENUE_EVENTS = Counter('garcar_revenue_events_total', 'Revenue events', ['system', 'type'])\nMATURITY_GAUGE = Gauge('garcar_maturity_score', 'Maturity score', ['system'])\n\n@app.get('/metrics')\nasync def metrics():\n    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)"
+    },
+    "webhook_receiver": {
+      "description": "HMAC-validated webhook receiver that routes to event bus",
+      "scaffold": "import hmac, hashlib\nfrom fastapi import Request, HTTPException\n\n@app.post('/webhook')\nasync def receive_webhook(request: Request):\n    body = await request.body()\n    sig = request.headers.get('X-Garcar-Signature', '')\n    expected = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()\n    if not hmac.compare_digest(sig, f'sha256={expected}'):\n        raise HTTPException(status_code=401)\n    payload = await request.json()\n    await event_bus.emit(f'garcar.{SYSTEM_ID}.webhook.received', payload)\n    return {\"received\": True}"
+    },
+    "stripe_billing_hook": {
+      "description": "Stripe webhook — emits revenue signals on payment events",
+      "scaffold": "import stripe\n\n@app.post('/stripe/webhook')\nasync def stripe_webhook(request: Request):\n    payload = await request.body()\n    sig = request.headers.get('stripe-signature')\n    try:\n        event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)\n    except Exception:\n        raise HTTPException(status_code=400)\n    if event.type in ['payment_intent.succeeded', 'invoice.payment_succeeded', 'customer.subscription.created']:\n        await event_bus.emit(f'garcar.{SYSTEM_ID}.revenue.signal', {\"amount\": event.data.object.get('amount_received', 0), \"attribution\": ATTRIBUTION_CODE, \"stripe_event\": event.type})\n    return {\"status\": \"processed\"}"
+    },
+    "event_bus_connected": {
+      "description": "Redis Streams event bus — publish and consume garcar.* events",
+      "scaffold": "import redis.asyncio as redis\nimport json\n\nclass GarcarEventBus:\n    def __init__(self):\n        self.redis = redis.from_url(REDIS_URL)\n    async def emit(self, event_type: str, payload: dict):\n        await self.redis.xadd('garcar:events', {\"type\": event_type, \"payload\": json.dumps(payload), \"system\": SYSTEM_ID})\n    async def consume(self, prefix: str, handler):\n        while True:\n            msgs = await self.redis.xread({'garcar:events': '$'}, block=1000)\n            for _, entries in msgs:\n                for _, fields in entries:\n                    if fields[b'type'].decode().startswith(prefix):\n                        await handler(json.loads(fields[b'payload']))\n\nevent_bus = GarcarEventBus()"
+    },
+    "revenue_signal_emitter": {
+      "description": "Emits revenue signal to RHNS whenever this system produces value",
+      "scaffold": "async def emit_revenue_signal(amount_usd: float, source: str, metadata: dict = {}):\n    await event_bus.emit('garcar.revenue.signal', {\"amount_usd\": amount_usd, \"source\": source, \"system\": SYSTEM_ID, \"attribution_code\": ATTRIBUTION_CODE, \"metadata\": metadata})\n    await http_client.post(RHNS_URL + '/signals', json={\"system\": SYSTEM_ID, \"amount\": amount_usd, \"source\": source})"
+    },
+    "atlas_dashboard_feed": {
+      "description": "Pushes real-time status and revenue data to ATLAS dashboard",
+      "scaffold": "async def push_to_atlas():\n    await http_client.post(ATLAS_URL + '/api/systems/update', json={\"system_id\": SYSTEM_ID, \"health\": \"healthy\", \"maturity_score\": MATURITY_SCORE, \"revenue_mtd\": await get_revenue_mtd(), \"last_event\": datetime.utcnow().isoformat(), \"capabilities\": CAPABILITIES})"
+    },
+    "self_healing": {
+      "description": "Auto-restart on failure with exponential backoff and alerting",
+      "scaffold": "import asyncio, logging\n\nasync def self_heal(task_fn, max_retries=5, base_delay=2):\n    for attempt in range(max_retries):\n        try:\n            return await task_fn()\n        except Exception as e:\n            delay = base_delay ** attempt\n            logging.error(f'[{SYSTEM_ID}] Attempt {attempt+1} failed: {e}. Retrying in {delay}s...')\n            await event_bus.emit(f'garcar.{SYSTEM_ID}.self_heal.retry', {\"attempt\": attempt+1, \"error\": str(e)})\n            await asyncio.sleep(delay)\n    await event_bus.emit(f'garcar.{SYSTEM_ID}.self_heal.exhausted', {\"system\": SYSTEM_ID})"
+    },
+    "audit_log_emission": {
+      "description": "Emits tamper-proof audit entries to garcar-audit-trail QLDB",
+      "scaffold": "async def emit_audit(action: str, actor: str, resource: str, metadata: dict = {}):\n    entry = {\"system\": SYSTEM_ID, \"action\": action, \"actor\": actor, \"resource\": resource, \"timestamp\": datetime.utcnow().isoformat(), \"metadata\": metadata}\n    await event_bus.emit('garcar.audit.entry', entry)\n    await http_client.post(AUDIT_TRAIL_URL + '/log', json=entry)"
+    },
+    "drift_detection": {
+      "description": "Detects configuration drift vs expected state and alerts",
+      "scaffold": "import hashlib, json\n\nEXPECTED_CONFIG_HASH = None\n\nasync def check_drift():\n    current = json.dumps(get_current_config(), sort_keys=True)\n    current_hash = hashlib.sha256(current.encode()).hexdigest()\n    if EXPECTED_CONFIG_HASH and current_hash != EXPECTED_CONFIG_HASH:\n        await event_bus.emit(f'garcar.{SYSTEM_ID}.drift.detected', {\"expected\": EXPECTED_CONFIG_HASH, \"actual\": current_hash})\n        return True\n    return False"
+    }
+  },
+
+  "systems": {
+
+    "garcar-payments": {
+      "name": "Garcar Payments System",
+      "domain": "payments",
+      "role": "gateway",
+      "revenue_model": "usage-based",
+      "monthly_target_usd": 25000,
+      "maturity_score": 72,
+      "priority": 1,
+      "capabilities_complete": ["health_endpoint", "stripe_billing_hook", "auth_layer", "webhook_receiver"],
+      "capabilities_missing": ["metrics_endpoint", "event_bus_connected", "revenue_signal_emitter", "drift_detection", "atlas_dashboard_feed", "audit_log_emission"],
+      "events_emits": ["garcar.payments.charge.succeeded", "garcar.payments.subscription.created", "garcar.payments.revenue.signal"],
+      "events_consumes": ["garcar.rhns.revenue.target"],
+      "deployment": "railway"
+    },
+
+    "revenue-intelligence-engine": {
+      "name": "Revenue Intelligence Engine",
+      "domain": "revenue-intelligence",
+      "role": "orchestrator",
+      "revenue_model": "internal-cost-center",
+      "monthly_target_usd": 0,
+      "maturity_score": 65,
+      "priority": 2,
+      "capabilities_complete": ["health_endpoint", "webhook_receiver", "stripe_billing_hook", "auth_layer"],
+      "capabilities_missing": ["metrics_endpoint", "event_bus_connected", "auto_rollback", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission"],
+      "events_emits": ["garcar.revenue.opportunity.detected", "garcar.revenue.churn.risk", "garcar.revenue.forecast"],
+      "events_consumes": ["garcar.payments.charge.succeeded", "garcar.payments.subscription.created"],
+      "deployment": "railway"
+    },
+
+    "garcar-rhns-core": {
+      "name": "RHNS Revenue Horizon Navigation System",
+      "domain": "revenue-intelligence",
+      "role": "processor",
+      "revenue_model": "internal-cost-center",
+      "monthly_target_usd": 0,
+      "maturity_score": 60,
+      "priority": 3,
+      "capabilities_complete": ["health_endpoint", "webhook_receiver", "auth_layer"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "self_healing"],
+      "events_emits": ["garcar.rhns.revenue.target", "garcar.rhns.session.completed"],
+      "events_consumes": ["garcar.revenue.opportunity.detected"],
+      "deployment": "railway"
+    },
+
+    "TITAN-Autonomous-Business-Empire": {
+      "name": "TITAN Autonomous Business Empire",
+      "domain": "ai-agents",
+      "role": "orchestrator",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 50000,
+      "maturity_score": 70,
+      "priority": 4,
+      "capabilities_complete": ["health_endpoint", "auth_layer", "self_healing", "auto_rollback"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission"],
+      "events_emits": ["garcar.titan.agent.action", "garcar.titan.revenue.generated", "garcar.titan.company.created"],
+      "events_consumes": ["garcar.payments.charge.succeeded", "garcar.rhns.revenue.target"],
+      "deployment": "aws-ecs"
+    },
+
+    "atlas-dashboard": {
+      "name": "ATLAS Lead Pipeline & Revenue Analytics Dashboard",
+      "domain": "frontend-ui",
+      "role": "gateway",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 8000,
+      "maturity_score": 50,
+      "priority": 5,
+      "capabilities_complete": ["health_endpoint", "auth_layer"],
+      "capabilities_missing": ["metrics_endpoint", "webhook_receiver", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection"],
+      "events_emits": ["garcar.atlas.user.action", "garcar.atlas.lead.viewed"],
+      "events_consumes": ["garcar.payments.charge.succeeded", "garcar.revenue.opportunity.detected", "garcar.titan.revenue.generated"],
+      "deployment": "vercel"
+    },
+
+    "deal-desk-core": {
+      "name": "ABC Deal Desk FastAPI + Stripe Backend",
+      "domain": "customer-acquisition",
+      "role": "processor",
+      "revenue_model": "usage-based",
+      "monthly_target_usd": 15000,
+      "maturity_score": 48,
+      "priority": 6,
+      "capabilities_complete": ["health_endpoint", "auth_layer", "webhook_receiver"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "auto_rollback"],
+      "events_emits": ["garcar.dealdesk.proposal.sent", "garcar.dealdesk.deal.closed"],
+      "events_consumes": ["garcar.rhns.revenue.target"],
+      "deployment": "railway"
+    },
+
+    "neural-mesh": {
+      "name": "Neural Mesh Self-Healing CI/CD Pipeline",
+      "domain": "devops-cicd",
+      "role": "orchestrator",
+      "revenue_model": "internal-cost-center",
+      "monthly_target_usd": 0,
+      "maturity_score": 55,
+      "priority": 7,
+      "capabilities_complete": ["health_endpoint", "auto_rollback", "self_healing"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "drift_detection", "atlas_dashboard_feed", "audit_log_emission", "revenue_signal_emitter"],
+      "events_emits": ["garcar.neural-mesh.deploy.succeeded", "garcar.neural-mesh.heal.triggered"],
+      "events_consumes": ["garcar.payments.charge.succeeded"],
+      "deployment": "github-actions"
+    },
+
+    "garcar-acquisition": {
+      "name": "Garcar DFW Contractor Cold Outreach Engine",
+      "domain": "customer-acquisition",
+      "role": "producer",
+      "revenue_model": "revenue-share",
+      "monthly_target_usd": 5000,
+      "maturity_score": 40,
+      "priority": 8,
+      "capabilities_complete": ["health_endpoint"],
+      "capabilities_missing": ["metrics_endpoint", "webhook_receiver", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "auth_layer", "rate_limiting"],
+      "events_emits": ["garcar.acquisition.lead.contacted", "garcar.acquisition.lead.responded"],
+      "events_consumes": ["garcar.dealdesk.deal.closed"],
+      "deployment": "github-actions"
+    },
+
+    "enterprise-mlops-platform": {
+      "name": "Enterprise MLOps Lifecycle Platform",
+      "domain": "ml-platform",
+      "role": "processor",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 12000,
+      "maturity_score": 62,
+      "priority": 9,
+      "capabilities_complete": ["health_endpoint", "metrics_endpoint", "auto_rollback", "auth_layer"],
+      "capabilities_missing": ["stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "self_healing"],
+      "events_emits": ["garcar.mlops.model.deployed", "garcar.mlops.experiment.completed"],
+      "events_consumes": ["garcar.payments.charge.succeeded"],
+      "deployment": "aws-eks"
+    },
+
+    "garcar-enterprise-production": {
+      "name": "Garcar Enterprise Production Stack",
+      "domain": "api-gateway",
+      "role": "gateway",
+      "revenue_model": "usage-based",
+      "monthly_target_usd": 20000,
+      "maturity_score": 58,
+      "priority": 10,
+      "capabilities_complete": ["health_endpoint", "auth_layer", "rate_limiting", "webhook_receiver"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "auto_rollback"],
+      "events_emits": ["garcar.production.api.call", "garcar.production.error.critical"],
+      "events_consumes": ["garcar.payments.charge.succeeded", "garcar.neural-mesh.deploy.succeeded"],
+      "deployment": "aws-ecs"
+    },
+
+    "zero-human-enterprise-grid": {
+      "name": "Zero Human Enterprise Grid — Self-Building AI Business",
+      "domain": "ai-agents",
+      "role": "orchestrator",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 30000,
+      "maturity_score": 55,
+      "priority": 11,
+      "capabilities_complete": ["health_endpoint", "auth_layer", "self_healing"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "drift_detection"],
+      "events_emits": ["garcar.zero-human.business.created", "garcar.zero-human.revenue.generated"],
+      "events_consumes": ["garcar.payments.charge.succeeded", "garcar.rhns.revenue.target"],
+      "deployment": "aws-ecs"
+    },
+
+    "autohelix": {
+      "name": "AUTOHELIX Quantum-Hybrid AI Infrastructure",
+      "domain": "infrastructure",
+      "role": "orchestrator",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 18000,
+      "maturity_score": 52,
+      "priority": 12,
+      "capabilities_complete": ["health_endpoint", "auth_layer"],
+      "capabilities_missing": ["metrics_endpoint", "webhook_receiver", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "self_healing", "drift_detection"],
+      "events_emits": ["garcar.autohelix.heal.triggered", "garcar.autohelix.infra.scaled"],
+      "events_consumes": ["garcar.neural-mesh.deploy.succeeded"],
+      "deployment": "aws-eks"
+    },
+
+    "ai-ops-studio": {
+      "name": "Enterprise AI Ops Studio — Multi-Agent Workflow",
+      "domain": "ai-agents",
+      "role": "orchestrator",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 22000,
+      "maturity_score": 48,
+      "priority": 13,
+      "capabilities_complete": ["health_endpoint", "auth_layer", "webhook_receiver"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "auto_rollback", "self_healing"],
+      "events_emits": ["garcar.aiops.workflow.completed", "garcar.aiops.agent.spawned"],
+      "events_consumes": ["garcar.payments.charge.succeeded"],
+      "deployment": "railway"
+    },
+
+    "garcar-apex-nexus": {
+      "name": "GARCAR APEX NEXUS — Unified AI Business OS Control Plane",
+      "domain": "api-gateway",
+      "role": "orchestrator",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 100000,
+      "maturity_score": 35,
+      "priority": 14,
+      "capabilities_complete": ["health_endpoint"],
+      "capabilities_missing": ["metrics_endpoint", "webhook_receiver", "stripe_billing_hook", "auth_layer", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "self_healing", "drift_detection", "auto_rollback", "rate_limiting"],
+      "events_emits": ["garcar.apex.command.issued", "garcar.apex.system.registered", "garcar.apex.evolution.triggered"],
+      "events_consumes": ["garcar.*"],
+      "deployment": "aws-ecs"
+    },
+
+    "stablecoin-protocol": {
+      "name": "Full-Stack Stablecoin Protocol",
+      "domain": "blockchain",
+      "role": "processor",
+      "revenue_model": "revenue-share",
+      "monthly_target_usd": 10000,
+      "maturity_score": 45,
+      "priority": 15,
+      "capabilities_complete": ["health_endpoint", "auth_layer"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "self_healing"],
+      "events_emits": ["garcar.stablecoin.mint", "garcar.stablecoin.redeem", "garcar.stablecoin.revenue.signal"],
+      "events_consumes": ["garcar.payments.charge.succeeded"],
+      "deployment": "aws-lambda"
+    },
+
+    "garcar-shopify-app": {
+      "name": "Garcar Enterprise Shopify App",
+      "domain": "customer-acquisition",
+      "role": "producer",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 7500,
+      "maturity_score": 42,
+      "priority": 16,
+      "capabilities_complete": ["health_endpoint", "auth_layer", "webhook_receiver"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "rate_limiting"],
+      "events_emits": ["garcar.shopify.order.created", "garcar.shopify.revenue.signal"],
+      "events_consumes": ["garcar.payments.charge.succeeded"],
+      "deployment": "vercel"
+    },
+
+    "observability-intelligence-platform": {
+      "name": "AI-Powered Observability & Anomaly Detection",
+      "domain": "observability",
+      "role": "consumer",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 9000,
+      "maturity_score": 55,
+      "priority": 17,
+      "capabilities_complete": ["health_endpoint", "metrics_endpoint", "auth_layer", "drift_detection"],
+      "capabilities_missing": ["stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "auto_rollback"],
+      "events_emits": ["garcar.observability.anomaly.detected", "garcar.observability.incident.predicted"],
+      "events_consumes": ["garcar.*"],
+      "deployment": "aws-ecs"
+    },
+
+    "nwu-data-monetization": {
+      "name": "NWU Data Monetization Engine — Liquidity Bonds",
+      "domain": "data-monetization",
+      "role": "processor",
+      "revenue_model": "revenue-share",
+      "monthly_target_usd": 15000,
+      "maturity_score": 44,
+      "priority": 18,
+      "capabilities_complete": ["health_endpoint", "auth_layer"],
+      "capabilities_missing": ["metrics_endpoint", "webhook_receiver", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission", "self_healing"],
+      "events_emits": ["garcar.nwu.data.sold", "garcar.nwu.bond.issued", "garcar.nwu.revenue.signal"],
+      "events_consumes": ["garcar.payments.charge.succeeded"],
+      "deployment": "aws-lambda"
+    },
+
+    "garcar-audit-trail": {
+      "name": "Garcar Immutable Audit Trail — AWS QLDB",
+      "domain": "legal-compliance",
+      "role": "store",
+      "revenue_model": "internal-cost-center",
+      "monthly_target_usd": 0,
+      "maturity_score": 60,
+      "priority": 19,
+      "capabilities_complete": ["health_endpoint", "auth_layer", "audit_log_emission", "webhook_receiver"],
+      "capabilities_missing": ["metrics_endpoint", "event_bus_connected", "atlas_dashboard_feed", "drift_detection", "stripe_billing_hook"],
+      "events_emits": ["garcar.audit.entry.written", "garcar.audit.tamper.detected"],
+      "events_consumes": ["garcar.*"],
+      "deployment": "aws-lambda"
+    },
+
+    "intelligent-ci-cd-orchestrator": {
+      "name": "AI-Optimized CI/CD Deployment Orchestrator",
+      "domain": "devops-cicd",
+      "role": "orchestrator",
+      "revenue_model": "saas-subscription",
+      "monthly_target_usd": 11000,
+      "maturity_score": 58,
+      "priority": 20,
+      "capabilities_complete": ["health_endpoint", "auto_rollback", "self_healing", "auth_layer", "drift_detection"],
+      "capabilities_missing": ["metrics_endpoint", "stripe_billing_hook", "event_bus_connected", "revenue_signal_emitter", "atlas_dashboard_feed", "audit_log_emission"],
+      "events_emits": ["garcar.cicd.deploy.succeeded", "garcar.cicd.rollback.triggered", "garcar.cicd.test.passed"],
+      "events_consumes": ["garcar.neural-mesh.deploy.succeeded"],
+      "deployment": "github-actions"
+    }
+
+  }
+}

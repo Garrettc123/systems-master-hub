@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GARCAR System Manifest",
+  "description": "Universal manifest standard for all 332 Garcar Enterprise systems. Every system must implement this contract to participate in the APEX organism.",
+  "version": "3.0.0",
+  "type": "object",
+  "required": ["system_id", "name", "domain", "role", "capabilities", "revenue", "endpoints", "events"],
+  "properties": {
+    "system_id": {
+      "type": "string",
+      "description": "Unique slug matching GitHub repo name",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "name": { "type": "string" },
+    "version": { "type": "string", "default": "1.0.0" },
+    "domain": {
+      "type": "string",
+      "enum": [
+        "payments", "revenue-intelligence", "ai-agents", "devops-cicd",
+        "customer-acquisition", "observability", "data-monetization",
+        "legal-compliance", "blockchain", "ml-platform",
+        "frontend-ui", "api-gateway", "security", "infrastructure"
+      ]
+    },
+    "role": {
+      "type": "string",
+      "enum": ["producer", "consumer", "processor", "orchestrator", "gateway", "store"]
+    },
+    "capabilities": {
+      "type": "object",
+      "description": "Capability checklist — the evolution engine reads this to determine upgrade targets",
+      "properties": {
+        "health_endpoint":         { "type": "boolean", "default": false },
+        "metrics_endpoint":        { "type": "boolean", "default": false },
+        "webhook_receiver":        { "type": "boolean", "default": false },
+        "stripe_billing_hook":     { "type": "boolean", "default": false },
+        "auth_layer":              { "type": "boolean", "default": false },
+        "rate_limiting":           { "type": "boolean", "default": false },
+        "audit_log_emission":      { "type": "boolean", "default": false },
+        "event_bus_connected":     { "type": "boolean", "default": false },
+        "auto_rollback":           { "type": "boolean", "default": false },
+        "drift_detection":         { "type": "boolean", "default": false },
+        "self_healing":            { "type": "boolean", "default": false },
+        "revenue_signal_emitter":  { "type": "boolean", "default": false },
+        "atlas_dashboard_feed":    { "type": "boolean", "default": false },
+        "termux_compatible":       { "type": "boolean", "default": false }
+      }
+    },
+    "revenue": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "enum": ["saas-subscription", "usage-based", "one-time", "api-calls", "revenue-share", "internal-cost-center", "none"]
+        },
+        "stripe_product_id":    { "type": "string" },
+        "monthly_target_usd":   { "type": "number" },
+        "attribution_code":     { "type": "string", "description": "Tags all revenue events for this system" }
+      }
+    },
+    "endpoints": {
+      "type": "object",
+      "properties": {
+        "health":        { "type": "string" },
+        "metrics":       { "type": "string" },
+        "webhook":       { "type": "string" },
+        "api_base":      { "type": "string" },
+        "dashboard_url": { "type": "string" }
+      }
+    },
+    "events": {
+      "type": "object",
+      "description": "Event bus contract",
+      "properties": {
+        "emits":    { "type": "array", "items": { "type": "string" } },
+        "consumes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "deployment": {
+      "type": "object",
+      "properties": {
+        "platform": {
+          "type": "string",
+          "enum": ["railway", "vercel", "aws-ecs", "aws-eks", "aws-lambda", "github-actions", "docker-compose", "local"]
+        },
+        "docker_image": { "type": "string" },
+        "env_secrets":  { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "evolution": {
+      "type": "object",
+      "description": "Written only by evolve.py — never by humans",
+      "properties": {
+        "last_evolved":          { "type": "string", "format": "date-time" },
+        "evolution_count":       { "type": "integer", "default": 0 },
+        "maturity_score":        { "type": "number", "minimum": 0, "maximum": 100 },
+        "last_capability_added": { "type": "string" },
+        "next_upgrade_target":   { "type": "string" }
+      }
+    }
+  }
+}
