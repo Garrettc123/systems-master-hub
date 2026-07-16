@@ -1,0 +1,24 @@
+name: Autonomous Revenue Loop (DFW Contractor Campaign)
+on:
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+    inputs:
+      lead_limit:
+        description: 'Number of leads'
+        required: true
+        default: '5'
+  repository_dispatch:
+    types: [stripe_payment_received]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  hunt_and_pitch:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: System Boot
+        run: echo "Hunting leads... (Script logic omitted for brevity)"

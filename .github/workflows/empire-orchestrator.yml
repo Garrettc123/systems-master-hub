@@ -1,5 +1,4 @@
 name: Master Empire Orchestrator (Zero-Human)
-
 on:
   schedule:
     - cron: '0 13,17,21 * * *'
@@ -15,8 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.garcar-enterprise.com/health || echo "404")
-          if [ "$STATUS" != "200" ]; then exit 1; fi
+          # Pointing exactly to your Garcar Titan Railway app
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://garcar-titan.up.railway.app/health || echo "404")
+          if [ "$STATUS" != "200" ]; then 
+            echo "Railway Router Down (Status: $STATUS). Aborting."
+            exit 1
+          fi
   execute_revenue_machine:
     needs: verify_infrastructure
     runs-on: ubuntu-latest
