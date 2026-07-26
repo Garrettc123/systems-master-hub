@@ -1,0 +1,88 @@
+name: Garcar AutoKey Bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type BOOTSTRAP to confirm'
+        required: true
+        type: string
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    if: inputs.confirm == 'BOOTSTRAP'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate master secrets
+        env:
+          GHPAT: ${{ secrets.GHPAT }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_PRICE_STARTER: ${{ secrets.STRIPE_PRICE_STARTER }}
+          STRIPE_PRICE_PRO: ${{ secrets.STRIPE_PRICE_PRO }}
+          STRIPE_PRICE_AGENCY: ${{ secrets.STRIPE_PRICE_AGENCY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          MISSING=""
+          [ -z "$GHPAT" ]               && MISSING="$MISSING GHPAT"
+          [ -z "$RAILWAY_TOKEN" ]        && MISSING="$MISSING RAILWAY_TOKEN"
+          [ -z "$STRIPE_SECRET_KEY" ]    && MISSING="$MISSING STRIPE_SECRET_KEY"
+          [ -z "$STRIPE_PRICE_STARTER" ] && MISSING="$MISSING STRIPE_PRICE_STARTER"
+          [ -z "$STRIPE_PRICE_PRO" ]     && MISSING="$MISSING STRIPE_PRICE_PRO"
+          [ -z "$STRIPE_PRICE_AGENCY" ]  && MISSING="$MISSING STRIPE_PRICE_AGENCY"
+          [ -z "$OPENAI_API_KEY" ]       && MISSING="$MISSING OPENAI_API_KEY"
+          [ -z "$SUPABASE_URL" ]         && MISSING="$MISSING SUPABASE_URL"
+          [ -z "$SUPABASE_ANON_KEY" ]    && MISSING="$MISSING SUPABASE_ANON_KEY"
+          if [ -n "$MISSING" ]; then
+            echo "❌ Missing secrets:$MISSING"
+            exit 1
+          fi
+          echo "✅ Master secrets present"
+
+      - name: Generate internal bootstrap manifest
+        run: |
+          cat > GARCAR-AUTOKEY-MASTER-REGISTRY.md <<'EOF'
+          # Garcar AutoKey Master Registry
+
+          Canonical control plane: `systems-master-hub`
+
+          ## Required secrets
+          - GHPAT
+          - RAILWAY_TOKEN
+          - STRIPE_SECRET_KEY
+          - STRIPE_PRICE_STARTER
+          - STRIPE_PRICE_PRO
+          - STRIPE_PRICE_AGENCY
+          - OPENAI_API_KEY
+          - SUPABASE_URL
+          - SUPABASE_ANON_KEY
+
+          ## Optional secrets
+          - ANTHROPIC_API_KEY
+          - STRIPE_WEBHOOK_SECRET
+          - SUPABASE_SERVICE_KEY
+          - DATABASE_URL
+          - REDIS_URL
+          - VERCEL_TOKEN
+          - NEXT_PUBLIC_APP_URL
+          - APP_BASE_URL_PAYMENTS
+          - APP_BASE_URL_RHNS
+          - APP_BASE_URL_ATLAS
+          - APP_BASE_URL_ZEUS
+
+          ## Target repos
+          - garcar-payments
+          - garcar-rhns-core
+          - atlas-dashboard
+          - zeus-dashboard
+          EOF
+          echo "✅ Master registry generated"
+
+      - name: Summary
+        run: |
+          echo "GARCAR AUTOKEY BOOTSTRAP READY"
+          echo "Add secrets in systems-master-hub, then run garcar-autokey-propagate.yml with PROPAGATE"
