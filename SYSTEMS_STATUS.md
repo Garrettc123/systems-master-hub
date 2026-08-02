@@ -10,20 +10,22 @@
 | Metric | Value |
 |--------|-------|
 | **Owner** | [Garrettc123](https://github.com/Garrettc123) |
-| **Total Repositories** | 89+ |
+| **Total Repositories** | 229+ |
 | **Estimated Ecosystem Value** | $100M+ |
-| **Production Systems** | 16 |
+| **Production Systems** | 16+ |
 
 ---
 
-## 🟢 Core Infrastructure
+## 🟢 Core Infrastructure (Unified Flagship Stack)
 
 | Repository | Description | Language | Open Issues | Last Updated |
 |------------|-------------|----------|-------------|--------------|
-| [systems-master-hub](https://github.com/Garrettc123/systems-master-hub) | Master coordination hub for all 89+ repositories. Orchestrates deployments, documentation, and status dashboards. | Shell | ![issues](https://img.shields.io/github/issues/Garrettc123/systems-master-hub) | ![last-commit](https://img.shields.io/github/last-commit/Garrettc123/systems-master-hub) |
-| [APEX-Universal-AI-Operating-System](https://github.com/Garrettc123/APEX-Universal-AI-Operating-System) | Universal AI Operating System orchestrating ALL 26+ repositories. Self-evolving superintelligence with quantum-neural fusion. | Python | ![issues](https://img.shields.io/github/issues/Garrettc123/APEX-Universal-AI-Operating-System) | ![last-commit](https://img.shields.io/github/last-commit/Garrettc123/APEX-Universal-AI-Operating-System) |
+| [**APEX-AI-ENGINE**](https://github.com/Garrettc123/APEX-AI-ENGINE) | **Flagship** Autonomous Profit & Enterprise eXecution Engine — multi-agent (Scout/Analyst/Executor/Monetizer), Stripe revenue loops, Celery swarm, live dashboard. Primary production engine. | Python | ![issues](https://img.shields.io/github/issues/Garrettc123/APEX-AI-ENGINE) | ![last-commit](https://img.shields.io/github/last-commit/Garrettc123/APEX-AI-ENGINE) |
+| [**NEXUS-AI-CORE**](https://github.com/Garrettc123/NEXUS-AI-CORE) | Strategic product identity layer for Autonomous AI Commerce & Real Estate Intelligence. Unified with APEX-AI-ENGINE as the execution runtime. | — | ![issues](https://img.shields.io/github/issues/Garrettc123/NEXUS-AI-CORE) | ![last-commit](https://img.shields.io/github/last-commit/Garrettc123/NEXUS-AI-CORE) |
+| [systems-master-hub](https://github.com/Garrettc123/systems-master-hub) | Master coordination hub for all 229+ repositories. Orchestrates deployments, documentation, secrets, and status dashboards. | Shell | ![issues](https://img.shields.io/github/issues/Garrettc123/systems-master-hub) | ![last-commit](https://img.shields.io/github/last-commit/Garrettc123/systems-master-hub) |
+| [garcar-enterprise-production](https://github.com/Garrettc123/garcar-enterprise-production) | Production-Ready Enterprise Stack with CI/CD — Revenue Aggregator, AI Agent Network, API Gateway. | Python | ![issues](https://img.shields.io/github/issues/Garrettc123/garcar-enterprise-production) | ![last-commit](https://img.shields.io/github/last-commit/Garrettc123/garcar-enterprise-production) |
+| [APEX-Universal-AI-Operating-System](https://github.com/Garrettc123/APEX-Universal-AI-Operating-System) | Universal AI Operating System orchestrating ALL repositories. Self-evolving superintelligence with quantum-neural fusion. | Python | ![issues](https://img.shields.io/github/issues/Garrettc123/APEX-Universal-AI-Operating-System) | ![last-commit](https://img.shields.io/github/last-commit/Garrettc123/APEX-Universal-AI-Operating-System) |
 | [autohelix](https://github.com/Garrettc123/autohelix) | Quantum-Hybrid AI Infrastructure for Self-Healing Systems & Real-Time Data Liquidity Markets. 175x quantum speedup. | Python | ![issues](https://img.shields.io/github/issues/Garrettc123/autohelix) | ![last-commit](https://img.shields.io/github/last-commit/Garrettc123/autohelix) |
-| [nexusai-platform](https://github.com/Garrettc123/nexusai-platform) | NexusAI Platform — historical foundation for the ecosystem. | Python | ![issues](https://img.shields.io/github/issues/Garrettc123/nexusai-platform) | ![last-commit](https://img.shields.io/github/last-commit/Garrettc123/nexusai-platform) |
 
 ---
 
