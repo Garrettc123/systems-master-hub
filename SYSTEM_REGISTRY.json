@@ -1,0 +1,111 @@
+{
+  "registry_version": "1.0.0",
+  "owner": "Garrettc123",
+  "organization": "Garcar Enterprise",
+  "registry_created": "2026-08-03T20:50:00Z",
+  "last_updated": "2026-08-03T20:50:00Z",
+  "description": "Canonical source of truth for all Garcar Enterprise systems. Every system must emit and consume events via the Universal Event Bus. This file drives the daily autonomous upgrade loop.",
+  "meta": {
+    "total_systems": 200,
+    "target_systems": 332,
+    "public_repos": 149,
+    "private_repos": 51,
+    "repos_with_api": 11,
+    "repos_with_ui": 22,
+    "repos_with_payment": 20,
+    "languages": ["CSS", "HCL", "HTML", "JavaScript", "Python", "Shell", "Solidity", "TypeScript"],
+    "upgrade_directive": "NEVER_REPEAT_ONLY_UPGRADE",
+    "convergence_target": "ONE_MASTERY_LEVEL_ARCHITECTURAL_FEAT"
+  },
+  "architecture": {
+    "event_bus": {
+      "host_repo": "autonomous-butler-core",
+      "broker": "NATS or Redis Streams",
+      "status": "to_be_wired",
+      "topic_schema": "garcar.{system_name}.{event_type}"
+    },
+    "master_control_plane": {
+      "host_repo": "systems-master-hub",
+      "role": "canonical registry + daily upgrade orchestrator",
+      "upgrade_cron": "0 2 * * *"
+    },
+    "unified_ui": {
+      "primary": "zeus-dashboard",
+      "secondary": "atlas-dashboard",
+      "status": "active"
+    },
+    "payments_layer": {
+      "host_repo": "garcar-payments",
+      "provider": "Stripe",
+      "status": "active"
+    },
+    "observability": {
+      "host_repo": "observability-intelligence-platform",
+      "stack": "Prometheus + Grafana + AI anomaly detection",
+      "status": "to_be_wired"
+    },
+    "cicd": {
+      "host_repo": "intelligent-ci-cd-orchestrator",
+      "strategy": "canary + blue-green + auto-rollback",
+      "status": "active"
+    }
+  },
+  "upgrade_loop": {
+    "description": "Every night at 02:00 UTC, the master-control-plane reads the last commit per repo, diffs against the previous state, and opens a PR with the next evolutionary upgrade. No system is repeated — only improved.",
+    "workflow_file": ".github/workflows/nightly-upgrade-loop.yml",
+    "agent": "GitHub Copilot + GPT-4o",
+    "rule": "Each cycle must advance at least one capability tier. Rollback is automatic on failure."
+  },
+  "fullstack_gap_analysis": {
+    "systems_missing_backend_api": 189,
+    "systems_missing_frontend_ui": 178,
+    "systems_missing_payment_hook": 180,
+    "systems_missing_event_bus": 200,
+    "systems_missing_observability": 200,
+    "priority_tier_1": [
+      "autonomous-butler-core",
+      "garcar-payments",
+      "systems-master-hub",
+      "zeus-dashboard",
+      "garcar-apex-nexus",
+      "autonomous-orchestrator-core",
+      "garcar-singularity-grid",
+      "APEX-AI-ENGINE",
+      "nwu-protocol",
+      "unprecedented-autonomous-revenue-os"
+    ],
+    "note": "Tier 1 systems receive full-stack upgrades first: FastAPI backend + Next.js UI + Stripe hook + NATS event bus connection"
+  },
+  "systems": [
+    {"id": 1, "name": "TITAN-Autonomous-Business-Empire", "github_url": "https://github.com/Garrettc123/TITAN-Autonomous-Business-Empire", "role": "flagship_revenue", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-27", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["revenue", "autonomous", "flagship"]},
+    {"id": 2, "name": "autonomous-income-deployment", "github_url": "https://github.com/Garrettc123/autonomous-income-deployment", "role": "deployment_infra", "language": "HCL", "visibility": "public", "status": "active", "last_updated": "2026-07-27", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["deployment", "terraform", "income"]},
+    {"id": 3, "name": "autonomous-butler-core", "github_url": "https://github.com/Garrettc123/autonomous-butler-core", "role": "ai_orchestration", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-08-03", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["orchestration", "multi-agent", "devops"]},
+    {"id": 4, "name": "ai-ops-studio", "github_url": "https://github.com/Garrettc123/ai-ops-studio", "role": "ai_ops", "language": "TypeScript", "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["aiops", "langgraph", "temporal"]},
+    {"id": 5, "name": "zeus-dashboard", "github_url": "https://github.com/Garrettc123/zeus-dashboard", "role": "ui_control_plane", "language": "TypeScript", "visibility": "public", "status": "active", "last_updated": "2026-06-27", "full_stack_components": {"backend_api": null, "frontend_ui": "Next.js", "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["dashboard", "rhns", "ui"]},
+    {"id": 6, "name": "garcar-payments", "github_url": "https://github.com/Garrettc123/garcar-payments", "role": "payments", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-08-03", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": "Stripe", "event_bus_connected": false, "observability_connected": false}, "tags": ["payments", "billing", "stripe"]},
+    {"id": 7, "name": "systems-master-hub", "github_url": "https://github.com/Garrettc123/systems-master-hub", "role": "master_registry", "language": "Shell", "visibility": "public", "status": "active", "last_updated": "2026-08-03", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["registry", "hub", "master"]},
+    {"id": 8, "name": "garcar-apex-nexus", "github_url": "https://github.com/Garrettc123/garcar-apex-nexus", "role": "unified_control_plane", "language": null, "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["apex", "nexus", "unified"]},
+    {"id": 9, "name": "autonomous-orchestrator-core", "github_url": "https://github.com/Garrettc123/autonomous-orchestrator-core", "role": "master_orchestrator", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["332-systems", "orchestrator", "self-improving"]},
+    {"id": 10, "name": "garcar-singularity-grid", "github_url": "https://github.com/Garrettc123/garcar-singularity-grid", "role": "master_orchestrator", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["singularity", "orchestrator", "master"]},
+    {"id": 11, "name": "APEX-AI-ENGINE", "github_url": "https://github.com/Garrettc123/APEX-AI-ENGINE", "role": "commerce_engine", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-08-02", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["apex", "commerce", "multi-agent"]},
+    {"id": 12, "name": "nwu-protocol", "github_url": "https://github.com/Garrettc123/nwu-protocol", "role": "blockchain_protocol", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-08-03", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["nwu", "blockchain", "verification"]},
+    {"id": 13, "name": "unprecedented-autonomous-revenue-os", "github_url": "https://github.com/Garrettc123/unprecedented-autonomous-revenue-os", "role": "revenue_os", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-08-02", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": "Stripe", "event_bus_connected": false, "observability_connected": false}, "tags": ["revenue", "soc2", "multi-agent"]},
+    {"id": 14, "name": "garcar-enterprise-production", "github_url": "https://github.com/Garrettc123/garcar-enterprise-production", "role": "production_stack", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-08-01", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["production", "cicd", "revenue"]},
+    {"id": 15, "name": "NEXUS-AI-CORE", "github_url": "https://github.com/Garrettc123/NEXUS-AI-CORE", "role": "commerce_real_estate", "language": null, "visibility": "public", "status": "active", "last_updated": "2026-08-02", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": "Stripe", "event_bus_connected": false, "observability_connected": false}, "tags": ["nexus", "commerce", "realestate"]},
+    {"id": 16, "name": "atlas-dashboard", "github_url": "https://github.com/Garrettc123/atlas-dashboard", "role": "ui_analytics", "language": "TypeScript", "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": "Next.js", "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["atlas", "dashboard", "analytics"]},
+    {"id": 17, "name": "atlas-agents", "github_url": "https://github.com/Garrettc123/atlas-agents", "role": "multi_agent", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["atlas", "crewai", "agents"]},
+    {"id": 18, "name": "atlas-orchestration", "github_url": "https://github.com/Garrettc123/atlas-orchestration", "role": "workflow_engine", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["atlas", "langgraph", "redis"]},
+    {"id": 19, "name": "atlas-integrations", "github_url": "https://github.com/Garrettc123/atlas-integrations", "role": "api_integrations", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": "Stripe", "event_bus_connected": false, "observability_connected": false}, "tags": ["atlas", "twilio", "google-calendar"]},
+    {"id": 20, "name": "atlas-infrastructure", "github_url": "https://github.com/Garrettc123/atlas-infrastructure", "role": "deployment_infra", "language": null, "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["atlas", "railway", "docker"]},
+    {"id": 21, "name": "garcar-autonomous-wealth-system", "github_url": "https://github.com/Garrettc123/garcar-autonomous-wealth-system", "role": "wealth_automation", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-29", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": "Stripe", "event_bus_connected": false, "observability_connected": false}, "tags": ["wealth", "apollo", "stripe"]},
+    {"id": 22, "name": "revenue-intelligence-engine", "github_url": "https://github.com/Garrettc123/revenue-intelligence-engine", "role": "revenue_intelligence", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-06-05", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": "Stripe", "event_bus_connected": false, "observability_connected": false}, "tags": ["rhns", "churn", "revenue"]},
+    {"id": 23, "name": "intelligent-ci-cd-orchestrator", "github_url": "https://github.com/Garrettc123/intelligent-ci-cd-orchestrator", "role": "cicd", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["cicd", "canary", "rollback"]},
+    {"id": 24, "name": "enterprise-mlops-platform", "github_url": "https://github.com/Garrettc123/enterprise-mlops-platform", "role": "mlops", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["mlops", "ml", "training"]},
+    {"id": 25, "name": "RHNS-Architecture", "github_url": "https://github.com/Garrettc123/RHNS-Architecture", "role": "cognitive_architecture", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-05-16", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["rhns", "neuro-symbolic", "cognitive"]},
+    {"id": 26, "name": "smart-contract-auditor-ai", "github_url": "https://github.com/Garrettc123/smart-contract-auditor-ai", "role": "blockchain_security", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-20", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["solidity", "security", "auditor"]},
+    {"id": 27, "name": "garcar-control-plane", "github_url": "https://github.com/Garrettc123/garcar-control-plane", "role": "control_plane", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["control", "plane", "garcar"]},
+    {"id": 28, "name": "ai-business-platform", "github_url": "https://github.com/Garrettc123/ai-business-platform", "role": "business_automation", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["business", "automation", "enterprise"]},
+    {"id": 29, "name": "garcar-acquisition", "github_url": "https://github.com/Garrettc123/garcar-acquisition", "role": "lead_acquisition", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-12", "full_stack_components": {"backend_api": null, "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["outreach", "ses", "acquisition"]},
+    {"id": 30, "name": "client-onboarding-platform", "github_url": "https://github.com/Garrettc123/client-onboarding-platform", "role": "client_onboarding", "language": "Python", "visibility": "public", "status": "active", "last_updated": "2026-07-29", "full_stack_components": {"backend_api": "FastAPI", "frontend_ui": null, "payment_hook": null, "event_bus_connected": false, "observability_connected": false}, "tags": ["onboarding", "pipedrive", "supabase"]}
+  ]
+}
