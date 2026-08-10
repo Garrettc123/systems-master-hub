@@ -41,11 +41,11 @@ STRUCTURE = {
 }
 
 def run_command(command, cwd=None):
-    """Executes a shell command harmoniously."""
+    """Executes a command harmoniously without invoking a shell."""
     try:
-        subprocess.run(command, shell=True, check=True, cwd=cwd, stdout=subprocess.DEVNULL)
+        subprocess.run(command, shell=False, check=True, cwd=cwd, stdout=subprocess.DEVNULL)
         return True
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         return False
 
 def build_repo(repo_path):
@@ -55,13 +55,13 @@ def build_repo(repo_path):
     # Python Build
     if os.path.exists(os.path.join(repo_path, "requirements.txt")):
         print(f"  🐍 Python system detected. Installing dependencies...")
-        if run_command("pip install -r requirements.txt", cwd=repo_path):
+        if run_command(["pip", "install", "-r", "requirements.txt"], cwd=repo_path):
             build_log.append("Python dependencies installed.")
             
     # Node/JS Build
     if os.path.exists(os.path.join(repo_path, "package.json")):
         print(f"  📦 Node system detected. Installing dependencies...")
-        if run_command("npm install", cwd=repo_path):
+        if run_command(["npm", "install"], cwd=repo_path):
             build_log.append("Node dependencies installed.")
 
     return build_log
@@ -91,7 +91,7 @@ def main():
             # Clone if not exists
             if not os.path.exists(repo_path):
                 clone_url = f"https://github.com/{GITHUB_USER}/{repo}.git"
-                success = run_command(f"git clone {clone_url}", cwd=domain_path)
+                success = run_command(["git", "clone", "--", clone_url], cwd=domain_path)
                 if not success:
                     print(f"  ⚠️  Could not clone {repo}. Skipping.")
                     continue

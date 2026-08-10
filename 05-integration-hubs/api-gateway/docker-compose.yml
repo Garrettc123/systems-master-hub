@@ -13,7 +13,8 @@ services:
       - NWU_URL=http://nwu:8200
       - AIOPS_URL=http://ai-ops:8300
       - TOL_URL=http://tree-of-life:3000
-      - JWT_SECRET=change-this-in-production
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
     networks:
       - enterprise-network
     restart: unless-stopped

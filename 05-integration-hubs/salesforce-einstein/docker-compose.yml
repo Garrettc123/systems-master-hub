@@ -15,7 +15,7 @@ services:
       - SF_SECURITY_TOKEN=${SF_SECURITY_TOKEN}
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq:5672
-      - POSTGRES_URL=postgresql://sfuser:sfpass@postgres:5432/sf_integration
+      - POSTGRES_URL=postgresql://sfuser:${SF_POSTGRES_PASSWORD:?SF_POSTGRES_PASSWORD must be set}@postgres:5432/sf_integration
       - API_PORT=3000
     ports:
       - "3000:3000"
@@ -43,7 +43,7 @@ services:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://rabbitmq:5672
-      - POSTGRES_URL=postgresql://sfuser:sfpass@postgres:5432/sf_integration
+      - POSTGRES_URL=postgresql://sfuser:${SF_POSTGRES_PASSWORD:?SF_POSTGRES_PASSWORD must be set}@postgres:5432/sf_integration
     depends_on:
       - redis
       - rabbitmq
@@ -71,7 +71,7 @@ services:
     restart: unless-stopped
     environment:
       - RABBITMQ_DEFAULT_USER=admin
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-admin123}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD must be set}
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -87,7 +87,7 @@ services:
     restart: unless-stopped
     environment:
       - POSTGRES_USER=sfuser
-      - POSTGRES_PASSWORD=sfpass
+      - POSTGRES_PASSWORD=${SF_POSTGRES_PASSWORD:?SF_POSTGRES_PASSWORD must be set}
       - POSTGRES_DB=sf_integration
     ports:
       - "5432:5432"
