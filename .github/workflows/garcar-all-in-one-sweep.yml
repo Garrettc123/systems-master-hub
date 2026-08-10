@@ -15,6 +15,9 @@ on:
   schedule:
     - cron: '0 */6 * * *'  # Every 6 hours autonomous sweep
 
+permissions:
+  contents: read
+
 jobs:
 
   # ─────────────────────────────────────────────
@@ -35,7 +38,7 @@ jobs:
                 owner: 'Garrettc123',
                 repo: 'garcar-payments',
                 event_type: 'garcar-sweep',
-                client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
+                client_payload: { mode: '${{ github.event.inputs.mode || 'full' }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
               console.log('✅ garcar-payments dispatched');
             } catch(e) {
@@ -56,7 +59,7 @@ jobs:
                 owner: 'Garrettc123',
                 repo: 'garcar-payment-loop',
                 event_type: 'garcar-sweep',
-                client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
+                client_payload: { mode: '${{ github.event.inputs.mode || 'full' }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
               console.log('✅ garcar-payment-loop dispatched');
             } catch(e) {
@@ -77,7 +80,7 @@ jobs:
                 owner: 'Garrettc123',
                 repo: 'TITAN-Autonomous-Business-Empire',
                 event_type: 'garcar-sweep',
-                client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
+                client_payload: { mode: '${{ github.event.inputs.mode || 'full' }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
               console.log('✅ TITAN dispatched');
             } catch(e) {
@@ -98,7 +101,7 @@ jobs:
                 owner: 'Garrettc123',
                 repo: 'enterprise-mlops-platform',
                 event_type: 'garcar-sweep',
-                client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
+                client_payload: { mode: '${{ github.event.inputs.mode || 'full' }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
               console.log('✅ enterprise-mlops-platform dispatched');
             } catch(e) {
@@ -119,7 +122,7 @@ jobs:
                 owner: 'Garrettc123',
                 repo: 'atlas-dashboard',
                 event_type: 'garcar-sweep',
-                client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
+                client_payload: { mode: '${{ github.event.inputs.mode || 'full' }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
               console.log('✅ atlas-dashboard dispatched');
             } catch(e) {
@@ -140,7 +143,7 @@ jobs:
                 owner: 'Garrettc123',
                 repo: 'zeus-dashboard',
                 event_type: 'garcar-sweep',
-                client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
+                client_payload: { mode: '${{ github.event.inputs.mode || 'full' }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
               console.log('✅ zeus-dashboard dispatched');
             } catch(e) {
@@ -161,7 +164,7 @@ jobs:
                 owner: 'Garrettc123',
                 repo: 'mars-api',
                 event_type: 'garcar-sweep',
-                client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
+                client_payload: { mode: '${{ github.event.inputs.mode || 'full' }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
               console.log('✅ mars-api dispatched');
             } catch(e) {
@@ -182,7 +185,7 @@ jobs:
                 owner: 'Garrettc123',
                 repo: 'neural-mesh',
                 event_type: 'garcar-sweep',
-                client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
+                client_payload: { mode: '${{ github.event.inputs.mode || 'full' }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
               console.log('✅ neural-mesh dispatched');
             } catch(e) {
@@ -272,7 +275,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const now = new Date().toISOString();
-            const mode = '${{ github.event.inputs.mode || "full" }}';
+            const mode = '${{ github.event.inputs.mode || 'full' }}';
             const body = [
               '## 🚀 Garcar Enterprise — All-In-One Sweep Ledger',
               '',

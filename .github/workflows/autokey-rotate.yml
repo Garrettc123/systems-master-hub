@@ -27,13 +27,15 @@ on:
         required: false
         default: 'false'
 
+permissions:
+  contents: read
+
 jobs:
   rotate:
     name: Rotate Internal Secrets
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      secrets: write
     
     steps:
       - name: Checkout

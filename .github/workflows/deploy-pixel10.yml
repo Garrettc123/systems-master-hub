@@ -24,10 +24,20 @@ on:
         required: false
         default: 'false'
 
+permissions:
+  contents: read
+
 env:
+  # Untrusted workflow inputs are bound to environment variables so they
+  # are never interpolated directly into a shell command (script injection).
+  DEVICE_IP: ${{ github.event.inputs.device_ip }}
+  SSH_PORT: ${{ github.event.inputs.ssh_port }}
+  SSH_USER: ${{ github.event.inputs.ssh_user }}
+  DEPLOY_TARGET: ${{ github.event.inputs.deploy_target }}
+  DRY_RUN: ${{ github.event.inputs.dry_run }}
   # Tailscale SSH options — aggressive keepalives to survive intermittent drops
   SSH_OPTS: >-
-    -o StrictHostKeyChecking=no
+    -o StrictHostKeyChecking=accept-new
     -o ConnectTimeout=20
     -o ServerAliveInterval=5
     -o ServerAliveCountMax=6
@@ -64,8 +74,8 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.PIXEL10_SSH_KEY }}" > ~/.ssh/id_pixel10
           chmod 600 ~/.ssh/id_pixel10
-          ssh-keyscan -p ${{ github.event.inputs.ssh_port }} \
-            ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -p "$SSH_PORT" \
+            "$DEVICE_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       # --- Reusable retry helpers for Tailscale SSH resilience ---
       # Defined once and sourced by all subsequent steps that need SSH.
@@ -205,10 +215,10 @@ jobs:
           if ! scp_retry "Upload ssh-stabilizer.sh" \
             ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
             -i ~/.ssh/id_pixel10 \
-            -P ${{ github.event.inputs.ssh_port }} \
+            -P "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
             termux/ssh-stabilizer.sh \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/ssh-stabilizer.sh; then
+            "$SSH_USER"@"$DEVICE_IP":/data/data/com.termux/files/home/ssh-stabilizer.sh; then
             echo "::warning::Pre-flight SCP upload failed after all retries — stabilization skipped due to connectivity"
             echo "[preflight] SCP upload failed — stabilization skipped due to connectivity" >> "$DEPLOY_LOG"
             PREFLIGHT_OK=false
@@ -220,9 +230,9 @@ jobs:
             if ! ssh_retry "Run SSH stabilizer" \
               ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
               ssh -i ~/.ssh/id_pixel10 \
-              -p ${{ github.event.inputs.ssh_port }} \
+              -p "$SSH_PORT" \
               ${{ env.SSH_OPTS }} \
-              ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+              "$SSH_USER"@"$DEVICE_IP" \
               'chmod +x ~/ssh-stabilizer.sh && bash ~/ssh-stabilizer.sh 2>&1'; then
               echo "::warning::SSH stabilizer could not complete after retries — continuing with deployment"
               echo "[preflight] SSH stabilizer execution failed — continuing without stabilization" >> "$DEPLOY_LOG"
@@ -236,9 +246,9 @@ jobs:
             if ! ssh_retry "Read ssh-status.json" \
               ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
               ssh -i ~/.ssh/id_pixel10 \
-              -p ${{ github.event.inputs.ssh_port }} \
+              -p "$SSH_PORT" \
               ${{ env.SSH_OPTS }} \
-              ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+              "$SSH_USER"@"$DEVICE_IP" \
               'cat ~/edge-node/ssh-status.json 2>/dev/null || echo "{\"status\": \"no status file\"}"'; then
               echo "::warning::Could not read stabilizer status — continuing with deployment"
               echo "[preflight] Could not read ssh-status.json — continuing without verification" >> "$DEPLOY_LOG"
@@ -257,9 +267,9 @@ jobs:
             if ssh_retry "SSH connectivity probe" \
               ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
               ssh -i ~/.ssh/id_pixel10 \
-              -p ${{ github.event.inputs.ssh_port }} \
+              -p "$SSH_PORT" \
               ${{ env.SSH_OPTS }} \
-              ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+              "$SSH_USER"@"$DEVICE_IP" \
               'echo "SSH OK — $(whoami)@$(hostname) — $(date -Iseconds)"'; then
               CONNECTIVITY=true
               echo "[preflight] Stabilization skipped but device is reachable — deploy steps will proceed with retry logic" >> "$DEPLOY_LOG"
@@ -291,19 +301,19 @@ jobs:
           scp_retry "Upload bootstrap.sh" \
             ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
             -i ~/.ssh/id_pixel10 \
-            -P ${{ github.event.inputs.ssh_port }} \
+            -P "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
             termux/bootstrap.sh \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/bootstrap.sh
+            "$SSH_USER"@"$DEVICE_IP":/data/data/com.termux/files/home/bootstrap.sh
           echo "::endgroup::"
 
           echo "::group::Run bootstrap (with retry)"
           ssh_retry "Run bootstrap" \
             ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
             ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
+            -p "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            "$SSH_USER"@"$DEVICE_IP" \
             'bash ~/bootstrap.sh 2>&1' | tee -a "${{ env.DEPLOY_LOG }}"
           REMOTE_RC=${PIPESTATUS[0]}
           echo "::endgroup::"
@@ -327,19 +337,19 @@ jobs:
         run: |
           echo "::group::Upload support scripts"
           scp -i ~/.ssh/id_pixel10 \
-            -P ${{ github.event.inputs.ssh_port }} \
+            -P "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
             termux/boot-init.sh \
             termux/watchdog.sh \
             termux/status-report.sh \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/
+            "$SSH_USER"@"$DEVICE_IP":/data/data/com.termux/files/home/
           echo "::endgroup::"
 
           echo "::group::Install boot persistence"
           ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
+            -p "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} 'bash -s' <<'BOOTSETUP'
+            "$SSH_USER"@"$DEVICE_IP" 'bash -s' <<'BOOTSETUP'
           set -e
           mkdir -p ~/.termux/boot
           # Symlink boot-init into Termux:Boot directory
@@ -359,9 +369,9 @@ jobs:
         run: |
           echo "::group::Install Ollama"
           ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
+            -p "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} 'bash -s' <<'OLLAMA'
+            "$SSH_USER"@"$DEVICE_IP" 'bash -s' <<'OLLAMA'
           set -euo pipefail
           echo "[1/4] Ensuring tur-repo for Ollama..."
           pkg install -y tur-repo 2>/dev/null || true
@@ -414,9 +424,9 @@ jobs:
         run: |
           echo "::group::Health check"
           ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
+            -p "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            "$SSH_USER"@"$DEVICE_IP" \
             'bash ~/status-report.sh 2>&1' | tee -a "${{ env.DEPLOY_LOG }}"
           echo "::endgroup::"
 
@@ -429,10 +439,10 @@ jobs:
             echo ""
             echo "| Field | Value |"
             echo "|-------|-------|"
-            echo "| **Device** | \`${{ github.event.inputs.device_ip }}:${{ github.event.inputs.ssh_port }}\` |"
-            echo "| **User** | \`${{ github.event.inputs.ssh_user }}\` |"
-            echo "| **Target** | \`${{ github.event.inputs.deploy_target }}\` |"
-            echo "| **Dry run** | \`${{ github.event.inputs.dry_run }}\` |"
+            echo "| **Device** | \`"$DEVICE_IP":"$SSH_PORT"\` |"
+            echo "| **User** | \`"$SSH_USER"\` |"
+            echo "| **Target** | \`"$DEPLOY_TARGET"\` |"
+            echo "| **Dry run** | \`"$DRY_RUN"\` |"
             echo "| **SSH retry** | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s linear backoff |"
             echo "| **Pre-flight stabilization** | ${{ steps.preflight.outputs.preflight_ok == 'true' && '✅ Passed' || '⚠️ Skipped (connectivity)' }} |"
             echo "| **Pre-flight connectivity** | ${{ steps.preflight.outputs.connectivity == 'true' && '✅ Reachable' || '⚠️ Unreachable (deploy steps will retry)' }} |"

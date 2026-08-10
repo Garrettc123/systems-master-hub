@@ -22,18 +22,20 @@ ISSUES=0
 log() { echo "[$NOW] $*"; }
 
 check_service() {
-  local name="$1" check_cmd="$2" start_cmd="$3"
+  # Command names are passed as shell function names and invoked directly, so
+  # nothing is re-parsed by `eval`.
+  local name="$1" check_fn="$2" start_fn="$3"
 
-  if eval "$check_cmd" >/dev/null 2>&1; then
+  if "$check_fn" >/dev/null 2>&1; then
     log "OK   $name"
   else
     log "DOWN $name"
     ((ISSUES++))
     if [ "$CHECK_ONLY" = false ]; then
       log "     Restarting $name ..."
-      if eval "$start_cmd" 2>/dev/null; then
+      if "$start_fn" 2>/dev/null; then
         sleep 2
-        if eval "$check_cmd" >/dev/null 2>&1; then
+        if "$check_fn" >/dev/null 2>&1; then
           log "     $name recovered"
         else
           log "     $name STILL DOWN after restart"
@@ -47,23 +49,27 @@ check_service() {
 
 log "=== Watchdog check ==="
 
+# --- Service probe/start definitions ---
+check_sshd()   { pgrep -x sshd; }
+start_sshd()   { sshd; }
+
+check_crond()  { pgrep -x crond; }
+start_crond()  { crond -b; }
+
+check_ollama() { curl -sf --max-time 5 http://127.0.0.1:11434/api/tags; }
+start_ollama() { nohup ollama serve >> "${LOG_DIR}/ollama.log" 2>&1 & }
+
 # --- sshd ---
-check_service "sshd" \
-  "pgrep -x sshd" \
-  "sshd"
+check_service "sshd" check_sshd start_sshd
 
 # --- crond ---
 if command -v crond >/dev/null 2>&1; then
-  check_service "crond" \
-    "pgrep -x crond" \
-    "crond -b"
+  check_service "crond" check_crond start_crond
 fi
 
 # --- Ollama ---
 if command -v ollama >/dev/null 2>&1; then
-  check_service "ollama" \
-    "curl -sf --max-time 5 http://127.0.0.1:11434/api/tags" \
-    "nohup ollama serve >> ${LOG_DIR}/ollama.log 2>&1 &"
+  check_service "ollama" check_ollama start_ollama
 fi
 
 # --- Disk space warning ---

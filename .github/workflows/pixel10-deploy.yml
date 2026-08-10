@@ -20,10 +20,18 @@ on:
         required: false
         default: 'false'
 
+permissions:
+  contents: read
+
 env:
+  # Untrusted workflow inputs are bound to environment variables so they
+  # are never interpolated directly into a shell command (script injection).
+  DEVICE_IP: ${{ github.event.inputs.device_ip }}
+  SSH_PORT: ${{ github.event.inputs.ssh_port }}
+  DRY_RUN: ${{ github.event.inputs.dry_run }}
   # Tailscale SSH options — aggressive keepalives to survive intermittent drops
   SSH_OPTS: >-
-    -o StrictHostKeyChecking=no
+    -o StrictHostKeyChecking=accept-new
     -o ConnectTimeout=20
     -o ServerAliveInterval=5
     -o ServerAliveCountMax=6
@@ -43,9 +51,9 @@ jobs:
 
       - name: Pre-flight Check
         run: |
-          echo "Device IP: ${{ github.event.inputs.device_ip }}"
-          echo "SSH Port: ${{ github.event.inputs.ssh_port }}"
-          echo "Dry Run: ${{ github.event.inputs.dry_run }}"
+          echo "Device IP: "$DEVICE_IP""
+          echo "SSH Port: "$SSH_PORT""
+          echo "Dry Run: "$DRY_RUN""
 
       - name: Check SSH Key
         id: check-ssh
@@ -65,8 +73,8 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.PIXEL10_SSH_KEY }}" > ~/.ssh/pixel10_key
           chmod 600 ~/.ssh/pixel10_key
-          ssh-keyscan -p ${{ github.event.inputs.ssh_port }} \
-            ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -p "$SSH_PORT" \
+            "$DEVICE_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       # --- Reusable retry helpers for Tailscale SSH resilience ---
       - name: Create SSH retry helpers
@@ -187,10 +195,10 @@ jobs:
           if ! scp_retry "Upload ssh-stabilizer.sh" \
             ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
             -i ~/.ssh/pixel10_key \
-            -P ${{ github.event.inputs.ssh_port }} \
+            -P "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
             termux/ssh-stabilizer.sh \
-            u0_a325@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/ssh-stabilizer.sh; then
+            u0_a325@"$DEVICE_IP":/data/data/com.termux/files/home/ssh-stabilizer.sh; then
             echo "::warning::Pre-flight SCP upload failed after all retries — stabilization skipped due to connectivity"
             PREFLIGHT_OK=false
           fi
@@ -201,9 +209,9 @@ jobs:
             if ! ssh_retry "Run SSH stabilizer" \
               ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
               ssh -i ~/.ssh/pixel10_key \
-              -p ${{ github.event.inputs.ssh_port }} \
+              -p "$SSH_PORT" \
               ${{ env.SSH_OPTS }} \
-              u0_a325@${{ github.event.inputs.device_ip }} \
+              u0_a325@"$DEVICE_IP" \
               'chmod +x ~/ssh-stabilizer.sh && bash ~/ssh-stabilizer.sh 2>&1'; then
               echo "::warning::SSH stabilizer could not complete after retries — continuing with deployment"
               PREFLIGHT_OK=false
@@ -216,9 +224,9 @@ jobs:
             if ! ssh_retry "Read ssh-status.json" \
               ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
               ssh -i ~/.ssh/pixel10_key \
-              -p ${{ github.event.inputs.ssh_port }} \
+              -p "$SSH_PORT" \
               ${{ env.SSH_OPTS }} \
-              u0_a325@${{ github.event.inputs.device_ip }} \
+              u0_a325@"$DEVICE_IP" \
               'cat ~/edge-node/ssh-status.json 2>/dev/null || echo "{\"status\": \"no status file\"}"'; then
               echo "::warning::Could not read stabilizer status — continuing with deployment"
               PREFLIGHT_OK=false
@@ -236,9 +244,9 @@ jobs:
             if ssh_retry "SSH connectivity probe" \
               ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
               ssh -i ~/.ssh/pixel10_key \
-              -p ${{ github.event.inputs.ssh_port }} \
+              -p "$SSH_PORT" \
               ${{ env.SSH_OPTS }} \
-              u0_a325@${{ github.event.inputs.device_ip }} \
+              u0_a325@"$DEVICE_IP" \
               'echo "SSH OK — $(whoami)@$(uname -m) — $(date)"'; then
               CONNECTIVITY=true
               echo "::notice::Pre-flight stabilization skipped but device is reachable. Deploy steps will proceed with their own retry logic."
@@ -259,9 +267,9 @@ jobs:
         run: |
           echo "Deploying Ollama to device..."
           ssh -i ~/.ssh/pixel10_key \
-            -p ${{ github.event.inputs.ssh_port }} \
+            -p "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
-            u0_a325@${{ github.event.inputs.device_ip }} 'bash -s' <<'DEPLOY_SCRIPT'
+            u0_a325@"$DEVICE_IP" 'bash -s' <<'DEPLOY_SCRIPT'
           set -euo pipefail
           echo "[1/6] Installing packages..."
           pkg update -y 2>/dev/null || true
@@ -313,9 +321,9 @@ jobs:
           ssh_retry "Verify Ollama deployment" \
             ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
             ssh -i ~/.ssh/pixel10_key \
-            -p ${{ github.event.inputs.ssh_port }} \
+            -p "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
-            u0_a325@${{ github.event.inputs.device_ip }} \
+            u0_a325@"$DEVICE_IP" \
             'echo "=== Service ===" && curl -sf http://127.0.0.1:11434/api/tags 2>/dev/null || echo "Service not yet ready"'
           echo "::endgroup::"
 
@@ -349,9 +357,9 @@ jobs:
             echo ""
             echo "| Field | Value |"
             echo "|-------|-------|"
-            echo "| Device | \`${{ github.event.inputs.device_ip }}\` |"
-            echo "| Port | \`${{ github.event.inputs.ssh_port }}\` |"
-            echo "| Dry run | \`${{ github.event.inputs.dry_run }}\` |"
+            echo "| Device | \`"$DEVICE_IP"\` |"
+            echo "| Port | \`"$SSH_PORT"\` |"
+            echo "| Dry run | \`"$DRY_RUN"\` |"
             echo "| SSH retry | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s linear backoff |"
             echo "| Pre-flight stabilization | ${{ steps.preflight.outputs.preflight_ok == 'true' && '✅ Passed' || '⚠️ Skipped (connectivity)' }} |"
             echo "| Pre-flight connectivity | ${{ steps.preflight.outputs.connectivity == 'true' && '✅ Reachable' || '⚠️ Unreachable (deploy steps will retry)' }} |"
@@ -368,7 +376,7 @@ jobs:
 
             echo "**Test locally:**"
             echo '```bash'
-            echo "curl -X POST http://${{ github.event.inputs.device_ip }}:11434/api/generate \\"
+            echo "curl -X POST http://"$DEVICE_IP":11434/api/generate \\"
             echo "  -H 'Content-Type: application/json' \\"
             echo "  -d '{\"model\": \"llama3.2:3b\", \"prompt\": \"Hello!\", \"stream\": false}'"
             echo '```'

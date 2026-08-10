@@ -24,6 +24,9 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     name: Validate Secret Presence

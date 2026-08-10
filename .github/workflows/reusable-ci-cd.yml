@@ -11,6 +11,9 @@ on:
         type: string
         default: 'staging'
 
+permissions:
+  contents: read
+
 jobs:
   quality:
     name: Code Quality & Security

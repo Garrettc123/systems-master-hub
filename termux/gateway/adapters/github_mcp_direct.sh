@@ -65,7 +65,7 @@ deliver_to_edge() {
   echo "$envelope" > "$tmp"
   scp -i "${PIXEL10_SSH_KEY_PATH:-~/.ssh/pixel10_edge}" \
       -P "${PIXEL10_SSH_PORT:-8022}" \
-      -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+      -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
       "$tmp" "${PIXEL10_USER:-root}@${PIXEL10_IP}:${EDGE_QUEUE_PATH}/${filename}"
   rm -f "$tmp"
 }

@@ -24,9 +24,19 @@ on:
         required: false
         default: 'false'
 
+permissions:
+  contents: read
+
 env:
+  # Untrusted workflow inputs are bound to environment variables so they
+  # are never interpolated directly into a shell command (script injection).
+  DEVICE_IP: ${{ github.event.inputs.device_ip }}
+  SSH_PORT: ${{ github.event.inputs.ssh_port }}
+  SSH_USER: ${{ github.event.inputs.ssh_user }}
+  MODEL_OVERRIDE: ${{ github.event.inputs.model_override }}
+  DRY_RUN: ${{ github.event.inputs.dry_run }}
   SSH_OPTS: >-
-    -o StrictHostKeyChecking=no
+    -o StrictHostKeyChecking=accept-new
     -o ConnectTimeout=20
     -o ServerAliveInterval=5
     -o ServerAliveCountMax=6
@@ -65,8 +75,8 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.PIXEL10_SSH_KEY }}" > ~/.ssh/id_pixel10
           chmod 600 ~/.ssh/id_pixel10
-          ssh-keyscan -p ${{ github.event.inputs.ssh_port }} \
-            ${{ github.event.inputs.device_ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -p "$SSH_PORT" \
+            "$DEVICE_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Create SSH retry helpers
         if: steps.check-ssh.outputs.skip != 'true'
@@ -136,9 +146,9 @@ jobs:
           ssh_retry_exponential "SSH connectivity" \
             ${{ env.SSH_TEST_RETRY_MAX }} ${{ env.SSH_TEST_RETRY_BASE_DELAY }} \
             ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
+            -p "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            "$SSH_USER"@"$DEVICE_IP" \
             'echo "SSH OK — $(whoami)@$(hostname) — $(date -Iseconds)"'
           echo "::endgroup::"
 
@@ -150,9 +160,9 @@ jobs:
           ssh_retry "Ollama health check" \
             ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
             ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
+            -p "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            "$SSH_USER"@"$DEVICE_IP" \
             'curl -sf --max-time 10 http://127.0.0.1:11434/api/tags && echo "" && echo "Ollama is healthy"'
           echo "::endgroup::"
 
@@ -164,20 +174,20 @@ jobs:
           scp_retry "Upload Qwen scripts" \
             ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
             -i ~/.ssh/id_pixel10 \
-            -P ${{ github.event.inputs.ssh_port }} \
+            -P "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
             termux/qwen-model-pull.sh \
             termux/qwen-endpoint-check.sh \
             termux/qwen-health-probe.sh \
             termux/qwen-model-config.json \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }}:/data/data/com.termux/files/home/
+            "$SSH_USER"@"$DEVICE_IP":/data/data/com.termux/files/home/
           echo "::endgroup::"
 
           echo "::group::Set permissions"
           ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
+            -p "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            "$SSH_USER"@"$DEVICE_IP" \
             'chmod +x ~/qwen-model-pull.sh ~/qwen-endpoint-check.sh ~/qwen-health-probe.sh'
           echo "::endgroup::"
 
@@ -187,15 +197,15 @@ jobs:
           github.event.inputs.dry_run == 'false'
         run: |
           MODEL_ENV=""
-          if [ -n "${{ github.event.inputs.model_override }}" ]; then
-            MODEL_ENV="QWEN_MODEL='${{ github.event.inputs.model_override }}'"
+          if [ -n ""$MODEL_OVERRIDE"" ]; then
+            MODEL_ENV="QWEN_MODEL='"$MODEL_OVERRIDE"'"
           fi
 
           echo "::group::Pull Qwen model"
           ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
+            -p "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            "$SSH_USER"@"$DEVICE_IP" \
             "${MODEL_ENV} bash ~/qwen-model-pull.sh 2>&1"
           echo "::endgroup::"
 
@@ -209,9 +219,9 @@ jobs:
           ssh_retry "Qwen endpoint check" \
             ${{ env.SSH_RETRY_MAX }} ${{ env.SSH_RETRY_DELAY }} \
             ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
+            -p "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            "$SSH_USER"@"$DEVICE_IP" \
             'bash ~/qwen-endpoint-check.sh --json 2>&1'
           echo "::endgroup::"
 
@@ -222,16 +232,16 @@ jobs:
         run: |
           echo "::group::Health probe"
           ssh -i ~/.ssh/id_pixel10 \
-            -p ${{ github.event.inputs.ssh_port }} \
+            -p "$SSH_PORT" \
             ${{ env.SSH_OPTS }} \
-            ${{ github.event.inputs.ssh_user }}@${{ github.event.inputs.device_ip }} \
+            "$SSH_USER"@"$DEVICE_IP" \
             'bash ~/qwen-health-probe.sh --json 2>&1'
           echo "::endgroup::"
 
       - name: Summary
         if: always()
         run: |
-          MODEL_TAG="${{ github.event.inputs.model_override }}"
+          MODEL_TAG=""$MODEL_OVERRIDE""
           [ -z "$MODEL_TAG" ] && MODEL_TAG="qwen2.5:0.5b-instruct (default)"
 
           {
@@ -239,15 +249,15 @@ jobs:
             echo ""
             echo "| Field | Value |"
             echo "|-------|-------|"
-            echo "| **Device** | \`${{ github.event.inputs.device_ip }}:${{ github.event.inputs.ssh_port }}\` |"
-            echo "| **User** | \`${{ github.event.inputs.ssh_user }}\` |"
+            echo "| **Device** | \`"$DEVICE_IP":"$SSH_PORT"\` |"
+            echo "| **User** | \`"$SSH_USER"\` |"
             echo "| **Model** | \`${MODEL_TAG}\` |"
-            echo "| **Dry run** | \`${{ github.event.inputs.dry_run }}\` |"
+            echo "| **Dry run** | \`"$DRY_RUN"\` |"
             echo "| **Run** | [\`${GITHUB_RUN_ID}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
             echo ""
             echo "**Test locally:**"
             echo '```bash'
-            echo "curl -X POST http://${{ github.event.inputs.device_ip }}:11434/api/generate \\"
+            echo "curl -X POST http://"$DEVICE_IP":11434/api/generate \\"
             echo "  -H 'Content-Type: application/json' \\"
             echo "  -d '{\"model\": \"qwen2.5:0.5b-instruct\", \"prompt\": \"Hello!\", \"stream\": false}'"
             echo '```'

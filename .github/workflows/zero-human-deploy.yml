@@ -14,6 +14,9 @@ on:
           - complete
           - careful
 
+permissions:
+  contents: read
+
 jobs:
   zero-human-deploy:
     runs-on: ubuntu-latest

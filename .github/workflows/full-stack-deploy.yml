@@ -23,6 +23,9 @@ env:
   NODE_VERSION: '18'
   PYTHON_VERSION: '3.11'
 
+permissions:
+  contents: read
+
 jobs:
   #############################################################################
   # STEP 1-5: Initialize & Validate

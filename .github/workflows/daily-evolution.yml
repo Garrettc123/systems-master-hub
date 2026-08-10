@@ -26,6 +26,9 @@ env:
   GARCAR_ORG: Garrettc123
   REGISTRY_URL: https://raw.githubusercontent.com/Garrettc123/systems-master-hub/main/registry/capability-registry.json
 
+permissions:
+  contents: read
+
 jobs:
 
   # ── PHASE 1: Assess all 20 systems ─────────────────────────────────────
@@ -57,9 +60,10 @@ jobs:
           scores = [registry['systems'][s].get('maturity_score', 0) for s in systems]
           avg = round(sum(scores) / len(scores), 1) if scores else 0
 
-          print(f"::set-output name=matrix::{json.dumps(matrix)}")
-          print(f"::set-output name=count::{len(systems)}")
-          print(f"::set-output name=avg_maturity::{avg}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"matrix={json.dumps(matrix)}\n")
+              fh.write(f"count={len(systems)}\n")
+              fh.write(f"avg_maturity={avg}\n")
 
           print(f"\n🧬 GARCAR APEX — Daily Evolution Assessment")
           print(f"   Total systems: {len(systems)}")

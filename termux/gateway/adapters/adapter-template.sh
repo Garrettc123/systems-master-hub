@@ -80,7 +80,7 @@ deliver_to_edge() {
 
   scp -i "${PIXEL10_SSH_KEY_PATH:-~/.ssh/pixel10_edge}" \
       -P "${PIXEL10_SSH_PORT:-8022}" \
-      -o StrictHostKeyChecking=no \
+      -o StrictHostKeyChecking=accept-new \
       -o ConnectTimeout=10 \
       "$tmp_file" \
       "${PIXEL10_USER:-root}@${PIXEL10_IP}:${EDGE_QUEUE_PATH}/${filename}"
