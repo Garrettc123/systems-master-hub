@@ -3,7 +3,7 @@
     "version": "1.0.0",
     "owner": "Garrettc123",
     "description": "Garcar Enterprise canonical repo registry. Every Tier-1 and Tier-2 system is listed here. The deploy engine reads this file to resolve plain-English deploy commands to concrete repos.",
-    "lastUpdated": "2026-06-09",
+    "lastUpdated": "2026-08-10",
     "secretsSpec": "docs/SECRETSAPI.md",
     "schema": "schema/deploy-contract.schema.json"
   },
@@ -16,7 +16,11 @@
         "role": "control-plane",
         "platform": "github-actions",
         "dispatchEvent": null,
-        "requiredSecrets": ["GITHUB_TOKEN", "LINEAR_API_KEY", "SLACK_WEBHOOK_URL"]
+        "requiredSecrets": [
+          "GITHUB_TOKEN",
+          "LINEAR_API_KEY",
+          "SLACK_WEBHOOK_URL"
+        ]
       },
       "garcar-payments": {
         "repo": "Garrettc123/garcar-payments",
@@ -24,7 +28,14 @@
         "role": "payment-service",
         "platform": "railway",
         "dispatchEvent": "garcar-sweep",
-        "requiredSecrets": ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "APP_URL", "RAILWAY_TOKEN"]
+        "requiredSecrets": [
+          "STRIPE_SECRET_KEY",
+          "STRIPE_WEBHOOK_SECRET",
+          "SUPABASE_URL",
+          "SUPABASE_SERVICE_KEY",
+          "APP_URL",
+          "RAILWAY_TOKEN"
+        ]
       },
       "garcar-payment-loop": {
         "repo": "Garrettc123/garcar-payment-loop",
@@ -32,7 +43,13 @@
         "role": "payment-event-bridge",
         "platform": "railway",
         "dispatchEvent": "garcar-sweep",
-        "requiredSecrets": ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "RAILWAY_TOKEN"]
+        "requiredSecrets": [
+          "STRIPE_SECRET_KEY",
+          "STRIPE_WEBHOOK_SECRET",
+          "SUPABASE_URL",
+          "SUPABASE_SERVICE_KEY",
+          "RAILWAY_TOKEN"
+        ]
       },
       "mars-api": {
         "repo": "Garrettc123/mars-api",
@@ -40,7 +57,12 @@
         "role": "billable-api",
         "platform": "railway",
         "dispatchEvent": "garcar-sweep",
-        "requiredSecrets": ["RAILWAY_TOKEN", "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "LINEAR_API_KEY"]
+        "requiredSecrets": [
+          "RAILWAY_TOKEN",
+          "SUPABASE_URL",
+          "SUPABASE_SERVICE_KEY",
+          "LINEAR_API_KEY"
+        ]
       },
       "enterprise-mlops-platform": {
         "repo": "Garrettc123/enterprise-mlops-platform",
@@ -48,7 +70,11 @@
         "role": "ml-lifecycle",
         "platform": "railway",
         "dispatchEvent": "garcar-sweep",
-        "requiredSecrets": ["RAILWAY_TOKEN", "SUPABASE_URL", "SUPABASE_SERVICE_KEY"]
+        "requiredSecrets": [
+          "RAILWAY_TOKEN",
+          "SUPABASE_URL",
+          "SUPABASE_SERVICE_KEY"
+        ]
       }
     }
   },
@@ -61,7 +87,12 @@
         "role": "orchestration-engine",
         "platform": "railway",
         "dispatchEvent": "garcar-sweep",
-        "requiredSecrets": ["RAILWAY_TOKEN", "STRIPE_SECRET_KEY", "SUPABASE_URL", "LINEAR_API_KEY"]
+        "requiredSecrets": [
+          "RAILWAY_TOKEN",
+          "STRIPE_SECRET_KEY",
+          "SUPABASE_URL",
+          "LINEAR_API_KEY"
+        ]
       },
       "atlas-dashboard": {
         "repo": "Garrettc123/atlas-dashboard",
@@ -69,7 +100,11 @@
         "role": "revenue-analytics",
         "platform": "vercel",
         "dispatchEvent": "garcar-sweep",
-        "requiredSecrets": ["VERCEL_TOKEN", "SUPABASE_URL", "SUPABASE_SERVICE_KEY"]
+        "requiredSecrets": [
+          "VERCEL_TOKEN",
+          "SUPABASE_URL",
+          "SUPABASE_SERVICE_KEY"
+        ]
       },
       "zeus-dashboard": {
         "repo": "Garrettc123/zeus-dashboard",
@@ -77,7 +112,11 @@
         "role": "cognitive-control-plane",
         "platform": "vercel",
         "dispatchEvent": "garcar-sweep",
-        "requiredSecrets": ["VERCEL_TOKEN", "SUPABASE_URL", "LINEAR_API_KEY"]
+        "requiredSecrets": [
+          "VERCEL_TOKEN",
+          "SUPABASE_URL",
+          "LINEAR_API_KEY"
+        ]
       },
       "neural-mesh": {
         "repo": "Garrettc123/neural-mesh",
@@ -85,12 +124,136 @@
         "role": "self-healing-cicd",
         "platform": "github-actions",
         "dispatchEvent": "garcar-sweep",
-        "requiredSecrets": ["GITHUB_TOKEN", "SLACK_WEBHOOK_URL"]
+        "requiredSecrets": [
+          "GITHUB_TOKEN",
+          "SLACK_WEBHOOK_URL"
+        ]
       }
     }
   },
   "tier3": {
-    "description": "Experimental and support systems.",
-    "repos": {}
+    "description": "Supporting systems. Deploy after Tier-2 is healthy. Non-blocking.",
+    "repos": {
+      "nwu-protocol": {
+        "repo": "Garrettc123/nwu-protocol",
+        "contract": "contracts/nwu-protocol.json",
+        "role": "protocol",
+        "platform": "github-actions",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": [
+          "GITHUB_TOKEN"
+        ]
+      },
+      "autonomous-income-deployment": {
+        "repo": "Garrettc123/autonomous-income-deployment",
+        "contract": "contracts/autonomous-income-deployment.json",
+        "role": "revenue-automation",
+        "platform": "github-actions",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": [
+          "GITHUB_TOKEN"
+        ]
+      },
+      "tree-of-life-system": {
+        "repo": "Garrettc123/tree-of-life-system",
+        "contract": "contracts/tree-of-life-system.json",
+        "role": "knowledge-graph",
+        "platform": "github-actions",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": [
+          "GITHUB_TOKEN"
+        ]
+      },
+      "enterprise-unified-platform": {
+        "repo": "Garrettc123/enterprise-unified-platform",
+        "contract": "contracts/enterprise-unified-platform.json",
+        "role": "unified-platform",
+        "platform": "github-actions",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": [
+          "GITHUB_TOKEN"
+        ]
+      },
+      "portfolio-website": {
+        "repo": "Garrettc123/portfolio-website",
+        "contract": "contracts/portfolio-website.json",
+        "role": "marketing-site",
+        "platform": "github-actions",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": [
+          "GITHUB_TOKEN"
+        ]
+      },
+      "ai-business-platform": {
+        "repo": "Garrettc123/ai-business-platform",
+        "contract": "contracts/ai-business-platform.json",
+        "role": "business-platform",
+        "platform": "github-actions",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": [
+          "GITHUB_TOKEN"
+        ]
+      },
+      "APEX-Universal-AI-Operating-System": {
+        "repo": "Garrettc123/APEX-Universal-AI-Operating-System",
+        "contract": "contracts/APEX-Universal-AI-Operating-System.json",
+        "role": "ai-operating-system",
+        "platform": "github-actions",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": [
+          "GITHUB_TOKEN"
+        ]
+      },
+      "stablecoin-protocol": {
+        "repo": "Garrettc123/stablecoin-protocol",
+        "contract": "contracts/stablecoin-protocol.json",
+        "role": "protocol",
+        "platform": "github-actions",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": [
+          "GITHUB_TOKEN"
+        ]
+      },
+      "autohelix": {
+        "repo": "Garrettc123/autohelix",
+        "contract": "contracts/autohelix.json",
+        "role": "orchestration",
+        "platform": "github-actions",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": [
+          "GITHUB_TOKEN"
+        ]
+      },
+      "quantum-advantage-layer": {
+        "repo": "Garrettc123/quantum-advantage-layer",
+        "contract": "contracts/quantum-advantage-layer.json",
+        "role": "research",
+        "platform": "github-actions",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": [
+          "GITHUB_TOKEN"
+        ]
+      },
+      "enterprise-automation-system": {
+        "repo": "Garrettc123/enterprise-automation-system",
+        "contract": "contracts/enterprise-automation-system.json",
+        "role": "automation",
+        "platform": "github-actions",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": [
+          "GITHUB_TOKEN"
+        ]
+      },
+      "gwc1": {
+        "repo": "Garrettc123/gwc1",
+        "contract": "contracts/gwc1.json",
+        "role": "support",
+        "platform": "github-actions",
+        "dispatchEvent": "garcar-sweep",
+        "requiredSecrets": [
+          "GITHUB_TOKEN"
+        ]
+      }
+    }
   }
 }

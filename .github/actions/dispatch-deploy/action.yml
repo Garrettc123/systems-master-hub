@@ -1,0 +1,105 @@
+name: Dispatch Deploy
+description: >-
+  Trigger a downstream repository's deploy pipeline via repository_dispatch,
+  with bounded retries. The token is read from the environment by `gh`, so it
+  never appears in a URL, in process arguments, or in the run log.
+
+inputs:
+  repo:
+    description: Target repository in owner/name form.
+    required: true
+  event-type:
+    description: repository_dispatch event type to send.
+    required: true
+  tier:
+    description: Registry tier the target belongs to (used for reporting).
+    required: false
+    default: ''
+  token:
+    description: PAT with repo scope on the target repository.
+    required: true
+  dry-run:
+    description: Resolve and validate without dispatching.
+    required: false
+    default: 'false'
+  max-attempts:
+    description: Number of dispatch attempts before giving up.
+    required: false
+    default: '3'
+
+runs:
+  using: composite
+  steps:
+    - name: Dispatch
+      shell: bash
+      env:
+        # Every value is bound to an env var rather than interpolated into the
+        # script body, so registry content cannot inject shell code.
+        TARGET_REPO: ${{ inputs.repo }}
+        EVENT_TYPE: ${{ inputs.event-type }}
+        TIER: ${{ inputs.tier }}
+        GH_TOKEN: ${{ inputs.token }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        MAX_ATTEMPTS: ${{ inputs.max-attempts }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -euo pipefail
+
+        case "$TARGET_REPO" in
+          */*/*) echo "::error::Invalid repo '$TARGET_REPO' (expected owner/name)"; exit 1 ;;
+          */*)   ;;
+          *)     echo "::error::Invalid repo '$TARGET_REPO' (expected owner/name)"; exit 1 ;;
+        esac
+
+        if [ -z "$EVENT_TYPE" ]; then
+          echo "::warning::$TARGET_REPO has no dispatchEvent in the registry; nothing to trigger."
+          exit 0
+        fi
+
+        if [ "$DRY_RUN" = "true" ]; then
+          echo "[dry-run] would dispatch '$EVENT_TYPE' to $TARGET_REPO"
+          exit 0
+        fi
+
+        if [ -z "$GH_TOKEN" ]; then
+          echo "::error::No dispatch token available for $TARGET_REPO"
+          exit 1
+        fi
+
+        payload=$(python3 -c '
+        import json, os
+        print(json.dumps({
+            "event_type": os.environ["EVENT_TYPE"],
+            "client_payload": {
+                "tier": os.environ.get("TIER", ""),
+                "triggered_by": "systems-master-hub/autonomous-deploy",
+                "run_url": os.environ.get("RUN_URL", ""),
+            },
+        }))')
+
+        attempt=1
+        while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+          # `gh` reads GH_TOKEN from the environment: the credential is never
+          # placed in argv or in the request URL.
+          status=0
+          response=$(printf '%s' "$payload" | gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/repos/${TARGET_REPO}/dispatches" \
+            --input - 2>&1) || status=$?
+
+          if [ "$status" -eq 0 ]; then
+            echo "dispatched '$EVENT_TYPE' to $TARGET_REPO"
+            exit 0
+          fi
+
+          echo "::warning::attempt ${attempt}/${MAX_ATTEMPTS} failed for ${TARGET_REPO}: ${response}"
+          attempt=$((attempt + 1))
+          if [ "$attempt" -le "$MAX_ATTEMPTS" ]; then
+            sleep $((attempt * 5))
+          fi
+        done
+
+        echo "::error::Failed to dispatch '$EVENT_TYPE' to ${TARGET_REPO} after ${MAX_ATTEMPTS} attempts"
+        exit 1

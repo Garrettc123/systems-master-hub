@@ -102,7 +102,7 @@ jobs:
         continue-on-error: true
       - name: Cost Estimation (Infracost)
         if: matrix.env == 'prod'
-        uses: infracost/actions/infracost@latest
+        uses: infracost/actions/infracost@v3
         env:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
         with:

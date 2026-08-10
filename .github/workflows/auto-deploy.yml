@@ -83,37 +83,61 @@ jobs:
   #############################################################################
   # PHASE 3: Deploy Universal Workflows (13 Repos)
   #############################################################################
+  resolve-targets:
+    name: 'Resolve Targets'
+    needs: detect-env
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+      count: ${{ steps.resolve.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+      # Repo names live in registry/repos.json, never in this workflow.
+      - id: resolve
+        run: python3 scripts/resolve_deploy_targets.py --all > /dev/null
+
   deploy-workflows:
     name: '🔧 Deploy Workflows'
-    needs: [initialize, detect-env]
+    needs: [initialize, detect-env, resolve-targets]
+    if: needs.resolve-targets.outputs.count != '0'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
-      matrix:
-        repo:
-          - nwu-protocol
-          - autonomous-income-deployment
-          - tree-of-life-system
-          - enterprise-unified-platform
-          - portfolio-website
-          - ai-business-platform
-          - APEX-Universal-AI-Operating-System
-          - enterprise-mlops-platform
-          - stablecoin-protocol
-          - autohelix
-          - quantum-advantage-layer
-          - enterprise-automation-system
-          - gwc1
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.resolve-targets.outputs.matrix) }}
       max-parallel: 5
     steps:
-      - name: "Deploy to ${{ matrix.repo }}"
+      - name: "Deploy CI to ${{ matrix.name }}"
+        env:
+          TARGET_REPO: ${{ matrix.repo }}
+          # GITHUB_TOKEN cannot write to other repositories; a PAT is required.
+          GH_PAT: ${{ secrets.GARCAR_PAT || secrets.PAT_TOKEN || secrets.GHPAT }}
         run: |
-          git clone https://${{ secrets.GITHUB_TOKEN }}@github.com/Garrettc123/${{ matrix.repo }}.git
-          cd ${{ matrix.repo }}
+          set -euo pipefail
+
+          if [ -z "$GH_PAT" ]; then
+            echo "::warning::No cross-repo PAT configured; skipping $TARGET_REPO"
+            exit 0
+          fi
+
+          # Credential helper keeps the token out of the remote URL, out of
+          # argv, and out of .git/config.
+          git config --global credential.helper \
+            '!f() { printf "username=x-access-token\npassword=%s\n" "$GH_PAT"; }; f'
+          git config --global user.name "Garrett Automation"
+          git config --global user.email "automation@garrettc123.dev"
+
+          workdir=$(mktemp -d)
+          git clone --depth 1 "https://github.com/${TARGET_REPO}.git" "$workdir/repo"
+          cd "$workdir/repo"
           mkdir -p .github/workflows
-          
+
           cat > .github/workflows/ci.yml << 'WORKFLOW'
           name: CI/CD
           on: [push, pull_request]
+          permissions:
+            contents: read
           jobs:
             ci:
               runs-on: ubuntu-latest
@@ -124,7 +148,7 @@ jobs:
                 - uses: actions/checkout@v4
                 - uses: actions/setup-node@v4
                   with:
-                    node-version: ${{ matrix.node-version }}
+                    node-version: ${{ '${{' }} matrix.node-version }}
                 - uses: actions/setup-python@v5
                   with:
                     python-version: '3.11'
@@ -139,14 +163,22 @@ jobs:
                     if [ -f Makefile ]; then make build; fi
                     if [ -f package.json ]; then npm run build 2>/dev/null || true; fi
           WORKFLOW
-          
-          git config user.name "Garrett Automation"
-          git config user.email "automation@garrettc123.dev"
+
           git add .github/workflows/ci.yml
-          git commit -m "🔧 Auto: Deploy universal CI/CD" 2>/dev/null || true
-          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/Garrettc123/${{ matrix.repo }}.git main 2>/dev/null || \
-          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/Garrettc123/${{ matrix.repo }}.git master 2>/dev/null || true
-        continue-on-error: true
+          if git diff --cached --quiet; then
+            echo "$TARGET_REPO already up to date"
+            exit 0
+          fi
+
+          git commit -m "🔧 Auto: Deploy universal CI/CD"
+          branch=$(git rev-parse --abbrev-ref HEAD)
+          # Report a real failure instead of masking it with `|| true`, so a
+          # broken rollout is visible rather than silently skipped.
+          if ! git push origin "HEAD:${branch}"; then
+            echo "::error::Failed to push CI workflow to ${TARGET_REPO} (${branch})"
+            exit 1
+          fi
+          echo "updated $TARGET_REPO ($branch)"
 
   #############################################################################
   # PHASE 4: Terraform Validation

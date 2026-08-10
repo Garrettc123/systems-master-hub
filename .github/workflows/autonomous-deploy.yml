@@ -1,0 +1,197 @@
+name: Autonomous Deploy
+
+# Fully automatic, registry-driven deployment. There is deliberately no manual
+# gate: any push to main that touches deployable content, plus a recurring
+# schedule, rolls the whole estate forward tier by tier.
+#
+# Scaling: the deploy matrix is generated from registry/repos.json. Adding a
+# repository there is the only change needed for it to start deploying — no
+# edits to this workflow, and no repo names hardcoded here.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'registry/**'
+      - 'contracts/**'
+      - 'scripts/**'
+      - '.github/workflows/autonomous-deploy.yml'
+  schedule:
+    # Every 6 hours: reconciles drift and retries anything that failed earlier.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      tiers:
+        description: 'Comma-separated tiers to deploy (default: all)'
+        required: false
+        default: 'tier1,tier2,tier3'
+      dry_run:
+        description: 'Resolve and validate targets without dispatching'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+# One rollout at a time. A scheduled run will not stomp a push-triggered run.
+concurrency:
+  group: autonomous-deploy
+  cancel-in-progress: false
+
+env:
+  # Cross-repo dispatch needs a PAT; GITHUB_TOKEN is scoped to this repo only.
+  DISPATCH_TOKEN: ${{ secrets.GARCAR_PAT || secrets.PAT_TOKEN || secrets.GHPAT }}
+
+jobs:
+  resolve:
+    name: Resolve targets from registry
+    runs-on: ubuntu-latest
+    outputs:
+      tier1: ${{ steps.tier1.outputs.matrix }}
+      tier1_count: ${{ steps.tier1.outputs.count }}
+      tier2: ${{ steps.tier2.outputs.matrix }}
+      tier2_count: ${{ steps.tier2.outputs.count }}
+      tier3: ${{ steps.tier3.outputs.matrix }}
+      tier3_count: ${{ steps.tier3.outputs.count }}
+      has_token: ${{ steps.token.outputs.present }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check dispatch credentials
+        id: token
+        env:
+          TOKEN: ${{ env.DISPATCH_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No cross-repo dispatch token (GARCAR_PAT/PAT_TOKEN/GHPAT). Running in validate-only mode."
+          fi
+
+      - name: Validate registry
+        run: python3 scripts/resolve_deploy_targets.py --all > /dev/null
+
+      - name: Resolve tier1
+        id: tier1
+        run: python3 scripts/resolve_deploy_targets.py --tier tier1 > /dev/null
+
+      - name: Resolve tier2
+        id: tier2
+        run: python3 scripts/resolve_deploy_targets.py --tier tier2 > /dev/null
+
+      - name: Resolve tier3
+        id: tier3
+        run: python3 scripts/resolve_deploy_targets.py --tier tier3 > /dev/null
+
+  tier1:
+    name: 'Tier 1: ${{ matrix.name }}'
+    needs: resolve
+    if: needs.resolve.outputs.tier1_count != '0' && contains(inputs.tiers || 'tier1,tier2,tier3', 'tier1')
+    runs-on: ubuntu-latest
+    strategy:
+      # Tier-1 is critical path: stop the rollout if one fails.
+      fail-fast: true
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.resolve.outputs.tier1) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        uses: ./.github/actions/dispatch-deploy
+        with:
+          repo: ${{ matrix.repo }}
+          event-type: ${{ matrix.dispatchEvent }}
+          tier: ${{ matrix.tier }}
+          token: ${{ env.DISPATCH_TOKEN }}
+          dry-run: ${{ inputs.dry_run || needs.resolve.outputs.has_token != 'true' }}
+
+  tier2:
+    name: 'Tier 2: ${{ matrix.name }}'
+    needs: [resolve, tier1]
+    if: |
+      always()
+      && needs.resolve.outputs.tier2_count != '0'
+      && needs.tier1.result != 'failure'
+      && contains(inputs.tiers || 'tier1,tier2,tier3', 'tier2')
+    runs-on: ubuntu-latest
+    strategy:
+      # Tier-2 systems are independent; one failure should not block the rest.
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.resolve.outputs.tier2) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        uses: ./.github/actions/dispatch-deploy
+        with:
+          repo: ${{ matrix.repo }}
+          event-type: ${{ matrix.dispatchEvent }}
+          tier: ${{ matrix.tier }}
+          token: ${{ env.DISPATCH_TOKEN }}
+          dry-run: ${{ inputs.dry_run || needs.resolve.outputs.has_token != 'true' }}
+
+  tier3:
+    name: 'Tier 3: ${{ matrix.name }}'
+    needs: [resolve, tier2]
+    if: |
+      always()
+      && needs.resolve.outputs.tier3_count != '0'
+      && needs.tier2.result != 'failure'
+      && contains(inputs.tiers || 'tier1,tier2,tier3', 'tier3')
+    runs-on: ubuntu-latest
+    strategy:
+      # Tier-3 is non-blocking by definition.
+      fail-fast: false
+      max-parallel: 6
+      matrix: ${{ fromJSON(needs.resolve.outputs.tier3) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        uses: ./.github/actions/dispatch-deploy
+        with:
+          repo: ${{ matrix.repo }}
+          event-type: ${{ matrix.dispatchEvent }}
+          tier: ${{ matrix.tier }}
+          token: ${{ env.DISPATCH_TOKEN }}
+          dry-run: ${{ inputs.dry_run || needs.resolve.outputs.has_token != 'true' }}
+
+  summary:
+    name: Rollout summary
+    needs: [resolve, tier1, tier2, tier3]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write summary
+        env:
+          T1: ${{ needs.tier1.result }}
+          T2: ${{ needs.tier2.result }}
+          T3: ${{ needs.tier3.result }}
+          N1: ${{ needs.resolve.outputs.tier1_count }}
+          N2: ${{ needs.resolve.outputs.tier2_count }}
+          N3: ${{ needs.resolve.outputs.tier3_count }}
+          HAS_TOKEN: ${{ needs.resolve.outputs.has_token }}
+        run: |
+          {
+            echo "## Autonomous rollout"
+            echo
+            echo "| Tier | Repos | Result |"
+            echo "| --- | --- | --- |"
+            echo "| Tier 1 | ${N1} | ${T1} |"
+            echo "| Tier 2 | ${N2} | ${T2} |"
+            echo "| Tier 3 | ${N3} | ${T3} |"
+            echo
+            if [ "$HAS_TOKEN" != "true" ]; then
+              echo "> Validate-only run: no cross-repo dispatch token configured."
+            fi
+            echo "Targets resolved from \`registry/repos.json\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail if a critical tier failed
+        env:
+          T1: ${{ needs.tier1.result }}
+        run: |
+          if [ "$T1" = "failure" ]; then
+            echo "::error::Tier-1 rollout failed; downstream tiers were held back."
+            exit 1
+          fi
