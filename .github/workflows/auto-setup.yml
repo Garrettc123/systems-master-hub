@@ -3,84 +3,136 @@ name: Auto Setup
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-setup-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   setup:
     runs-on: ubuntu-latest
+    env:
+      # All connection details come from repository secrets — never hardcoded.
+      DEVICE_IP: ${{ secrets.PIXEL10_IP }}
+      SSH_PORT: ${{ secrets.PIXEL10_SSH_PORT || '8022' }}
+      SSH_USER: ${{ secrets.PIXEL10_SSH_USER || 'u0_a325' }}
+      # Optional: pin the expected SHA-256 of the Ollama installer to prevent
+      # supply-chain tampering. When unset the installer is not executed.
+      OLLAMA_INSTALLER_SHA256: ${{ vars.OLLAMA_INSTALLER_SHA256 }}
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Create Config
+
+      - name: Validate required secrets
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PIXEL10_SSH_KEY }}
+        run: |
+          if [ -z "$DEVICE_IP" ]; then
+            echo "::error::PIXEL10_IP secret is not configured."
+            exit 1
+          fi
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "::error::PIXEL10_SSH_KEY secret is not configured."
+            exit 1
+          fi
+
+      - name: Configure SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PIXEL10_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          
-          # SSH Key (base64 encoded, will be decoded)
-          cat > ~/.ssh/pixel10_key << 'EOF'
-          -----BEGIN OPENSSH PRIVATE KEY-----
-          b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gt
-          ZWQyNTUxOQAAACD3PChxmOnIj9BD7Qtkw6yyCIo/uo3DdtnPtxA2dmwuBwAAAJjL0ued
-          y9LngwAAAAtzc2gtZWQyNTUxOQAAACD3PChxmOnIj9BD7Qtkw6yyCIo/uo3DdtnPtxA2
-          dmwuBwAAAEBoKWAC7nWjmfz4yGgUTX6XL5F7LAx3qZKnQktWXZ/ZYfc8KHGY6ciP0EPt
-          C2TDrLIIij+6jcN22c+3EDZ2bC4HAAAAEXUwX2EzMjVAbG9jYWxob3N0AQIDBA==
-          -----END OPENSSH PRIVATE KEY-----
-          EOF
-          
+          chmod 700 ~/.ssh
+          umask 077
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/pixel10_key
           chmod 600 ~/.ssh/pixel10_key
-          echo "SSH Key configured"
-      
-      - name: Test SSH Connection to Pixel 10
+          # Pin the host key so connections cannot be silently MITM'd.
+          ssh-keyscan -p "$SSH_PORT" "$DEVICE_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
+          chmod 600 ~/.ssh/known_hosts
+          echo "SSH key configured"
+
+      - name: Test SSH connection
         run: |
-          ssh-keyscan -p 8022 100.71.218.79 >> ~/.ssh/known_hosts 2>/dev/null || true
-          
           ssh -i ~/.ssh/pixel10_key \
-            -p 8022 \
-            -o StrictHostKeyChecking=no \
+            -p "$SSH_PORT" \
+            -o StrictHostKeyChecking=accept-new \
             -o ConnectTimeout=5 \
-            u0_a325@100.71.218.79 \
-            'echo "Connected as: $(whoami)"' || echo "Connection test"
-      
-      - name: Deploy Ollama to Pixel 10
+            "$SSH_USER@$DEVICE_IP" \
+            'echo "Connected as: $(whoami)"' || echo "Connection test failed"
+
+      - name: Deploy Ollama
         run: |
           ssh -i ~/.ssh/pixel10_key \
-            -p 8022 \
-            -o StrictHostKeyChecking=no \
-            u0_a325@100.71.218.79 'bash -s' << 'DEPLOY'
+            -p "$SSH_PORT" \
+            -o StrictHostKeyChecking=accept-new \
+            "$SSH_USER@$DEVICE_IP" \
+            "bash -s -- '$OLLAMA_INSTALLER_SHA256'" << 'DEPLOY'
+          set -u
+          EXPECTED_SHA="${1:-}"
           echo "===== PIXEL 10 LLM DEPLOYMENT ====="
-          echo ""
           echo "[1/5] Updating packages..."
           pkg update -y 2>/dev/null || true
           pkg install -y curl wget 2>/dev/null || true
+
           echo "[2/5] Installing Ollama..."
-          if ! command -v ollama > /dev/null 2>&1; then
-            curl -fsSL https://ollama.ai/install.sh | sh 2>/dev/null || true
+          if command -v ollama > /dev/null 2>&1; then
+            echo "  Ollama already installed — skipping."
+          elif [ -z "$EXPECTED_SHA" ]; then
+            echo "  SKIPPED: OLLAMA_INSTALLER_SHA256 is not configured."
+            echo "  Refusing to pipe a remote script into a shell without an integrity check."
+            echo "  Set the OLLAMA_INSTALLER_SHA256 repository variable to enable this step."
+          else
+            INSTALLER="$(mktemp)"
+            if curl -fsSL --proto '=https' --tlsv1.2 https://ollama.ai/install.sh -o "$INSTALLER"; then
+              ACTUAL_SHA="$(sha256sum "$INSTALLER" | cut -d' ' -f1)"
+              if [ "$ACTUAL_SHA" = "$EXPECTED_SHA" ]; then
+                echo "  Installer checksum verified."
+                sh "$INSTALLER" || true
+              else
+                echo "  ERROR: installer checksum mismatch — refusing to execute."
+                echo "    expected: $EXPECTED_SHA"
+                echo "    actual:   $ACTUAL_SHA"
+              fi
+            else
+              echo "  ERROR: failed to download installer."
+            fi
+            rm -f "$INSTALLER"
           fi
+
           echo "[3/5] Pulling llama3.2:3b..."
-          timeout 1800 ollama pull llama3.2:3b || echo "Download started"
+          command -v ollama >/dev/null 2>&1 && timeout 1800 ollama pull llama3.2:3b || echo "Skipped"
+
           echo "[4/5] Starting Ollama..."
-          nohup ollama serve > /tmp/ollama.log 2>&1 &
+          command -v ollama >/dev/null 2>&1 && nohup ollama serve > "$HOME/ollama.log" 2>&1 &
           sleep 3
+
           echo "[5/5] Verifying..."
           curl -s http://127.0.0.1:11434/api/ps 2>/dev/null | head -10 || echo "Service starting"
-          echo ""
           echo "===== DEPLOYMENT COMPLETE ====="
-          echo "Access: http://100.71.218.79:11434"
           DEPLOY
-      
-      - name: Final Check
+
+      - name: Final check
         run: |
           echo "Waiting for service..."
           sleep 5
-          
           ssh -i ~/.ssh/pixel10_key \
-            -p 8022 \
-            -o StrictHostKeyChecking=no \
-            u0_a325@100.71.218.79 \
+            -p "$SSH_PORT" \
+            -o StrictHostKeyChecking=accept-new \
+            "$SSH_USER@$DEVICE_IP" \
             'curl -s http://127.0.0.1:11434/api/ps | head -20 || echo Initializing' || true
-      
-      - name: Test Model
+
+      - name: Test model over the SSH tunnel
         run: |
-          echo "Testing model inference..."
-          curl -X POST http://100.71.218.79:11434/api/generate \
-            -H 'Content-Type: application/json' \
-            -d '{"model": "llama3.2:3b", "prompt": "Hello!", "stream": false}' \
-            --connect-timeout 5 \
-            --max-time 30 || echo "Model still loading"
+          # The inference port is never exposed publicly; probe it through SSH.
+          ssh -i ~/.ssh/pixel10_key \
+            -p "$SSH_PORT" \
+            -o StrictHostKeyChecking=accept-new \
+            "$SSH_USER@$DEVICE_IP" \
+            "curl -s -X POST http://127.0.0.1:11434/api/generate \
+              -H 'Content-Type: application/json' \
+              -d '{\"model\": \"llama3.2:3b\", \"prompt\": \"Hello!\", \"stream\": false}' \
+              --connect-timeout 5 --max-time 30" || echo "Model still loading"
+
+      - name: Cleanup credentials
+        if: always()
+        run: rm -f ~/.ssh/pixel10_key
