@@ -22,7 +22,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TARGET="${{ github.event.inputs.pr_number }}"
+          TARGET="${INPUT_PR_NUMBER}"
           if [ "$TARGET" != "0" ] && [ -n "$TARGET" ]; then
             echo "Merging PR #$TARGET..."
             gh pr merge "$TARGET" --repo "${{ github.repository }}" --squash --auto --delete-branch || true
@@ -39,3 +39,6 @@ jobs:
             echo "PR #$PR_NUM by $AUTHOR ($BRANCH) — enabling auto-merge"
             gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --squash --auto --delete-branch 2>/dev/null || true
           done
+
+env:
+  INPUT_PR_NUMBER: ${{ github.event.inputs.pr_number }}

@@ -19,6 +19,7 @@ on:
         type: boolean
 
 env:
+  INPUT_ENVIRONMENT: ${{ github.event.inputs.environment }}
   TF_VERSION: '1.9.5'
   NODE_VERSION: '18'
   PYTHON_VERSION: '3.11'
@@ -214,7 +215,7 @@ jobs:
         id: plan
         run: |
           cd terraform
-          terraform plan -var="environment=${{ github.event.inputs.environment }}" -out=tfplan.json
+          terraform plan -var="environment=${INPUT_ENVIRONMENT}" -out=tfplan.json
         continue-on-error: true
       - name: 'Cost Estimation (Infracost)'
         if: hashFiles('terraform/**/*.tf') != ''
@@ -242,7 +243,7 @@ jobs:
     environment:
       name: ${{ github.event.inputs.environment }}
     steps:
-      - run: echo "✅ Manual approval granted for ${{ github.event.inputs.environment }}"
+      - run: echo "✅ Manual approval granted for ${INPUT_ENVIRONMENT}"
 
   #############################################################################
   # STEP 41-45: Terraform Apply
@@ -266,7 +267,7 @@ jobs:
       - name: 'Terraform Apply'
         run: |
           cd terraform
-          terraform apply -var="environment=${{ github.event.inputs.environment }}" -auto-approve
+          terraform apply -var="environment=${INPUT_ENVIRONMENT}" -auto-approve
       - name: 'Capture Outputs'
         id: outputs
         run: |
@@ -342,7 +343,7 @@ jobs:
           # 🚀 Full Stack Deployment Report
           
           **Timestamp**: ${{ needs.initialize.outputs.timestamp }}
-          **Environment**: ${{ github.event.inputs.environment }}
+          **Environment**: "${INPUT_ENVIRONMENT}"
           **Status**: ${{ job.status }}
           
           ## Deployment Steps
@@ -390,7 +391,7 @@ jobs:
         run: |
           cd terraform
           terraform init -upgrade
-          terraform destroy -var="environment=${{ github.event.inputs.environment }}" -auto-approve || true
+          terraform destroy -var="environment=${INPUT_ENVIRONMENT}" -auto-approve || true
         continue-on-error: true
       - name: 'Slack Rollback Alert'
         uses: 8398a7/action-slack@v3

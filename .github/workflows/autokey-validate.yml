@@ -46,8 +46,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ARGS=""
-          if [ -n "${{ github.event.inputs.target_repo }}" ]; then
-            ARGS="--repo ${{ github.event.inputs.target_repo }}"
+          if [ -n "${INPUT_TARGET_REPO}" ]; then
+            ARGS="--repo ${INPUT_TARGET_REPO}"
           fi
           bash vault/validate-secrets.sh $ARGS
 
@@ -81,3 +81,6 @@ jobs:
               "text": "🚨 *AutoKey Validation FAILED*\n• One or more required secrets are MISSING\n• Time: '"$(date -u)"'\n• Action needed: Run bash vault/vault-setup.sh\n• Run: <https://github.com/Garrettc123/systems-master-hub/actions|View Logs>"
             }'
         continue-on-error: true
+
+env:
+  INPUT_TARGET_REPO: ${{ github.event.inputs.target_repo }}

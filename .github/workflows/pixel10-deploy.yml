@@ -51,9 +51,9 @@ jobs:
 
       - name: Pre-flight Check
         run: |
-          echo "Device IP: "$DEVICE_IP""
-          echo "SSH Port: "$SSH_PORT""
-          echo "Dry Run: "$DRY_RUN""
+          echo "Device IP: $DEVICE_IP"
+          echo "SSH Port: $SSH_PORT"
+          echo "Dry Run: $DRY_RUN"
 
       - name: Check SSH Key
         id: check-ssh
@@ -357,9 +357,9 @@ jobs:
             echo ""
             echo "| Field | Value |"
             echo "|-------|-------|"
-            echo "| Device | \`"$DEVICE_IP"\` |"
-            echo "| Port | \`"$SSH_PORT"\` |"
-            echo "| Dry run | \`"$DRY_RUN"\` |"
+            echo "| Device | \`${DEVICE_IP}\` |"
+            echo "| Port | \`${SSH_PORT}\` |"
+            echo "| Dry run | \`${DRY_RUN}\` |"
             echo "| SSH retry | max ${{ env.SSH_RETRY_MAX }} attempts, ${{ env.SSH_RETRY_DELAY }}s linear backoff |"
             echo "| Pre-flight stabilization | ${{ steps.preflight.outputs.preflight_ok == 'true' && '✅ Passed' || '⚠️ Skipped (connectivity)' }} |"
             echo "| Pre-flight connectivity | ${{ steps.preflight.outputs.connectivity == 'true' && '✅ Reachable' || '⚠️ Unreachable (deploy steps will retry)' }} |"
@@ -376,7 +376,7 @@ jobs:
 
             echo "**Test locally:**"
             echo '```bash'
-            echo "curl -X POST http://"$DEVICE_IP":11434/api/generate \\"
+            echo "curl -X POST http://${DEVICE_IP}:11434/api/generate \\"
             echo "  -H 'Content-Type: application/json' \\"
             echo "  -d '{\"model\": \"llama3.2:3b\", \"prompt\": \"Hello!\", \"stream\": false}'"
             echo '```'

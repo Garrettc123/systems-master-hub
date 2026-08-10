@@ -35,8 +35,8 @@ jobs:
 
       - name: Run Linting
         run: |
-          if [ "${{ inputs.stack }}" == "node" ]; then npm install && npm run lint; fi
-          if [ "${{ inputs.stack }}" == "python" ]; then pip install flake8 && flake8 .; fi
+          if [ "${INPUT_STACK}" == "node" ]; then npm install && npm run lint; fi
+          if [ "${INPUT_STACK}" == "python" ]; then pip install flake8 && flake8 .; fi
 
   test:
     name: Automated Testing
@@ -46,8 +46,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run Tests
         run: |
-          if [ "${{ inputs.stack }}" == "node" ]; then npm test; fi
-          if [ "${{ inputs.stack }}" == "python" ]; then pip install pytest && pytest; fi
+          if [ "${INPUT_STACK}" == "node" ]; then npm test; fi
+          if [ "${INPUT_STACK}" == "python" ]; then pip install pytest && pytest; fi
 
   deploy:
     name: Deployment
@@ -56,4 +56,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Deploy to ${{ inputs.environment }}
-        run: echo "Deploying system to ${{ inputs.environment }}..."
+        run: echo "Deploying system to ${INPUT_ENVIRONMENT}..."
+
+env:
+  INPUT_ENVIRONMENT: ${{ inputs.environment }}
+  INPUT_STACK: ${{ inputs.stack }}

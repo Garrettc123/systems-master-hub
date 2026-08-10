@@ -23,6 +23,8 @@ on:
         default: false
 
 env:
+  INPUT_TARGET_SYSTEM: ${{ github.event.inputs.target_system }}
+  INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
   GARCAR_ORG: Garrettc123
   REGISTRY_URL: https://raw.githubusercontent.com/Garrettc123/systems-master-hub/main/registry/capability-registry.json
 
@@ -53,7 +55,7 @@ jobs:
               registry = json.loads(r.read())
 
           all_systems = list(registry.get('systems', {}).keys())
-          target = "${{ github.event.inputs.target_system }}"
+          target = os.environ.get("INPUT_TARGET_SYSTEM", "")
           systems = [target] if target and target in all_systems else all_systems
 
           matrix = {"include": [{"system": s} for s in systems]}
@@ -107,7 +109,7 @@ jobs:
       - name: Run GARCAR Evolution Agent
         run: |
           DRY=""
-          [[ "${{ github.event.inputs.dry_run }}" == "true" ]] && DRY="--dry-run"
+          [[ "${INPUT_DRY_RUN}" == "true" ]] && DRY="--dry-run"
           python3 .garcar/evolve.py \
             --system "${{ matrix.system }}" \
             --path ./target-system \

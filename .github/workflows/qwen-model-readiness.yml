@@ -197,8 +197,8 @@ jobs:
           github.event.inputs.dry_run == 'false'
         run: |
           MODEL_ENV=""
-          if [ -n ""$MODEL_OVERRIDE"" ]; then
-            MODEL_ENV="QWEN_MODEL='"$MODEL_OVERRIDE"'"
+          if [ -n "$MODEL_OVERRIDE" ]; then
+            MODEL_ENV="QWEN_MODEL='${MODEL_OVERRIDE}'"
           fi
 
           echo "::group::Pull Qwen model"
@@ -241,7 +241,7 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          MODEL_TAG=""$MODEL_OVERRIDE""
+          MODEL_TAG="$MODEL_OVERRIDE"
           [ -z "$MODEL_TAG" ] && MODEL_TAG="qwen2.5:0.5b-instruct (default)"
 
           {
@@ -249,15 +249,15 @@ jobs:
             echo ""
             echo "| Field | Value |"
             echo "|-------|-------|"
-            echo "| **Device** | \`"$DEVICE_IP":"$SSH_PORT"\` |"
-            echo "| **User** | \`"$SSH_USER"\` |"
+            echo "| **Device** | \`${DEVICE_IP}:${SSH_PORT}\` |"
+            echo "| **User** | \`${SSH_USER}\` |"
             echo "| **Model** | \`${MODEL_TAG}\` |"
-            echo "| **Dry run** | \`"$DRY_RUN"\` |"
+            echo "| **Dry run** | \`${DRY_RUN}\` |"
             echo "| **Run** | [\`${GITHUB_RUN_ID}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
             echo ""
             echo "**Test locally:**"
             echo '```bash'
-            echo "curl -X POST http://"$DEVICE_IP":11434/api/generate \\"
+            echo "curl -X POST http://${DEVICE_IP}:11434/api/generate \\"
             echo "  -H 'Content-Type: application/json' \\"
             echo "  -d '{\"model\": \"qwen2.5:0.5b-instruct\", \"prompt\": \"Hello!\", \"stream\": false}'"
             echo '```'

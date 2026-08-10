@@ -56,13 +56,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ARGS=""
-          if [ -n "${{ github.event.inputs.target_repo }}" ]; then
-            ARGS="$ARGS --repo ${{ github.event.inputs.target_repo }}"
+          if [ -n "${INPUT_TARGET_REPO}" ]; then
+            ARGS="$ARGS --repo ${INPUT_TARGET_REPO}"
           fi
-          if [ -n "${{ github.event.inputs.target_secret }}" ]; then
-            ARGS="$ARGS --secret ${{ github.event.inputs.target_secret }}"
+          if [ -n "${INPUT_TARGET_SECRET}" ]; then
+            ARGS="$ARGS --secret ${INPUT_TARGET_SECRET}"
           fi
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+          if [ "${INPUT_DRY_RUN}" = "true" ]; then
             ARGS="$ARGS --dry-run"
           fi
           bash vault/rotate-secrets.sh $ARGS
@@ -92,3 +92,8 @@ jobs:
               "text": "🚨 *AutoKey Rotation FAILED*\n• Repo: systems-master-hub\n• Time: '"$(date -u)"'\n• Status: ❌ Failed\n• Action needed: Check run logs\n• Run: <https://github.com/Garrettc123/systems-master-hub/actions|View Run>"
             }'
         continue-on-error: true
+
+env:
+  INPUT_TARGET_REPO: ${{ github.event.inputs.target_repo }}
+  INPUT_TARGET_SECRET: ${{ github.event.inputs.target_secret }}
+  INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
