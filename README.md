@@ -100,6 +100,7 @@ This hub uses GitHub Actions for CI, validation, packaging, security, and deploy
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
+| **Autonomous Deploy** (`autonomous-deploy.yml`) | push to main, every 6h, dispatch | **Hands-off tiered rollout of every repo in the registry.** See [Autonomous deployment](#autonomous-deployment) below. |
 | **CI - Validate Hub** (`ci.yml`) | push, PR, dispatch | YAML lint, shell syntax check, Docker Compose validation, repo structure check |
 | **Build - Package Hub Artifacts** (`hub-build.yml`) | push (config paths), PR, dispatch | Validates compose/Makefile/monitoring configs; packages hub archive on main |
 | **Self-Heal - Hub Health Check** (`self-heal.yml`) | push, daily 7 AM, dispatch | Validates all YAML, shell scripts, JSON files; checks required files exist |
@@ -119,6 +120,74 @@ This hub uses GitHub Actions for CI, validation, packaging, security, and deploy
 | **Pixel 10 Deploy** (`deploy-pixel10.yml`, `pixel10-deploy.yml`) | Deploy Ollama LLM to Pixel 10 device |
 | **Zero-Human Deploy** (`zero-human-deploy.yml`) | Autonomous platform execution (3 paths) |
 | **Terraform** (`terraform.yml`) | Full Terraform pipeline with security scanning |
+
+> Terraform and other infrastructure-mutating workflows stay behind a manual gate on
+> purpose. Automatic rollout is handled by `autonomous-deploy.yml`, which dispatches
+> to each repo's own pipeline rather than applying infrastructure directly.
+
+## Autonomous deployment
+
+`autonomous-deploy.yml` removes the manual step from cross-repo rollout. It runs on
+every push to `main` that touches deployable content and on a 6-hourly schedule, so
+drift is reconciled and previously failed repos are retried without anyone pressing a
+button.
+
+**The registry is the only thing you edit.** `registry/repos.json` is the single
+source of truth for which repositories exist and in what order they deploy. No
+workflow contains a hardcoded repo name.
+
+```
+registry/repos.json
+        │
+        ▼
+scripts/resolve_deploy_targets.py     ← builds the deploy matrix
+        │
+        ▼
+tier1  ──►  tier2  ──►  tier3         ← each gated on the previous tier
+        │
+        ▼
+.github/actions/dispatch-deploy       ← repository_dispatch, with retries
+```
+
+### Tiers
+
+| Tier | Behaviour on failure | Intent |
+|------|----------------------|--------|
+| `tier1` | `fail-fast`, halts the rollout | Revenue and core-path systems |
+| `tier2` | Continues, blocks `tier3` if the tier fails | Dashboards and platform services |
+| `tier3` | Continues, non-blocking | Supporting and experimental systems |
+
+### Adding a repo
+
+Add an entry under the appropriate tier in `registry/repos.json`:
+
+```json
+"my-new-service": {
+  "repo": "Garrettc123/my-new-service",
+  "contract": "contracts/my-new-service.json",
+  "role": "what-it-does",
+  "platform": "railway",
+  "dispatchEvent": "garcar-sweep",
+  "requiredSecrets": ["RAILWAY_TOKEN"]
+}
+```
+
+That is the entire change. The next push or scheduled run picks it up automatically.
+Preview what would happen without dispatching:
+
+```bash
+python3 scripts/resolve_deploy_targets.py --all      # full matrix
+python3 scripts/resolve_deploy_targets.py --tier tier1
+```
+
+### Required secrets
+
+Cross-repo dispatch needs a PAT, because `GITHUB_TOKEN` is scoped to this repository
+only and cannot trigger workflows elsewhere. The pipeline accepts `GARCAR_PAT`,
+`PAT_TOKEN`, or `GHPAT`. If none is configured the run does **not** fail — it
+degrades to validate-only mode and annotates the run summary, so a missing secret is
+visible rather than silently skipped.
+
 
 ### Secrets Required for Full Deployment
 
