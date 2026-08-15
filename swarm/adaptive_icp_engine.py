@@ -55,7 +55,9 @@ class AdaptiveICPEngine:
 
     def __init__(self, weights: Mapping[str, float] | None = None) -> None:
         self.weights = dict(SIGNAL_WEIGHTS if weights is None else weights)
-        if not self.weights or any(
+        if not self.weights:
+            raise ValueError("ICP weights must not be empty")
+        if any(
             not isfinite(weight) or weight < 0.0
             for weight in self.weights.values()
         ):
