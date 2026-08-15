@@ -8,7 +8,7 @@ outputs can be audited and replaced without changing the decision contract.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import exp
+from math import exp, isfinite
 from typing import Dict, Iterable, Mapping
 
 
@@ -47,13 +47,19 @@ class SegmentState:
     retention_events: int = 0
     retention_successes: int = 0
     signal_means: Dict[str, float] = field(default_factory=dict)
+    signal_counts: Dict[str, int] = field(default_factory=dict)
 
 
 class AdaptiveICPEngine:
     """Continuously rank market segments from real observed outcomes."""
 
     def __init__(self, weights: Mapping[str, float] | None = None) -> None:
-        self.weights = dict(weights or SIGNAL_WEIGHTS)
+        self.weights = dict(SIGNAL_WEIGHTS if weights is None else weights)
+        if not self.weights or any(
+            not isfinite(weight) or weight < 0.0
+            for weight in self.weights.values()
+        ):
+            raise ValueError("ICP weights must be finite and non-negative")
         if abs(sum(self.weights.values()) - 1.0) > 1e-9:
             raise ValueError("ICP weights must sum to 1.0")
         self.segments: Dict[str, SegmentState] = {}
@@ -76,8 +82,9 @@ class AdaptiveICPEngine:
         for name, value in observation.signals.items():
             value = min(1.0, max(0.0, float(value)))
             old = state.signal_means.get(name, 0.0)
-            n = state.observations
+            n = state.signal_counts.get(name, 0) + 1
             state.signal_means[name] = old + (value - old) / n
+            state.signal_counts[name] = n
 
     def score(self, segment: str) -> float:
         state = self.segments[segment]
