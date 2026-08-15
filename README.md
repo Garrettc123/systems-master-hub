@@ -4,6 +4,24 @@
 
 ---
 
+## 🧠 Adaptive ICP Swarm
+
+The master hub now includes an outcome-driven ICP learning component at `swarm/adaptive_icp_engine.py`. It converts prospect, sales, retention, revenue, and acquisition-cost observations into continuously ranked market segments.
+
+**Documentation:** `swarm/ADAPTIVE_ICP_SWARM.md`
+
+The intended operating loop is:
+
+```text
+Discovery → Enrichment → Qualification → Offer → Outreach → Deal
+    ↑                                                     ↓
+    └──────────── ICP learning ← Outcomes ← Retention ────┘
+```
+
+The engine is framework-independent and designed to plug into the existing orchestration layer. It does not independently authorize consequential external actions; host-level permissions, compliance controls, rate limits, and approval gates remain authoritative.
+
+---
+
 ## 📊 Live Status Dashboard
 
 ```bash
@@ -55,7 +73,7 @@ make omni-stop    # Stop all services
 GITHUB_TOKEN=<token> ./master-deploy.sh
 
 # Dry-run (prints actions, no API calls)
-./master-deploy.sh --dry-run
+GITHUB_TOKEN=<token> ./master-deploy.sh --dry-run
 
 # Deploy a single repo
 GITHUB_TOKEN=<token> ./master-deploy.sh --repo enterprise-mlops-platform
@@ -70,6 +88,9 @@ systems-master-hub/
 ├── 🤖 ai-systems/               # All AI & ML platforms
 │   ├── APEX-Universal-AI-Operating-System
 │   └── enterprise-mlops-platform
+├── 🧠 swarm/                    # Adaptive commercial intelligence
+│   ├── adaptive_icp_engine.py
+│   └── ADAPTIVE_ICP_SWARM.md
 ├── ⛓️  blockchain/               # Crypto & Web3 protocols
 │   ├── stablecoin-protocol
 │   └── autohelix
@@ -89,8 +110,6 @@ systems-master-hub/
 ├── docker-compose.yml          # Master run configuration
 └── Makefile                    # Simple control commands
 ```
-
----
 
 ## GitHub Actions Workflows
 
@@ -160,3 +179,4 @@ These secrets are only needed for deployment workflows. CI and validation workfl
 | [OMNI-README.md](./OMNI-README.md) | Omnibus deployment guide |
 | [DEPLOYMENT.md](./DEPLOYMENT.md) | Deployment procedures |
 | [COMPLETION-ROADMAP.md](./COMPLETION-ROADMAP.md) | Roadmap and milestones |
+| [swarm/ADAPTIVE_ICP_SWARM.md](./swarm/ADAPTIVE_ICP_SWARM.md) | Adaptive ICP swarm architecture |
