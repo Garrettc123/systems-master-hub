@@ -1,0 +1,39 @@
+name: Garcar Control Plane Reconciliation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'control-plane/**'
+      - '.github/workflows/reconcile-control-plane.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: garcar-control-plane-reconcile
+  cancel-in-progress: true
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate JSON
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          for p in ['control-plane/garcar-state-schema.json','control-plane/systems.json']:
+              with open(p, encoding='utf-8') as f:
+                  json.load(f)
+              print(f'valid JSON: {p}')
+          PY
+      - name: Reconcile
+        run: python control-plane/reconcile.py
