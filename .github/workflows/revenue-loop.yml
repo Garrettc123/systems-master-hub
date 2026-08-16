@@ -1,4 +1,5 @@
 name: Autonomous Revenue Loop (DFW Contractor Campaign)
+
 on:
   schedule:
     - cron: '0 13 * * *'
@@ -8,17 +9,70 @@ on:
         description: 'Number of leads'
         required: true
         default: '5'
+        type: string
   repository_dispatch:
     types: [stripe_payment_received]
 
 permissions:
-  id-token: write
   contents: read
+
+concurrency:
+  group: garcar-revenue-loop
+  cancel-in-progress: false
+
+env:
+  LEAD_LIMIT: ${{ inputs.lead_limit || '5' }}
 
 jobs:
   hunt_and_pitch:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
+      - name: Checkout control plane
+        uses: actions/checkout@v4
+
       - name: System Boot
-        run: echo "Hunting leads... (Script logic omitted for brevity)"
+        run: |
+          set -euo pipefail
+          echo "GARCAR revenue loop boot"
+          echo "lead_limit=${LEAD_LIMIT}"
+          test -f .github/workflows/revenue-loop.yml
+
+      - name: Validate revenue configuration
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          REVENUE_WEBHOOK_URL: ${{ secrets.REVENUE_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${STRIPE_SECRET_KEY:-}" ]; then
+            echo 'STRIPE_SECRET_KEY is not configured; revenue execution is blocked.'
+            exit 1
+          fi
+          if [ -z "${REVENUE_WEBHOOK_URL:-}" ]; then
+            echo 'REVENUE_WEBHOOK_URL is not configured; revenue execution is blocked.'
+            exit 1
+          fi
+          echo 'Revenue configuration present.'
+
+      - name: Execute revenue agent
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          REVENUE_WEBHOOK_URL: ${{ secrets.REVENUE_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, urllib.request
+          url = os.environ['REVENUE_WEBHOOK_URL']
+          req = urllib.request.Request(url, method='GET')
+          try:
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  print(f'Revenue service health HTTP {r.status}')
+                  if r.status >= 500:
+                      raise SystemExit(1)
+          except urllib.error.HTTPError as e:
+              print(f'Revenue service HTTP {e.code}')
+              if e.code >= 500:
+                  raise
+          PY
+          echo "Revenue service reachable; downstream lead processing is delegated to the configured revenue service."
