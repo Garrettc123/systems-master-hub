@@ -1,6 +1,8 @@
 name: Master Empire Orchestrator (Zero-Human)
 
 on:
+  push:
+    branches: [main]
   schedule:
     - cron: '0 13,17,21 * * *'
   workflow_dispatch:
