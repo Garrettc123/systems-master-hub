@@ -45,6 +45,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
       - name: Validate infrastructure configuration
         run: |
           set -euo pipefail
@@ -65,6 +68,18 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+      - name: Verify required secrets are configured
+        env:
+          REQUIRED_SECRET_IDS: ${{ secrets.GARCAR_REQUIRED_SECRET_IDS }}
+        run: |
+          set -euo pipefail
+          [[ -n "$REQUIRED_SECRET_IDS" ]] || { echo "GARCAR_REQUIRED_SECRET_IDS is not configured."; exit 1; }
+          while IFS= read -r secret_id; do
+            [[ -z "$secret_id" ]] && continue
+            aws secretsmanager describe-secret --secret-id "$secret_id" --query '{ARN:ARN,RotationEnabled:RotationEnabled}' --output json >/dev/null
+          done <<< "$REQUIRED_SECRET_IDS"
       - name: Terraform init
         working-directory: terraform
         run: terraform init -input=false
@@ -78,6 +93,7 @@ jobs:
         with:
           name: terraform-plan-${{ needs.preflight.outputs.environment }}
           path: terraform/tfplan
+          retention-days: 7
 
   terraform-apply:
     needs: [preflight, terraform-plan]
@@ -111,17 +127,32 @@ jobs:
         with:
           name: terraform-outputs-${{ needs.preflight.outputs.environment }}
           path: terraform/outputs.json
+          retention-days: 7
 
   verification:
-    needs: terraform-apply
+    needs: [preflight, terraform-apply]
     runs-on: ubuntu-latest
+    environment: ${{ needs.preflight.outputs.environment }}
     steps:
       - uses: actions/checkout@v4
-      - name: Production verification
+      - name: Require explicit live health-check contract
+        env:
+          HEALTHCHECK_URLS: ${{ secrets.GARCAR_HEALTHCHECK_URLS }}
         run: |
           set -euo pipefail
-          echo "Infrastructure apply completed. Service-level verification belongs here."
-          # Never report success for an endpoint that has not been explicitly checked.
+          [[ -n "$HEALTHCHECK_URLS" ]] || { echo "GARCAR_HEALTHCHECK_URLS is not configured."; exit 1; }
+          failed=0
+          while IFS= read -r url; do
+            [[ -z "$url" ]] && continue
+            echo "Checking $url"
+            if ! curl --fail --silent --show-error --location --max-time 20 "$url" >/dev/null; then
+              echo "FAILED: $url"
+              failed=1
+            fi
+          done <<< "$HEALTHCHECK_URLS"
+          [[ "$failed" -eq 0 ]]
+      - name: Deployment success marker
+        run: echo "GARCAR ${{ needs.preflight.outputs.environment }} infrastructure and live health verification passed."
 
   failure:
     if: ${{ failure() }}
