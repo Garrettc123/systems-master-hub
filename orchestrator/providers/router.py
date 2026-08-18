@@ -26,17 +26,11 @@ class MultiModelRouter:
     Production behavior changes only when a new genome is promoted.
     """
 
-    def __init(
+    def __init__(
         self,
         providers: Dict[str, BaseProvider],
         policy: Optional[Dict[str, Any]] = None,
     ):
-        self.providers = {k.lower(): v for k, v in providers.items()}
-        self.policy = policy or self.default_policy()
-        self._total_cost_session = 0.0
-
-    # Allow both __init__ spellings during transition
-    def __init__(self, providers: Dict[str, BaseProvider], policy: Optional[Dict[str, Any]] = None):
         self.providers = {k.lower(): v for k, v in (providers or {}).items()}
         self.policy = policy or self.default_policy()
         self._total_cost_session = 0.0
@@ -134,13 +128,12 @@ class MultiModelRouter:
 
         primary = self.providers.get(primary_name)
         if not primary:
-            # degrade: first available provider
             primary = next(iter(self.providers.values()), None)
             primary_name = next(iter(self.providers.keys()), "none")
             if not primary:
                 return self._empty_result(task_type, mode, "No providers registered")
 
-        kwargs = dict(
+        kwargs: Dict[str, Any] = dict(
             system=system,
             max_tokens=max_tokens,
             temperature=temperature,
@@ -190,7 +183,6 @@ class MultiModelRouter:
                         logger.warning("Provider task failed: %s", r)
 
             elif mode == "sequential":
-                # primary first, then secondary can see primary output (simple form)
                 r = await primary.generate(prompt, **kwargs)
                 responses.append(r)
                 if r.ok and secondary_names:
@@ -207,7 +199,7 @@ class MultiModelRouter:
                             sk["model"] = model_overrides[name]
                         r2 = await sec.generate(follow, **sk)
                         responses.append(r2)
-                        break  # one refinement step by default
+                        break
 
             else:
                 responses.append(await primary.generate(prompt, **kwargs))
@@ -268,11 +260,10 @@ class MultiModelRouter:
             json_mode=True,
             max_tokens=512,
         )
-        parsed = {"score": None, "reasons": []}
+        parsed: Dict[str, Any] = {"score": None, "reasons": []}
         chosen = result.get("chosen") or {}
         content = chosen.get("content") or ""
         try:
-            # strip markdown fences if present
             text = content.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[-1]
@@ -296,7 +287,6 @@ class MultiModelRouter:
             return responses[0] if responses else None
         if mode in ("consensus", "majority", "cross") and len(ok) > 1:
             return max(ok, key=lambda r: (r.confidence, -r.cost_usd))
-        # sequential: prefer last successful (refinement)
         if mode == "sequential":
             return ok[-1]
         return ok[0]
@@ -305,7 +295,6 @@ class MultiModelRouter:
         ok = [r for r in responses if r.ok]
         if len(ok) < 2:
             return 0.0
-        # Prefer confidence-weighted fraction of successful responses
         return min(1.0, len(ok) / max(len(responses), 1))
 
     def _empty_result(self, task_type: str, mode: str, error: str) -> Dict[str, Any]:
@@ -344,8 +333,6 @@ def _response_to_dict(r: Optional[ProviderResponse]) -> Optional[Dict[str, Any]]
     }
 
 
-# ─── Factory ──────────────────────────────────────────────────────────────
-
 def build_router_from_env(policy: Optional[Dict[str, Any]] = None) -> MultiModelRouter:
     """
     Construct router with whatever providers have API keys present.
@@ -355,7 +342,6 @@ def build_router_from_env(policy: Optional[Dict[str, Any]] = None) -> MultiModel
 
     providers: Dict[str, BaseProvider] = {}
 
-    # Lazy imports so missing SDKs don't break the worker
     if os.getenv("ANTHROPIC_API_KEY"):
         try:
             from .anthropic_client import AnthropicProvider
@@ -385,6 +371,8 @@ def build_router_from_env(policy: Optional[Dict[str, Any]] = None) -> MultiModel
             logger.warning("Perplexity provider unavailable: %s", e)
 
     if not providers:
-        logger.warning("No LLM providers registered — router will return errors until keys are set")
+        logger.warning(
+            "No LLM providers registered — router will return errors until keys are set"
+        )
 
     return MultiModelRouter(providers, policy=policy)
