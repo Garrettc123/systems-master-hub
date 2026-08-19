@@ -1,0 +1,126 @@
+name: GARCAR Systems Sweep
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: garcar-systems-sweep
+  cancel-in-progress: false
+
+jobs:
+  inventory-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout control plane
+        uses: actions/checkout@v4
+
+      - name: Install validation tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Validate control-plane workflows
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          root = Path('.github/workflows')
+          files = sorted(root.glob('*.yml')) + sorted(root.glob('*.yaml'))
+          bad = []
+          for f in files:
+              try:
+                  data = yaml.safe_load(f.read_text())
+                  if not isinstance(data, dict):
+                      bad.append((str(f), 'not a YAML mapping'))
+              except Exception as e:
+                  bad.append((str(f), str(e)))
+          print(f'Validated {len(files)} workflow files')
+          for item in bad:
+              print('INVALID:', item[0], item[1])
+          if bad:
+              raise SystemExit(1)
+          PY
+
+      - name: Validate repository references
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, urllib.request
+          repos = [
+            'nwu-protocol','autonomous-income-deployment','tree-of-life-system',
+            'enterprise-unified-platform','portfolio-website','ai-business-platform',
+            'APEX-Universal-AI-Operating-System','enterprise-mlops-platform',
+            'stablecoin-protocol','autohelix','quantum-advantage-layer',
+            'enterprise-automation-system','gwc1'
+          ]
+          token = os.environ['GH_TOKEN']
+          missing = []
+          for repo in repos:
+              req = urllib.request.Request(
+                  f'https://api.github.com/repos/Garrettc123/{repo}',
+                  headers={'Authorization': f'Bearer {token}', 'Accept':'application/vnd.github+json'}
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=15) as r:
+                      data = json.load(r)
+                  print(f"OK {repo}: archived={data.get('archived')} disabled={data.get('disabled')} default={data.get('default_branch')}")
+              except Exception as e:
+                  missing.append((repo, str(e)))
+          if missing:
+              print('Repository reference failures:')
+              for repo, err in missing: print(repo, err)
+              raise SystemExit(1)
+          PY
+
+      - name: Detect stale hard-coded infrastructure gates
+        run: |
+          set -euo pipefail
+          if grep -RInE 'garcar-titan\.up\.railway\.app|railway.*health' .github/workflows --exclude='systems-sweep.yml'; then
+            echo 'ERROR: stale hard-coded Railway dependency remains in control-plane workflows.'
+            exit 1
+          fi
+          echo 'No stale hard-coded Railway gate detected.'
+
+      - name: Check repository hygiene
+        run: |
+          set -euo pipefail
+          forbidden=$(grep -RInE '(sk-[A-Za-z0-9_-]{20,}|rk_live_[A-Za-z0-9_-]+|whsec_[A-Za-z0-9_-]+)' . --exclude-dir=.git --exclude='systems-sweep.yml' || true)
+          if [ -n "$forbidden" ]; then
+            echo 'Potential credential material detected in tracked files:'
+            echo "$forbidden"
+            exit 1
+          fi
+          echo 'No obvious live credential patterns detected.'
+
+      - name: Publish machine-readable sweep report
+        if: always()
+        run: |
+          mkdir -p reports
+          {
+            echo '# GARCAR Systems Sweep'
+            echo
+            echo "Commit: $GITHUB_SHA"
+            echo "Run: $GITHUB_RUN_ID"
+            echo
+            echo '## Control Plane'
+            find .github/workflows -maxdepth 1 -type f -printf '%f\n' | sort
+          } > reports/systems-sweep.md
+
+      - name: Upload sweep report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: garcar-systems-sweep-${{ github.run_id }}
+          path: reports/systems-sweep.md

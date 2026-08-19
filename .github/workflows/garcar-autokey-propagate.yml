@@ -1,6 +1,7 @@
 name: Garcar Master Autokey Propagator
-# ONE workflow. ONE run. ALL four repos get ALL secrets.
+# ONE workflow. ONE run. ALL core repos get ALL secrets.
 # Add secrets to systems-master-hub ONLY, then run this.
+# Includes MultiModelRouter keys: Anthropic, OpenAI, Gemini, Perplexity, HubSpot.
 
 on:
   workflow_dispatch:
@@ -47,6 +48,25 @@ jobs:
           fi
           echo "✅ All required secrets present"
 
+      # ── Report multi-model key presence (optional, non-blocking) ─────────
+      - name: Multi-model key status
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+          HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          echo "Multi-model substrate keys:"
+          [ -n "$ANTHROPIC_API_KEY" ]    && echo "  ✓ ANTHROPIC_API_KEY" || echo "  ○ ANTHROPIC_API_KEY (missing)"
+          [ -n "$GEMINI_API_KEY" ]       && echo "  ✓ GEMINI_API_KEY" || echo "  ○ GEMINI_API_KEY (missing)"
+          [ -n "$GOOGLE_API_KEY" ]       && echo "  ✓ GOOGLE_API_KEY" || echo "  ○ GOOGLE_API_KEY (missing)"
+          [ -n "$PERPLEXITY_API_KEY" ]   && echo "  ✓ PERPLEXITY_API_KEY" || echo "  ○ PERPLEXITY_API_KEY (missing)"
+          [ -n "$HUBSPOT_API_KEY" ]      && echo "  ✓ HUBSPOT_API_KEY" || echo "  ○ HUBSPOT_API_KEY (missing)"
+          [ -n "$SUPABASE_SERVICE_KEY" ] && echo "  ✓ SUPABASE_SERVICE_KEY" || echo "  ○ SUPABASE_SERVICE_KEY (missing)"
+          echo "(Missing multi-model keys are non-blocking; providers degrade gracefully)"
+
       # ── Install gh CLI ───────────────────────────────────────────────────
       - name: Install gh CLI
         run: |
@@ -57,7 +77,7 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y gh
           echo "✅ gh CLI ready"
 
-      # ── Push all secrets to all four repos ───────────────────────────────
+      # ── Push all secrets to all core repos ───────────────────────────────
       - name: Propagate secrets to all core repos
         env:
           GHPAT: ${{ secrets.GHPAT }}
@@ -69,6 +89,10 @@ jobs:
           STRIPE_PRICE_AGENCY: ${{ secrets.STRIPE_PRICE_AGENCY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+          HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -92,7 +116,8 @@ jobs:
             fi
           }
 
-          for REPO in garcar-payments garcar-rhns-core atlas-dashboard zeus-dashboard; do
+          # Core commercial + AI stack repos
+          for REPO in garcar-payments garcar-rhns-core atlas-dashboard zeus-dashboard systems-master-hub; do
             echo ""
             echo "━━ $REPO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
@@ -107,11 +132,15 @@ jobs:
             set_secret "$REPO" "STRIPE_PRICE_PRO"      "$STRIPE_PRICE_PRO"
             set_secret "$REPO" "STRIPE_PRICE_AGENCY"   "$STRIPE_PRICE_AGENCY"
 
-            # ── AI Keys ──
+            # ── Multi-model AI keys (MultiModelRouter) ──
             set_secret "$REPO" "OPENAI_API_KEY"        "$OPENAI_API_KEY"
             set_secret "$REPO" "ANTHROPIC_API_KEY"     "$ANTHROPIC_API_KEY"
+            set_secret "$REPO" "GEMINI_API_KEY"        "$GEMINI_API_KEY"
+            set_secret "$REPO" "GOOGLE_API_KEY"        "$GOOGLE_API_KEY"
+            set_secret "$REPO" "PERPLEXITY_API_KEY"    "$PERPLEXITY_API_KEY"
 
-            # ── Supabase / Database ──
+            # ── CRM + Ledger ──
+            set_secret "$REPO" "HUBSPOT_API_KEY"       "$HUBSPOT_API_KEY"
             set_secret "$REPO" "SUPABASE_URL"          "$SUPABASE_URL"
             set_secret "$REPO" "SUPABASE_ANON_KEY"     "$SUPABASE_ANON_KEY"
             set_secret "$REPO" "SUPABASE_SERVICE_KEY"  "$SUPABASE_SERVICE_KEY"
@@ -136,7 +165,7 @@ jobs:
           echo " ✅ ALL SECRETS PROPAGATED TO GARCAR STACK"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      # ── Trigger deploy on all four repos ────────────────────────────────
+      # ── Trigger deploy on core repos ─────────────────────────────────────
       - name: Trigger deploys
         env:
           GHPAT: ${{ secrets.GHPAT }}
@@ -154,10 +183,14 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo " GARCAR AUTOKEY COMPLETE"
           echo ""
-          echo " ✓ garcar-payments   — secrets + deploy triggered"
-          echo " ✓ garcar-rhns-core  — secrets + deploy triggered"
-          echo " ✓ atlas-dashboard   — secrets + deploy triggered"
-          echo " ✓ zeus-dashboard    — secrets + deploy triggered"
+          echo " ✓ garcar-payments     — secrets + deploy"
+          echo " ✓ garcar-rhns-core    — secrets + deploy"
+          echo " ✓ atlas-dashboard     — secrets + deploy"
+          echo " ✓ zeus-dashboard      — secrets + deploy"
+          echo " ✓ systems-master-hub  — multi-model keys"
+          echo ""
+          echo " MultiModelRouter keys propagated:"
+          echo "   OPENAI | ANTHROPIC | GEMINI | PERPLEXITY | HUBSPOT"
           echo ""
           echo " Monitor: https://github.com/Garrettc123"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

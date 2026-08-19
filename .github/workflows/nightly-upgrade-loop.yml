@@ -1,0 +1,69 @@
+name: Nightly Autonomous Upgrade Loop
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  scan-and-upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout systems-master-hub
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install requests pygithub
+
+      - name: Load SYSTEM_REGISTRY.json
+        id: registry
+        run: |
+          python3 - <<'PY'
+          import json
+          with open("SYSTEM_REGISTRY.json") as f:
+              reg = json.load(f)
+          print(f"Loaded {len(reg['systems'])} systems")
+          PY
+
+      - name: Diff last-known state vs current repo activity
+        id: diff
+        run: |
+          python3 scripts/detect_upgrade_targets.py
+
+      - name: Generate upgrade proposal per Tier-1 system
+        run: |
+          python3 scripts/generate_upgrade_pr.py --tier 1
+
+      - name: Open PR with upgrade diff
+        run: |
+          python3 scripts/open_upgrade_pr.py
+
+      - name: Update registry upgrade_history
+        run: |
+          python3 scripts/update_registry_history.py
+
+      - name: Commit registry update
+        run: |
+          git config user.name "garcar-upgrade-bot"
+          git config user.email "bot@garcar.enterprise"
+          git add SYSTEM_REGISTRY.json
+          git commit -m "chore(registry): nightly upgrade cycle $(date -u +%Y-%m-%dT%H:%M:%SZ)" || echo "No changes"
+          git push
+
+  rollback-guard:
+    needs: scan-and-upgrade
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Alert on failed upgrade cycle
+        run: echo "Upgrade cycle failed — no changes applied, previous state preserved. Rule: never repeat, only upgrade or hold."

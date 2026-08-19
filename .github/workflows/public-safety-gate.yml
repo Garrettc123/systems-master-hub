@@ -1,0 +1,67 @@
+name: Garcar Public Safety Gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-safety-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate control-plane policy files
+        run: |
+          set -euo pipefail
+          test -s SECURITY_PUBLIC_RELEASE.md
+          test -s THREAT_MODEL.md
+          test -s SECURITY.md
+          test -s control-plane/garcar-state-schema.json
+          test -s control-plane/systems.json
+
+      - name: Parse control-plane JSON
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          for p in ('control-plane/garcar-state-schema.json','control-plane/systems.json'):
+              with open(p, encoding='utf-8') as f:
+                  json.load(f)
+          print('control-plane JSON valid')
+          PY
+
+      - name: Reconcile
+        run: python control-plane/reconcile.py
+
+      - name: Detect obvious plaintext secret material
+        run: |
+          set -euo pipefail
+          if grep -RInE --exclude-dir=.git --exclude='*.md' \
+            '(AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|ghp_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{20,})' .; then
+            echo 'Potential credential material detected; release blocked.'
+            exit 1
+          fi
+
+      - name: Ensure production registry remains evidence-based
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          d=json.load(open('control-plane/systems.json', encoding='utf-8'))
+          for s in d.get('systems', []):
+              if s.get('production'):
+                  required=('healthcheck','artifact_digest_source','deployment_evidence')
+                  missing=[k for k in required if not s.get(k)]
+                  if missing:
+                      raise SystemExit(f"Production system {s.get('repository')} missing {missing}")
+          print('production evidence contract valid')
+          PY

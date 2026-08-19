@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Garcar Control Plane State",
+  "type": "object",
+  "required": ["version", "systems", "invariants"],
+  "properties": {
+    "version": {"type": "string"},
+    "systems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["repository", "environment", "desired", "observed"],
+        "properties": {
+          "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+          "environment": {"enum": ["dev", "staging", "prod"]},
+          "desired": {"type": "object"},
+          "observed": {"type": "object"},
+          "evidence": {"type": "object"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "invariants": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "systems": [],
+  "invariants": [
+    "production requires explicit evidence",
+    "unknown repositories cannot be deployed",
+    "missing health checks fail closed",
+    "missing deployment evidence fails closed",
+    "secrets are referenced by identifier, never stored as plaintext",
+    "autonomous actions require observable postconditions"
+  ]
+}

@@ -1,369 +1,165 @@
-name: 🚀 FULL STACK AUTO-DEPLOY (All 49 Steps)
+name: GARCAR Full Stack Production Promotion
 
 on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Deployment environment'
+        description: Deployment environment
         required: true
-        default: 'prod'
+        default: staging
         type: choice
-        options:
-          - dev
-          - staging
-          - prod
-      auto_approve:
-        description: 'Auto-approve without manual gate'
+        options: [dev, staging, prod]
+      confirm:
+        description: Type DEPLOY-GARCAR to authorize promotion
         required: true
-        default: true
-        type: boolean
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: garcar-full-stack-${{ inputs.environment }}
+  cancel-in-progress: false
 
 env:
   TF_VERSION: '1.9.5'
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
   PYTHON_VERSION: '3.11'
 
 jobs:
-  #############################################################################
-  # STEP 1-5: Initialize & Validate
-  #############################################################################
-  initialize:
-    name: '1️⃣ Initialize Environment'
+  preflight:
     runs-on: ubuntu-latest
     outputs:
-      timestamp: ${{ steps.timestamp.outputs.timestamp }}
+      environment: ${{ steps.gate.outputs.environment }}
     steps:
       - uses: actions/checkout@v4
-      - id: timestamp
-        run: echo "timestamp=$(date +%Y%m%d_%H%M%S)" >> $GITHUB_OUTPUT
-      - name: Check AWS secrets
-        id: check-aws
-        env:
-          AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      - id: gate
         run: |
-          if [ -z "$AWS_KEY" ]; then
-            echo "⚠️ AWS_ACCESS_KEY_ID not configured — skipping AWS steps"
-            echo "skip_aws=true" >> $GITHUB_OUTPUT
-          else
-            echo "skip_aws=false" >> $GITHUB_OUTPUT
-          fi
-      - name: 'Configure AWS Credentials'
-        if: steps.check-aws.outputs.skip_aws != 'true'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-      - name: 'Setup Terraform'
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-      - name: 'Setup Node.js'
-        uses: actions/setup-node@v4
+          set -euo pipefail
+          [[ "${{ inputs.confirm }}" == "DEPLOY-GARCAR" ]]
+          echo "environment=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - name: 'Setup Python'
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: echo "✅ Environment initialized at ${{ steps.timestamp.outputs.timestamp }}"
-
-  #############################################################################
-  # STEP 6-15: Deploy Workflows to All 13 Repos
-  #############################################################################
-  deploy-workflows:
-    name: '2️⃣ Deploy Workflows (13 Repos)'
-    needs: initialize
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        repo:
-          - nwu-protocol
-          - autonomous-income-deployment
-          - tree-of-life-system
-          - enterprise-unified-platform
-          - portfolio-website
-          - ai-business-platform
-          - APEX-Universal-AI-Operating-System
-          - enterprise-mlops-platform
-          - stablecoin-protocol
-          - autohelix
-          - quantum-advantage-layer
-          - enterprise-automation-system
-          - gwc1
-    steps:
-      - name: "Deploy CI/CD to ${{ matrix.repo }}"
-        run: |
-          git clone https://github.com/Garrettc123/${{ matrix.repo }}.git
-          cd ${{ matrix.repo }}
-          mkdir -p .github/workflows
-          
-          cat > .github/workflows/ci.yml << 'WORKFLOW'
-          name: CI/CD Pipeline
-          on: [push, pull_request]
-          jobs:
-            test:
-              runs-on: ubuntu-latest
-              steps:
-                - uses: actions/checkout@v4
-                - uses: actions/setup-node@v4
-                  with:
-                    node-version: '18'
-                - uses: actions/setup-python@v5
-                  with:
-                    python-version: '3.11'
-                - run: |
-                    if [ -f package.json ]; then npm ci; fi
-                    if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-                - run: |
-                    if [ -f "Makefile" ]; then make test; fi
-                    if [ -f "pytest.ini" ]; then pytest; fi
-                    if [ -f "package.json" ]; then npm test 2>/dev/null || true; fi
-          WORKFLOW
-          
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add .github/workflows/ci.yml
-          git commit -m "🔧 Deploy universal CI/CD workflow" 2>/dev/null || true
-          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/Garrettc123/${{ matrix.repo }}.git main 2>/dev/null || \
-          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/Garrettc123/${{ matrix.repo }}.git master 2>/dev/null || true
-        continue-on-error: true
-
-  #############################################################################
-  # STEP 16-25: Terraform Validation & Security Scans
-  #############################################################################
-  terraform-validate:
-    name: '3️⃣ Terraform Validation & Security'
-    needs: initialize
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
-      - name: 'Terraform Format Check'
-        run: terraform fmt -check -recursive terraform/ || true
-      - name: 'Terraform Validate'
-        run: cd terraform && terraform validate || true
-      - name: 'Security Scan (tfsec)'
-        uses: aquasecurity/tfsec-action@v1
         with:
-          path: terraform/
-        continue-on-error: true
-      - name: 'IaC Scan (Checkov)'
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: terraform/
-          framework: terraform
-        continue-on-error: true
-      - run: echo "✅ All terraform checks passed"
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Validate infrastructure configuration
+        run: |
+          set -euo pipefail
+          test -d terraform
+          terraform fmt -check -recursive terraform/
 
-  #############################################################################
-  # STEP 26-35: Terraform Plan & Cost Estimation
-  #############################################################################
   terraform-plan:
-    name: '4️⃣ Terraform Plan & Cost'
-    needs: [initialize, terraform-validate]
+    needs: preflight
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    environment: ${{ needs.preflight.outputs.environment }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
-      - name: 'Configure AWS'
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Configure AWS using OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
-      - name: 'Terraform Init'
-        run: |
-          cd terraform
-          terraform init -upgrade
-      - name: 'Terraform Plan'
-        id: plan
-        run: |
-          cd terraform
-          terraform plan -var="environment=${{ github.event.inputs.environment }}" -out=tfplan.json
-        continue-on-error: true
-      - name: 'Cost Estimation (Infracost)'
-        if: hashFiles('terraform/**/*.tf') != ''
-        uses: infracost/actions/infracost@latest
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+      - name: Verify required secrets are configured
         env:
-          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+          REQUIRED_SECRET_IDS: ${{ secrets.GARCAR_REQUIRED_SECRET_IDS }}
+        run: |
+          set -euo pipefail
+          [[ -n "$REQUIRED_SECRET_IDS" ]] || { echo "GARCAR_REQUIRED_SECRET_IDS is not configured."; exit 1; }
+          while IFS= read -r secret_id; do
+            [[ -z "$secret_id" ]] && continue
+            aws secretsmanager describe-secret --secret-id "$secret_id" --query '{ARN:ARN,RotationEnabled:RotationEnabled}' --output json >/dev/null
+          done <<< "$REQUIRED_SECRET_IDS"
+      - name: Terraform init
+        working-directory: terraform
+        run: terraform init -input=false
+      - name: Terraform validate
+        working-directory: terraform
+        run: terraform validate
+      - name: Terraform plan
+        working-directory: terraform
+        run: terraform plan -input=false -var="environment=${{ needs.preflight.outputs.environment }}" -out=tfplan
+      - uses: actions/upload-artifact@v4
         with:
-          path: terraform/
-        continue-on-error: true
-      - name: 'Upload Plan Artifact'
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-plan-${{ github.event.inputs.environment }}
-          path: terraform/tfplan.json
-        continue-on-error: true
+          name: terraform-plan-${{ needs.preflight.outputs.environment }}
+          path: terraform/tfplan
+          retention-days: 7
 
-  #############################################################################
-  # STEP 36-40: Approval Gate (Optional)
-  #############################################################################
-  approval-gate:
-    name: '5️⃣ Approval Gate'
-    needs: terraform-plan
-    runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.auto_approve != 'true' }}
-    environment:
-      name: ${{ github.event.inputs.environment }}
-    steps:
-      - run: echo "✅ Manual approval granted for ${{ github.event.inputs.environment }}"
-
-  #############################################################################
-  # STEP 41-45: Terraform Apply
-  #############################################################################
   terraform-apply:
-    name: '6️⃣ Terraform Apply'
-    needs: [terraform-plan, approval-gate]
+    needs: [preflight, terraform-plan]
     runs-on: ubuntu-latest
-    if: always() && (needs.approval-gate.result == 'success' || github.event.inputs.auto_approve == 'true')
+    environment:
+      name: ${{ needs.preflight.outputs.environment }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
-      - name: 'Configure AWS'
-        uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          terraform_version: ${{ env.TF_VERSION }}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
-      - name: 'Terraform Init'
-        run: cd terraform && terraform init -upgrade
-      - name: 'Terraform Apply'
-        run: |
-          cd terraform
-          terraform apply -var="environment=${{ github.event.inputs.environment }}" -auto-approve
-      - name: 'Capture Outputs'
-        id: outputs
-        run: |
-          cd terraform
-          terraform output -json > outputs.json
-          cat outputs.json
-      - name: 'Upload Outputs Artifact'
-        uses: actions/upload-artifact@v4
+      - name: Terraform init
+        working-directory: terraform
+        run: terraform init -input=false
+      - name: Download reviewed plan
+        uses: actions/download-artifact@v4
         with:
-          name: terraform-outputs-${{ github.event.inputs.environment }}
+          name: terraform-plan-${{ needs.preflight.outputs.environment }}
+          path: terraform
+      - name: Apply reviewed plan
+        working-directory: terraform
+        run: terraform apply -input=false tfplan
+      - name: Capture outputs
+        working-directory: terraform
+        run: terraform output -json > outputs.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs-${{ needs.preflight.outputs.environment }}
           path: terraform/outputs.json
-        continue-on-error: true
+          retention-days: 7
 
-  #############################################################################
-  # STEP 46-47: Vercel Function Deployment
-  #############################################################################
-  vercel-deploy:
-    name: '7️⃣ Vercel Functions Deploy'
-    needs: terraform-apply
+  verification:
+    needs: [preflight, terraform-apply]
     runs-on: ubuntu-latest
-    if: always()
+    environment: ${{ needs.preflight.outputs.environment }}
     steps:
       - uses: actions/checkout@v4
-      - name: 'Install Vercel CLI'
-        run: npm install -g vercel
-      - name: 'Deploy to Vercel'
+      - name: Require explicit live health-check contract
+        env:
+          HEALTHCHECK_URLS: ${{ secrets.GARCAR_HEALTHCHECK_URLS }}
         run: |
-          if [ -d "api" ] || [ -d "functions" ]; then
-            vercel --prod --token=${{ secrets.VERCEL_TOKEN }} || true
-          fi
-        continue-on-error: true
+          set -euo pipefail
+          [[ -n "$HEALTHCHECK_URLS" ]] || { echo "GARCAR_HEALTHCHECK_URLS is not configured."; exit 1; }
+          failed=0
+          while IFS= read -r url; do
+            [[ -z "$url" ]] && continue
+            echo "Checking $url"
+            if ! curl --fail --silent --show-error --location --max-time 20 "$url" >/dev/null; then
+              echo "FAILED: $url"
+              failed=1
+            fi
+          done <<< "$HEALTHCHECK_URLS"
+          [[ "$failed" -eq 0 ]]
+      - name: Deployment success marker
+        run: echo "GARCAR ${{ needs.preflight.outputs.environment }} infrastructure and live health verification passed."
 
-  #############################################################################
-  # STEP 48-49: Notifications & Reporting
-  #############################################################################
-  notifications:
-    name: '8️⃣ Notifications & Reporting'
-    needs: [initialize, deploy-workflows, terraform-apply, vercel-deploy]
+  failure:
+    if: ${{ failure() }}
+    needs: [preflight, terraform-plan, terraform-apply, verification]
     runs-on: ubuntu-latest
-    if: always()
     steps:
-      - uses: actions/checkout@v4
-      - name: 'Slack Notification (Success)'
-        if: success()
-        uses: 8398a7/action-slack@v3
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-        with:
-          status: 'success'
-          text: |
-            ✅ FULL STACK DEPLOYMENT COMPLETE
-            Environment: ${{ github.event.inputs.environment }}
-            Repos: 13 ✓
-            Terraform: ✓
-            Vercel: ✓
-            Timestamp: ${{ needs.initialize.outputs.timestamp }}
-          fields: repo,message,commit,author,action,eventName,workflow,job,took
-      - name: 'Slack Notification (Failure)'
-        if: failure()
-        uses: 8398a7/action-slack@v3
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-        with:
-          status: 'failure'
-          text: |
-            🚨 DEPLOYMENT FAILED
-            Environment: ${{ github.event.inputs.environment }}
-            Check: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          fields: repo,message,commit,author,action,eventName,workflow,job
-      - name: 'Generate Deployment Report'
-        run: |
-          cat > deployment-report.md << 'EOF'
-          # 🚀 Full Stack Deployment Report
-          
-          **Timestamp**: ${{ needs.initialize.outputs.timestamp }}
-          **Environment**: ${{ github.event.inputs.environment }}
-          **Status**: ${{ job.status }}
-          
-          ## Deployment Steps
-          - [x] 1-5: Environment Initialization
-          - [x] 6-15: Workflow Deployment (13 repos)
-          - [x] 16-25: Terraform Validation
-          - [x] 26-35: Terraform Planning
-          - [x] 36-40: Approval Gate
-          - [x] 41-45: Terraform Apply
-          - [x] 46-47: Vercel Deployment
-          - [x] 48-49: Notifications
-          
-          ## Artifacts
-          - Terraform Plan: [Download](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          - Outputs: Available in artifacts
-          - Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          
-          **Deployed by**: ${{ github.actor }}
-          **Commit**: ${{ github.sha }}
-          EOF
-      - name: 'Upload Deployment Report'
-        uses: actions/upload-artifact@v4
-        with:
-          name: deployment-report
-          path: deployment-report.md
-
-  #############################################################################
-  # ROLLBACK (On Demand)
-  #############################################################################
-  rollback:
-    name: '🔄 Auto-Rollback (If Failed)'
-    needs: terraform-apply
-    runs-on: ubuntu-latest
-    if: failure()
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-      - name: 'Configure AWS'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-      - name: 'Rollback Terraform'
-        run: |
-          cd terraform
-          terraform init -upgrade
-          terraform destroy -var="environment=${{ github.event.inputs.environment }}" -auto-approve || true
-        continue-on-error: true
-      - name: 'Slack Rollback Alert'
-        uses: 8398a7/action-slack@v3
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-        with:
-          status: 'failure'
-          text: '🔄 ROLLBACK EXECUTED for ${{ github.event.inputs.environment }}'
+      - run: |
+          echo "GARCAR promotion failed. No destructive rollback is executed automatically."
+          echo "Use the documented last-known-good deployment procedure after incident review."
+          exit 1

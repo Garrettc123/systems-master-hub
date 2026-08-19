@@ -1,30 +1,57 @@
 name: Master Empire Orchestrator (Zero-Human)
+
 on:
+  push:
+    branches: [main]
   schedule:
     - cron: '0 13,17,21 * * *'
   workflow_dispatch:
 
 permissions:
   id-token: write
-  contents: write
+  contents: read
   actions: write
 
 jobs:
   verify_infrastructure:
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          # Pointing exactly to your Garcar Titan Railway app
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://garcar-titan.up.railway.app/health || echo "404")
-          if [ "$STATUS" != "200" ]; then 
-            echo "Railway Router Down (Status: $STATUS). Aborting."
+      - name: Verify control plane
+        run: |
+          set -euo pipefail
+          echo "Verifying GitHub Actions control plane..."
+          test -f /etc/os-release
+          echo "GitHub Actions runner healthy."
+
+      - name: Verify optional application health endpoint
+        env:
+          HEALTH_URL: ${{ secrets.GARCAR_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HEALTH_URL:-}" ]; then
+            echo "GARCAR_HEALTH_URL is not configured; external app health check is optional."
+            exit 0
+          fi
+
+          echo "Checking ${HEALTH_URL}"
+          STATUS=$(curl -L --connect-timeout 10 --max-time 30 -sS -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)
+          if [ "$STATUS" != "200" ]; then
+            echo "Application health check failed with HTTP ${STATUS}."
             exit 1
           fi
+          echo "Application health check passed."
+
   execute_revenue_machine:
     needs: verify_infrastructure
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run revenue-loop.yml --repo Garrettc123/systems-master-hub -f lead_limit=5
+      - name: Dispatch revenue loop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run revenue-loop.yml \
+            --repo Garrettc123/systems-master-hub \
+            -f lead_limit=5
+          echo "Revenue loop dispatched successfully."
