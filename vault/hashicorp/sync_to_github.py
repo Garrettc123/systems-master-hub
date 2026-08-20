@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
 """
 Garcar AutoKey — HashiCorp Vault → GitHub Secrets Synchronizer
-
-Reads every key under secret/garcar/* from Vault and pushes them
-into systems-master-hub + commercial repos via `gh secret set`.
-
-This is the only sanctioned path that can *read* secrets and distribute them.
+Reads secret/garcar/* and pushes every present key to commercial repos.
 """
 from __future__ import annotations
 
 import os
 import subprocess
 import sys
-from typing import Dict, List
+from typing import Dict
 
-from client import GarcarVault, build_from_env
+# Support both package and direct execution
+try:
+    from client import GarcarVault, build_from_env
+except ImportError:
+    from vault.hashicorp.client import GarcarVault, build_from_env  # type: ignore
 
-# Canonical secret names (must match vault/.vault.env.template + Autokey)
 CANONICAL_KEYS = [
     "GHPAT",
     "RAILWAY_TOKEN",
@@ -65,7 +64,6 @@ ORG = "Garrettc123"
 
 
 def load_from_vault(vault: GarcarVault) -> Dict[str, str]:
-    """Pull every canonical key that exists in Vault."""
     secrets: Dict[str, str] = {}
     for key in CANONICAL_KEYS:
         val = vault.read_value(key)
@@ -90,7 +88,7 @@ def set_github_secret(repo: str, name: str, value: str, gh_token: str) -> bool:
         )
         return True
     except subprocess.CalledProcessError as e:
-        print(f"  ✗ {name} → {repo}: {e.stderr.strip()}")
+        print(f"  ✗ {name} → {repo}: {(e.stderr or str(e)).strip()}")
         return False
 
 
@@ -99,8 +97,7 @@ def propagate(secrets: Dict[str, str], gh_token: str) -> None:
     for repo in TARGET_REPOS:
         print(f"\n━━ {repo} ━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         for name, value in secrets.items():
-            ok = set_github_secret(repo, name, value, gh_token)
-            if ok:
+            if set_github_secret(repo, name, value, gh_token):
                 print(f"  ✓ {name}")
 
 
@@ -115,7 +112,11 @@ def main() -> int:
         print("No secrets found in Vault under secret/garcar/*")
         return 1
 
-    gh_token = secrets.get("GHPAT") or os.environ.get("GHPAT") or os.environ.get("GH_TOKEN")
+    gh_token = (
+        secrets.get("GHPAT")
+        or os.environ.get("GHPAT")
+        or os.environ.get("GH_TOKEN")
+    )
     if not gh_token:
         print("GHPAT required in Vault (or env) to write GitHub secrets")
         return 1

@@ -6,7 +6,6 @@ Single source of truth for all secrets. GitHub Secrets is the distribution plane
 from __future__ import annotations
 
 import os
-import sys
 from typing import Any, Dict, List, Optional
 
 import hvac
@@ -14,7 +13,7 @@ import requests
 
 
 class GarcarVault:
-    """Minimal production client for HashiCorp Vault KV v2."""
+    """Production client for HashiCorp Vault KV v2 under secret/garcar/*."""
 
     def __init__(
         self,
@@ -60,7 +59,6 @@ class GarcarVault:
         return f"{self.namespace}/{key}".strip("/")
 
     def write(self, key: str, data: Dict[str, Any]) -> None:
-        """Write a secret (KV v2). Creates or updates."""
         self.client.secrets.kv.v2.create_or_update_secret(
             path=self._path(key),
             secret=data,
@@ -68,7 +66,6 @@ class GarcarVault:
         )
 
     def read(self, key: str) -> Dict[str, Any]:
-        """Read latest version of a secret."""
         resp = self.client.secrets.kv.v2.read_secret_version(
             path=self._path(key),
             mount_point=self.mount,
@@ -76,7 +73,6 @@ class GarcarVault:
         return resp["data"]["data"]
 
     def read_value(self, key: str, field: str = "value") -> Optional[str]:
-        """Convenience: read a single field (default 'value')."""
         try:
             data = self.read(key)
             return data.get(field) or data.get(key)
@@ -84,7 +80,6 @@ class GarcarVault:
             return None
 
     def list_keys(self, prefix: str = "") -> List[str]:
-        """List secret keys under namespace/prefix."""
         path = self._path(prefix) if prefix else self.namespace
         try:
             resp = self.client.secrets.kv.v2.list_secrets(
@@ -96,14 +91,12 @@ class GarcarVault:
             return []
 
     def delete(self, key: str) -> None:
-        """Soft-delete latest version (metadata retained)."""
         self.client.secrets.kv.v2.delete_latest_version_of_secret(
             path=self._path(key),
             mount_point=self.mount,
         )
 
     def health(self) -> Dict[str, Any]:
-        """Vault health check."""
         try:
             r = requests.get(f"{self.addr}/v1/sys/health", timeout=5)
             return r.json()
@@ -112,12 +105,10 @@ class GarcarVault:
 
 
 def build_from_env() -> GarcarVault:
-    """Factory used by all Garcar agents and workflows."""
     return GarcarVault()
 
 
 if __name__ == "__main__":
-    # Quick connectivity test
     v = build_from_env()
     print("Vault authenticated:", v.client.is_authenticated())
     print("Health:", v.health())

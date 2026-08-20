@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """
-One-time (or rotation) seeder: local vault/.vault.env → HashiCorp Vault
+Seed HashiCorp Vault from vault/.vault.env
 
-Usage:
-  export VAULT_ADDR=https://vault.example.com:8200
-  export VAULT_TOKEN=hvs....
+  export VAULT_ADDR=...
+  export VAULT_TOKEN=...   # or AppRole
   python vault/hashicorp/seed_from_env.py
 """
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
-from client import build_from_env
+try:
+    from client import build_from_env
+except ImportError:
+    from vault.hashicorp.client import build_from_env  # type: ignore
 
 VAULT_ENV = Path(__file__).resolve().parents[1] / ".vault.env"
 
@@ -21,7 +22,8 @@ VAULT_ENV = Path(__file__).resolve().parents[1] / ".vault.env"
 def load_env_file(path: Path) -> dict[str, str]:
     data: dict[str, str] = {}
     if not path.exists():
-        print(f"Missing {path}. Copy .vault.env.template and fill values.")
+        print(f"Missing {path}")
+        print("Run: cp vault/.vault.env.template vault/.vault.env")
         sys.exit(1)
     for line in path.read_text().splitlines():
         line = line.strip()
@@ -43,7 +45,7 @@ def main() -> int:
         vault.write(key, {"value": value})
         print(f"  ✓ wrote secret/garcar/{key}")
 
-    print("\n✅ Seed complete. Run sync_to_github.py to distribute.")
+    print("\n✅ Seed complete. Next: python vault/hashicorp/sync_to_github.py")
     return 0
 
 

@@ -1,111 +1,111 @@
-# HashiCorp Vault Integration — Garcar Enterprise
+# HashiCorp Vault — Full Implementation (Garcar Enterprise)
 
-**Vault is the single source of truth.**  
-GitHub Actions secrets are only the distribution / runtime plane.
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│              HashiCorp Vault (KV v2)                     │
-│              secret/garcar/*                             │
-│  APOLLO_API_KEY | STRIPE_* | SUPABASE_* | OPENAI_* …     │
-└──────────────────────────┬──────────────────────────────┘
-                           │  vault/hashicorp/sync_to_github.py
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│         systems-master-hub  (GitHub Secrets)             │
-│         + all commercial repos                           │
-└──────────────────────────┬──────────────────────────────┘
-                           │  GitHub Actions runtime
-                           ▼
-              Wealth Loop / Lead Agent / Deploys
-```
+**Vault = source of truth**  
+**GitHub Secrets = runtime distribution plane**  
+**Agents / Wealth Loop = consumers**
 
 ---
 
-## One-Time Activation
-
-### 1. Deploy / point at a Vault cluster
-
-Any of:
-- HashiCorp Cloud Platform (HCP Vault)
-- Self-hosted Vault on Railway / Fly / K8s
-- Existing company Vault
-
-Set these in **systems-master-hub** GitHub secrets:
-
-| Secret | Purpose |
-|--------|---------|
-| `VAULT_ADDR` | e.g. `https://vault.garcar.io:8200` |
-| `VAULT_TOKEN` | Root or high-privilege token (bootstrap only) |
-| *or* `VAULT_ROLE_ID` + `VAULT_SECRET_ID` | Preferred AppRole for CI |
-
-### 2. Enable KV v2 and policy
+## Quick Start (Local Dev — 5 minutes)
 
 ```bash
-export VAULT_ADDR=https://your-vault:8200
-export VAULT_TOKEN=hvs....
+# 1. Start Vault
+docker compose -f docker-compose.vault.yml up -d
 
-vault secrets enable -path=secret kv-v2
-vault policy write garcar-autokey vault/hashicorp/policies/garcar-autokey.hcl
+# 2. Bootstrap policy + AppRole
+export VAULT_ADDR=http://127.0.0.1:8200
+export VAULT_TOKEN=garcar-dev-root-token
+bash vault/hashicorp/bootstrap.sh
+# → prints VAULT_ROLE_ID and VAULT_SECRET_ID
 
-# Optional AppRole for GitHub Actions
-vault auth enable approle
-vault write auth/approle/role/garcar-autokey \
-  token_policies="garcar-autokey" \
-  token_ttl=1h token_max_ttl=4h
-```
-
-### 3. Seed secrets into Vault (one time)
-
-```bash
+# 3. Seed secrets
 cp vault/.vault.env.template vault/.vault.env
-# fill every real value
-
-export VAULT_ADDR=...
-export VAULT_TOKEN=...
+# edit vault/.vault.env with real keys (APOLLO, STRIPE, SUPABASE, …)
 pip install -r vault/hashicorp/requirements.txt
 python vault/hashicorp/seed_from_env.py
-```
 
-Every non-empty key is written to `secret/garcar/<KEY>` with field `value`.
-
-### 4. Sync to GitHub
-
-Manual:
-```bash
+# 4. Distribute to GitHub
+export GHPAT=ghp_your_pat_with_secrets_scope
 python vault/hashicorp/sync_to_github.py
 ```
 
-Or via Actions:
-https://github.com/Garrettc123/systems-master-hub/actions/workflows/garcar-vault-sync.yml  
-→ Run workflow → type `SYNC`
-
-The workflow also runs every 6 hours on schedule.
+Then re-run the Wealth Agent. The `APOLLO_API_KEY` blocker is gone if the key was seeded.
 
 ---
 
-## Day-2 Operations
+## Production Activation
 
-| Action | Command / Location |
-|--------|--------------------|
-| Rotate a key | Update in Vault UI / CLI → next sync pushes it |
-| Add a new key | Write to `secret/garcar/NEW_KEY` → add name to `CANONICAL_KEYS` in `sync_to_github.py` |
-| Audit who read | Vault audit log |
-| Emergency revoke | `vault token revoke` / AppRole secret_id rotate |
+### A. Vault cluster
+Use HCP Vault, self-hosted, or managed. Note `VAULT_ADDR`.
+
+### B. Bootstrap once
+```bash
+export VAULT_ADDR=https://vault.yourdomain.com:8200
+export VAULT_TOKEN=<privileged-token>
+bash vault/hashicorp/bootstrap.sh
+```
+
+### C. GitHub secrets (systems-master-hub only)
+| Secret | Required |
+|--------|----------|
+| `VAULT_ADDR` | Yes |
+| `VAULT_ROLE_ID` | Yes (preferred) |
+| `VAULT_SECRET_ID` | Yes (preferred) |
+| `VAULT_TOKEN` | Bootstrap only |
+| `GHPAT` | Yes (for `gh secret set`) |
+
+### D. Seed production keys
+Same as local: fill `vault/.vault.env` → `seed_from_env.py`
+
+Or write via CLI:
+```bash
+vault kv put secret/garcar/APOLLO_API_KEY value="your-apollo-key"
+vault kv put secret/garcar/STRIPE_SECRET_KEY value="sk_live_..."
+# … every canonical key
+```
+
+### E. Sync on demand or schedule
+Actions → **Garcar Vault → GitHub Sync** → type `SYNC`  
+(or wait for the 6-hour cron)
 
 ---
 
-## Why This Solves the Previous Blocker
+## Canonical Key List (`secret/garcar/<KEY>`)
 
-- GitHub secrets are **write-only** (values cannot be read back).
-- HashiCorp Vault is **read/write** with full audit and versioning.
-- The wealth loop (and every other agent) can now be unblocked by:
-  1. Putting `APOLLO_API_KEY` (and the rest) into Vault once
-  2. Running the Vault → GitHub sync
-  3. Re-triggering the wealth agent
+Revenue-critical:
+- `APOLLO_API_KEY` ← unblocks wealth loop
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_*`
+- `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY`
 
-**Vault holds the truth. Autokey distributes it. Agents consume it.**
+Platform:
+- `GHPAT`, `RAILWAY_TOKEN`, `VERCEL_TOKEN`
+- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `PERPLEXITY_API_KEY`
+- `HUBSPOT_API_KEY`, `LINEAR_API_KEY`, `SLACK_WEBHOOK_URL`
+
+Full list lives in `vault/hashicorp/sync_to_github.py` → `CANONICAL_KEYS`.
+
+---
+
+## File Map
+
+| Path | Role |
+|------|------|
+| `docker-compose.vault.yml` | Local Vault |
+| `vault/hashicorp/bootstrap.sh` | Policy + AppRole |
+| `vault/hashicorp/client.py` | KV v2 client |
+| `vault/hashicorp/seed_from_env.py` | .vault.env → Vault |
+| `vault/hashicorp/sync_to_github.py` | Vault → GitHub secrets |
+| `vault/hashicorp/policies/garcar-autokey.hcl` | Least privilege |
+| `.github/workflows/garcar-vault-sync.yml` | Scheduled + manual sync |
+| `docs/HASHICORP-VAULT.md` | This runbook |
+
+---
+
+## End-to-End: Unblock Revenue
+
+1. Seed `APOLLO_API_KEY` (and friends) into Vault  
+2. Run Vault → GitHub sync  
+3. Trigger `wealth-agent.yml`  
+4. Expect: payment links generated, no more `BLOCKED: missing required secrets`
+
+**Vault holds the truth. Autokey distributes. Agents earn.**
