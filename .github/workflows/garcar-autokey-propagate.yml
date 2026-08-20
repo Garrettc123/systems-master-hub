@@ -1,7 +1,7 @@
 name: Garcar Master Autokey Propagator
 # ONE workflow. ONE run. ALL core repos get ALL secrets.
 # Add secrets to systems-master-hub ONLY, then run this.
-# Includes MultiModelRouter keys: Anthropic, OpenAI, Gemini, Perplexity, HubSpot.
+# Includes MultiModelRouter keys + APOLLO_API_KEY for the wealth loop.
 
 on:
   workflow_dispatch:
@@ -24,6 +24,7 @@ jobs:
           GHPAT: ${{ secrets.GHPAT }}
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
           STRIPE_PRICE_STARTER: ${{ secrets.STRIPE_PRICE_STARTER }}
           STRIPE_PRICE_PRO: ${{ secrets.STRIPE_PRICE_PRO }}
           STRIPE_PRICE_AGENCY: ${{ secrets.STRIPE_PRICE_AGENCY }}
@@ -35,6 +36,7 @@ jobs:
           [ -z "$GHPAT" ]               && MISSING="$MISSING GHPAT"
           [ -z "$RAILWAY_TOKEN" ]        && MISSING="$MISSING RAILWAY_TOKEN"
           [ -z "$STRIPE_SECRET_KEY" ]    && MISSING="$MISSING STRIPE_SECRET_KEY"
+          [ -z "$APOLLO_API_KEY" ]       && MISSING="$MISSING APOLLO_API_KEY"
           [ -z "$STRIPE_PRICE_STARTER" ] && MISSING="$MISSING STRIPE_PRICE_STARTER"
           [ -z "$STRIPE_PRICE_PRO" ]     && MISSING="$MISSING STRIPE_PRICE_PRO"
           [ -z "$STRIPE_PRICE_AGENCY" ]  && MISSING="$MISSING STRIPE_PRICE_AGENCY"
@@ -46,10 +48,10 @@ jobs:
             echo "Add at: https://github.com/Garrettc123/systems-master-hub/settings/secrets/actions"
             exit 1
           fi
-          echo "✅ All required secrets present"
+          echo "✅ All required secrets present (including APOLLO_API_KEY)"
 
-      # ── Report multi-model key presence (optional, non-blocking) ─────────
-      - name: Multi-model key status
+      # ── Report multi-model + revenue key presence ────────────────────────
+      - name: Multi-model + revenue key status
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -57,15 +59,19 @@ jobs:
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
         run: |
-          echo "Multi-model substrate keys:"
-          [ -n "$ANTHROPIC_API_KEY" ]    && echo "  ✓ ANTHROPIC_API_KEY" || echo "  ○ ANTHROPIC_API_KEY (missing)"
-          [ -n "$GEMINI_API_KEY" ]       && echo "  ✓ GEMINI_API_KEY" || echo "  ○ GEMINI_API_KEY (missing)"
-          [ -n "$GOOGLE_API_KEY" ]       && echo "  ✓ GOOGLE_API_KEY" || echo "  ○ GOOGLE_API_KEY (missing)"
-          [ -n "$PERPLEXITY_API_KEY" ]   && echo "  ✓ PERPLEXITY_API_KEY" || echo "  ○ PERPLEXITY_API_KEY (missing)"
-          [ -n "$HUBSPOT_API_KEY" ]      && echo "  ✓ HUBSPOT_API_KEY" || echo "  ○ HUBSPOT_API_KEY (missing)"
-          [ -n "$SUPABASE_SERVICE_KEY" ] && echo "  ✓ SUPABASE_SERVICE_KEY" || echo "  ○ SUPABASE_SERVICE_KEY (missing)"
-          echo "(Missing multi-model keys are non-blocking; providers degrade gracefully)"
+          echo "Revenue + multi-model substrate keys:"
+          [ -n "$APOLLO_API_KEY" ]         && echo "  ✓ APOLLO_API_KEY" || echo "  ○ APOLLO_API_KEY (missing)"
+          [ -n "$STRIPE_WEBHOOK_SECRET" ]  && echo "  ✓ STRIPE_WEBHOOK_SECRET" || echo "  ○ STRIPE_WEBHOOK_SECRET (missing)"
+          [ -n "$ANTHROPIC_API_KEY" ]      && echo "  ✓ ANTHROPIC_API_KEY" || echo "  ○ ANTHROPIC_API_KEY (missing)"
+          [ -n "$GEMINI_API_KEY" ]         && echo "  ✓ GEMINI_API_KEY" || echo "  ○ GEMINI_API_KEY (missing)"
+          [ -n "$GOOGLE_API_KEY" ]         && echo "  ✓ GOOGLE_API_KEY" || echo "  ○ GOOGLE_API_KEY (missing)"
+          [ -n "$PERPLEXITY_API_KEY" ]     && echo "  ✓ PERPLEXITY_API_KEY" || echo "  ○ PERPLEXITY_API_KEY (missing)"
+          [ -n "$HUBSPOT_API_KEY" ]        && echo "  ✓ HUBSPOT_API_KEY" || echo "  ○ HUBSPOT_API_KEY (missing)"
+          [ -n "$SUPABASE_SERVICE_KEY" ]   && echo "  ✓ SUPABASE_SERVICE_KEY" || echo "  ○ SUPABASE_SERVICE_KEY (missing)"
+          echo "(Optional multi-model keys degrade gracefully if missing)"
 
       # ── Install gh CLI ───────────────────────────────────────────────────
       - name: Install gh CLI
@@ -87,6 +93,7 @@ jobs:
           STRIPE_PRICE_STARTER: ${{ secrets.STRIPE_PRICE_STARTER }}
           STRIPE_PRICE_PRO: ${{ secrets.STRIPE_PRICE_PRO }}
           STRIPE_PRICE_AGENCY: ${{ secrets.STRIPE_PRICE_AGENCY }}
+          APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -104,6 +111,7 @@ jobs:
           APP_BASE_URL_RHNS: ${{ secrets.APP_BASE_URL_RHNS }}
           APP_BASE_URL_ATLAS: ${{ secrets.APP_BASE_URL_ATLAS }}
           APP_BASE_URL_ZEUS: ${{ secrets.APP_BASE_URL_ZEUS }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: |
           export GH_TOKEN="$GHPAT"
 
@@ -124,6 +132,7 @@ jobs:
             # ── Infrastructure ──
             set_secret "$REPO" "GHPAT"                "$GHPAT"
             set_secret "$REPO" "RAILWAY_TOKEN"         "$RAILWAY_TOKEN"
+            set_secret "$REPO" "LINEAR_API_KEY"        "$LINEAR_API_KEY"
 
             # ── Stripe ──
             set_secret "$REPO" "STRIPE_SECRET_KEY"     "$STRIPE_SECRET_KEY"
@@ -131,6 +140,9 @@ jobs:
             set_secret "$REPO" "STRIPE_PRICE_STARTER"  "$STRIPE_PRICE_STARTER"
             set_secret "$REPO" "STRIPE_PRICE_PRO"      "$STRIPE_PRICE_PRO"
             set_secret "$REPO" "STRIPE_PRICE_AGENCY"   "$STRIPE_PRICE_AGENCY"
+
+            # ── Revenue Engine (Wealth Loop) ──
+            set_secret "$REPO" "APOLLO_API_KEY"        "$APOLLO_API_KEY"
 
             # ── Multi-model AI keys (MultiModelRouter) ──
             set_secret "$REPO" "OPENAI_API_KEY"        "$OPENAI_API_KEY"
@@ -187,10 +199,12 @@ jobs:
           echo " ✓ garcar-rhns-core    — secrets + deploy"
           echo " ✓ atlas-dashboard     — secrets + deploy"
           echo " ✓ zeus-dashboard      — secrets + deploy"
-          echo " ✓ systems-master-hub  — multi-model keys"
+          echo " ✓ systems-master-hub  — multi-model + APOLLO keys"
           echo ""
+          echo " Revenue Engine keys propagated:"
+          echo "   APOLLO | STRIPE | SUPABASE | HUBSPOT"
           echo " MultiModelRouter keys propagated:"
-          echo "   OPENAI | ANTHROPIC | GEMINI | PERPLEXITY | HUBSPOT"
+          echo "   OPENAI | ANTHROPIC | GEMINI | PERPLEXITY"
           echo ""
           echo " Monitor: https://github.com/Garrettc123"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
