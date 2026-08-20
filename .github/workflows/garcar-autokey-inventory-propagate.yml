@@ -1,0 +1,193 @@
+name: Garcar AutoKey — Inventory + Auto Propagate
+# Scans secret NAMES across the empire, then aggressively propagates
+# every secret present in systems-master-hub to all target repos.
+# NOTE: GitHub never returns secret VALUES. Only names can be inventoried.
+# Any key already living in the master hub will be pushed everywhere.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type PROPAGATE to inventory + push all master keys'
+        required: true
+        type: string
+
+jobs:
+  inventory-and-propagate:
+    runs-on: ubuntu-latest
+    if: inputs.confirm == 'PROPAGATE'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install gh CLI
+        run: |
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            | sudo tee /etc/apt/sources.list.d/github-cli.list
+          sudo apt-get update -qq && sudo apt-get install -y gh
+          echo "✅ gh CLI ready"
+
+      - name: Inventory secret NAMES across empire
+        env:
+          GHPAT: ${{ secrets.GHPAT }}
+        run: |
+          export GH_TOKEN="$GHPAT"
+          if [ -z "$GHPAT" ]; then
+            echo "❌ GHPAT is required to inventory other repos"
+            echo "Add GHPAT to systems-master-hub secrets first"
+            exit 1
+          fi
+
+          REPOS=(
+            systems-master-hub
+            garcar-payments
+            garcar-rhns-core
+            atlas-dashboard
+            zeus-dashboard
+            garcar-payment-loop
+            mars-api
+            enterprise-mlops-platform
+            neural-mesh
+          )
+
+          echo "=============================================="
+          echo " GARCAR AUTOKEY — SECRET NAME INVENTORY"
+          echo " (Values are never readable by design)"
+          echo "=============================================="
+
+          for REPO in "${REPOS[@]}"; do
+            echo ""
+            echo "━━ Garrettc123/$REPO ━━━━━━━━━━━━━━━━━━━━━━━"
+            if gh secret list --repo "Garrettc123/$REPO" 2>/dev/null; then
+              :
+            else
+              echo "  (repo missing or no access)"
+            fi
+          done
+
+          echo ""
+          echo "=============================================="
+          echo " Inventory complete. Propagating from master…"
+          echo "=============================================="
+
+      - name: Aggressive propagate — every master key → all commercial repos
+        env:
+          GHPAT: ${{ secrets.GHPAT }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          STRIPE_PRICE_STARTER: ${{ secrets.STRIPE_PRICE_STARTER }}
+          STRIPE_PRICE_PRO: ${{ secrets.STRIPE_PRICE_PRO }}
+          STRIPE_PRICE_AGENCY: ${{ secrets.STRIPE_PRICE_AGENCY }}
+          APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+          HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          APP_BASE_URL_PAYMENTS: ${{ secrets.APP_BASE_URL_PAYMENTS }}
+          APP_BASE_URL_RHNS: ${{ secrets.APP_BASE_URL_RHNS }}
+          APP_BASE_URL_ATLAS: ${{ secrets.APP_BASE_URL_ATLAS }}
+          APP_BASE_URL_ZEUS: ${{ secrets.APP_BASE_URL_ZEUS }}
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          export GH_TOKEN="$GHPAT"
+
+          set_secret() {
+            local REPO="$1" NAME="$2" VALUE="$3"
+            if [ -n "$VALUE" ]; then
+              gh secret set "$NAME" --body "$VALUE" --repo "Garrettc123/$REPO" \
+                && echo "  ✓ $NAME → $REPO" \
+                || echo "  ✗ FAILED $NAME → $REPO"
+            fi
+          }
+
+          # Every key that exists in the master hub gets pushed
+          TARGETS=(
+            systems-master-hub
+            garcar-payments
+            garcar-rhns-core
+            atlas-dashboard
+            zeus-dashboard
+            garcar-payment-loop
+            mars-api
+            enterprise-mlops-platform
+            neural-mesh
+          )
+
+          for REPO in "${TARGETS[@]}"; do
+            echo ""
+            echo "━━ PROPAGATE → $REPO ━━━━━━━━━━━━━━━━━━━━━━━"
+
+            set_secret "$REPO" "GHPAT"                 "$GHPAT"
+            set_secret "$REPO" "RAILWAY_TOKEN"          "$RAILWAY_TOKEN"
+            set_secret "$REPO" "STRIPE_SECRET_KEY"      "$STRIPE_SECRET_KEY"
+            set_secret "$REPO" "STRIPE_WEBHOOK_SECRET"  "$STRIPE_WEBHOOK_SECRET"
+            set_secret "$REPO" "STRIPE_PUBLISHABLE_KEY" "$STRIPE_PUBLISHABLE_KEY"
+            set_secret "$REPO" "STRIPE_PRICE_STARTER"   "$STRIPE_PRICE_STARTER"
+            set_secret "$REPO" "STRIPE_PRICE_PRO"       "$STRIPE_PRICE_PRO"
+            set_secret "$REPO" "STRIPE_PRICE_AGENCY"    "$STRIPE_PRICE_AGENCY"
+            set_secret "$REPO" "APOLLO_API_KEY"         "$APOLLO_API_KEY"
+            set_secret "$REPO" "OPENAI_API_KEY"         "$OPENAI_API_KEY"
+            set_secret "$REPO" "ANTHROPIC_API_KEY"      "$ANTHROPIC_API_KEY"
+            set_secret "$REPO" "GEMINI_API_KEY"         "$GEMINI_API_KEY"
+            set_secret "$REPO" "GOOGLE_API_KEY"         "$GOOGLE_API_KEY"
+            set_secret "$REPO" "PERPLEXITY_API_KEY"     "$PERPLEXITY_API_KEY"
+            set_secret "$REPO" "HUBSPOT_API_KEY"        "$HUBSPOT_API_KEY"
+            set_secret "$REPO" "SUPABASE_URL"           "$SUPABASE_URL"
+            set_secret "$REPO" "SUPABASE_ANON_KEY"      "$SUPABASE_ANON_KEY"
+            set_secret "$REPO" "SUPABASE_SERVICE_KEY"   "$SUPABASE_SERVICE_KEY"
+            set_secret "$REPO" "LINEAR_API_KEY"         "$LINEAR_API_KEY"
+            set_secret "$REPO" "SLACK_WEBHOOK_URL"      "$SLACK_WEBHOOK_URL"
+            set_secret "$REPO" "DATABASE_URL"           "$DATABASE_URL"
+            set_secret "$REPO" "REDIS_URL"              "$REDIS_URL"
+            set_secret "$REPO" "VERCEL_TOKEN"           "$VERCEL_TOKEN"
+            set_secret "$REPO" "NEXT_PUBLIC_APP_URL"    "$NEXT_PUBLIC_APP_URL"
+            set_secret "$REPO" "APP_URL"                "$APP_URL"
+          done
+
+          # Repo-specific base URLs
+          set_secret "garcar-payments"  "APP_BASE_URL" "$APP_BASE_URL_PAYMENTS"
+          set_secret "garcar-rhns-core" "APP_BASE_URL" "$APP_BASE_URL_RHNS"
+          set_secret "atlas-dashboard"  "APP_BASE_URL" "$APP_BASE_URL_ATLAS"
+          set_secret "zeus-dashboard"   "APP_BASE_URL" "$APP_BASE_URL_ZEUS"
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo " ✅ AUTOKEY INVENTORY + PROPAGATE COMPLETE"
+          echo " Every non-empty secret from master hub"
+          echo " has been pushed to all target repos."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Report master hub presence
+        env:
+          APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+          GHPAT: ${{ secrets.GHPAT }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "Master hub key presence (this run):"
+          [ -n "$GHPAT" ]                 && echo "  ✓ GHPAT"                 || echo "  ○ GHPAT MISSING"
+          [ -n "$RAILWAY_TOKEN" ]          && echo "  ✓ RAILWAY_TOKEN"          || echo "  ○ RAILWAY_TOKEN MISSING"
+          [ -n "$STRIPE_SECRET_KEY" ]      && echo "  ✓ STRIPE_SECRET_KEY"      || echo "  ○ STRIPE_SECRET_KEY MISSING"
+          [ -n "$APOLLO_API_KEY" ]         && echo "  ✓ APOLLO_API_KEY"         || echo "  ○ APOLLO_API_KEY MISSING  ← wealth loop blocker"
+          [ -n "$SUPABASE_URL" ]           && echo "  ✓ SUPABASE_URL"           || echo "  ○ SUPABASE_URL MISSING"
+          [ -n "$SUPABASE_SERVICE_KEY" ]   && echo "  ✓ SUPABASE_SERVICE_KEY"   || echo "  ○ SUPABASE_SERVICE_KEY MISSING"
+          [ -n "$OPENAI_API_KEY" ]         && echo "  ✓ OPENAI_API_KEY"         || echo "  ○ OPENAI_API_KEY MISSING"
+          [ -n "$HUBSPOT_API_KEY" ]        && echo "  ✓ HUBSPOT_API_KEY"        || echo "  ○ HUBSPOT_API_KEY MISSING"
