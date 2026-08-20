@@ -1,0 +1,51 @@
+name: Garcar Vault → GitHub Sync
+# Pulls secrets from HashiCorp Vault and pushes them into all commercial repos.
+# Vault is the single source of truth. GitHub Secrets are the runtime distribution layer.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # every 6 hours
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type SYNC to pull from Vault and propagate'
+        required: true
+        type: string
+
+jobs:
+  vault-sync:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || inputs.confirm == 'SYNC'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r vault/hashicorp/requirements.txt
+          # gh is pre-installed on GitHub-hosted runners
+
+      - name: Sync Vault → GitHub
+        env:
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+          VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
+          VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+          GHPAT: ${{ secrets.GHPAT }}
+        run: |
+          if [ -z "$VAULT_ADDR" ]; then
+            echo "❌ VAULT_ADDR not set in systems-master-hub secrets"
+            echo "Add VAULT_ADDR + (VAULT_TOKEN or VAULT_ROLE_ID/VAULT_SECRET_ID)"
+            exit 1
+          fi
+          cd vault/hashicorp
+          python sync_to_github.py
+
+      - name: Summary
+        run: |
+          echo "✅ Vault sync finished"
+          echo "All keys present in HashiCorp Vault under secret/garcar/*"
+          echo "have been pushed to the commercial GitHub repos."
