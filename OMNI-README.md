@@ -56,6 +56,7 @@ make omni
 - **Parallel execution** - Builds and starts services concurrently
 - **Health monitoring** - Verifies all services are operational
 - **Comprehensive logging** - Detailed logs for troubleshooting
+- **Core fallback mode** - If private app images/contexts are unavailable, auto-starts monitoring + data backbone services
 
 ### 📊 Monitoring & Observability
 - **Prometheus** - Metrics collection and alerting
@@ -186,6 +187,8 @@ ls -lt logs/*.md | head -1 | xargs cat
 ## Troubleshooting
 
 ### Services won't start
+If private application images or build contexts are unavailable, omnibus automatically falls back to core infrastructure services (`prometheus`, `grafana`, `elasticsearch`, `kibana`, `jaeger`, `postgres`, `redis`) and continues.
+
 ```bash
 # Check Docker daemon
 docker info

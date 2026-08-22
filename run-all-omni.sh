@@ -77,7 +77,7 @@ log "\n${MAGENTA}═══ PHASE 1: Pre-flight Checks ═══${NC}"
 
 # Check for required tools
 info "Checking required tools..."
-REQUIRED_TOOLS=("docker" "docker compose" "git" "make")
+REQUIRED_TOOLS=("docker" "git" "make")
 MISSING_TOOLS=()
 
 for tool in "${REQUIRED_TOOLS[@]}"; do
@@ -88,6 +88,19 @@ for tool in "${REQUIRED_TOOLS[@]}"; do
         MISSING_TOOLS+=("$tool")
     fi
 done
+
+# Detect Docker Compose command (v2 plugin or v1 standalone)
+DOCKER_COMPOSE_CMD=()
+if docker compose version &> /dev/null; then
+    DOCKER_COMPOSE_CMD=("docker" "compose")
+    success "docker compose installed (v2)"
+elif command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE_CMD=("docker-compose")
+    success "docker-compose installed (v1)"
+else
+    error "docker compose not found (need docker compose or docker-compose)"
+    MISSING_TOOLS+=("docker compose")
+fi
 
 if [ ${#MISSING_TOOLS[@]} -gt 0 ]; then
     error "Missing required tools: ${MISSING_TOOLS[*]}"
@@ -159,8 +172,12 @@ log "\n${MAGENTA}═══ PHASE 4: Build Docker Images ═══${NC}"
 
 info "Building all Docker images..."
 if [ -f docker-compose.yml ]; then
-    docker compose build --parallel 2>&1 | tee -a "$LOG_FILE" || warn "Some images failed to build"
-    success "Docker images built"
+    "${DOCKER_COMPOSE_CMD[@]}" build --parallel 2>&1 | tee -a "$LOG_FILE"
+    if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+        warn "Some images failed to build"
+    else
+        success "Docker images built"
+    fi
 else
     warn "No docker compose.yml found, skipping Docker build"
 fi
@@ -207,8 +224,19 @@ log "\n${MAGENTA}═══ PHASE 6: Launch All Services ═══${NC}"
 
 info "Starting all services with docker compose..."
 if [ -f docker-compose.yml ]; then
-    docker compose up -d 2>&1 | tee -a "$LOG_FILE" || error "Failed to start some services"
-    success "Services launched"
+    "${DOCKER_COMPOSE_CMD[@]}" up -d 2>&1 | tee -a "$LOG_FILE"
+    if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+        warn "Full service launch failed, attempting core infrastructure fallback..."
+        CORE_SERVICES=(prometheus grafana elasticsearch kibana jaeger postgres redis)
+        "${DOCKER_COMPOSE_CMD[@]}" up -d "${CORE_SERVICES[@]}" 2>&1 | tee -a "$LOG_FILE"
+        if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+            error "Failed to start core fallback services"
+            exit 1
+        fi
+        warn "Started core fallback services only: ${CORE_SERVICES[*]}"
+    else
+        success "Services launched"
+    fi
 
     # Wait for services to be healthy
     info "Waiting for services to be healthy (30s)..."
@@ -216,7 +244,7 @@ if [ -f docker-compose.yml ]; then
 
     # Check service status
     info "Checking service status..."
-    docker compose ps | tee -a "$LOG_FILE"
+    "${DOCKER_COMPOSE_CMD[@]}" ps | tee -a "$LOG_FILE"
 else
     warn "No docker compose.yml found, skipping service launch"
 fi
@@ -275,8 +303,8 @@ check_endpoint() {
 
 # Check Docker services
 info "Checking Docker service health..."
-RUNNING_SERVICES=$(docker compose ps --services --filter "status=running" 2>/dev/null | wc -l)
-TOTAL_SERVICES=$(docker compose ps --services 2>/dev/null | wc -l)
+RUNNING_SERVICES=$("${DOCKER_COMPOSE_CMD[@]}" ps --services --filter "status=running" 2>/dev/null | wc -l)
+TOTAL_SERVICES=$("${DOCKER_COMPOSE_CMD[@]}" ps --services 2>/dev/null | wc -l)
 
 if [ "$TOTAL_SERVICES" -gt 0 ]; then
     log "Services running: $RUNNING_SERVICES/$TOTAL_SERVICES"
