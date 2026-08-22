@@ -459,7 +459,7 @@ cat > 12-documentation/SYSTEM-OVERVIEW.md <<EOF
 # Enterprise AI Ecosystem - System Overview
 
 ## 🎯 Mission
-Revolutionary $102M+ AI enterprise stack combining:
+Revolutionary \$102M+ AI enterprise stack combining:
 - Meta-level infrastructure design
 - Apple-grade user experience
 - Tesla-scale automation
@@ -468,7 +468,7 @@ Revolutionary $102M+ AI enterprise stack combining:
 ## 📊 Portfolio Metrics
 - **Total Repositories:** 93
 - **Production Systems:** 45+
-- **Revenue Potential:** $102M+ (3-year)
+- **Revenue Potential:** \$102M+ (3-year)
 - **Uptime SLA:** 99.99%
 - **Global Scale:** Multi-region, multi-cloud
 
@@ -499,11 +499,11 @@ Revolutionary $102M+ AI enterprise stack combining:
 ✅ Multi-region failover  
 
 ## 📈 Revenue Streams
-1. AI Ops Studio: $50K-500K ARR
-2. Process Copilot: $100K-1M ARR
-3. Enterprise MLOps: $200K-2M ARR
-4. AUTOHELIX: $1M-10M ARR
-5. NWU Protocol: $500K-5M ARR
+1. AI Ops Studio: \$50K-500K ARR
+2. Process Copilot: \$100K-1M ARR
+3. Enterprise MLOps: \$200K-2M ARR
+4. AUTOHELIX: \$1M-10M ARR
+5. NWU Protocol: \$500K-5M ARR
 
 **Last Updated:** $(date)
 EOF
@@ -560,7 +560,7 @@ echo "   • Process Copilot  "
 echo "   • Enterprise MLOps"
 echo "   • AUTOHELIX"
 echo ""
-echo "📈 Total Portfolio Value: $102M+"
+echo "📈 Total Portfolio Value: \$102M+"
 echo "⚡ Deployment Time: <5 minutes"
 echo "🎯 Status: ENTERPRISE READY"
 echo ""

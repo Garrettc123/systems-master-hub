@@ -9,7 +9,7 @@ set -e
 
 echo "🌟 AUTOHELIX Initialization Starting..."
 echo "Budget Mode: ZERO-COST (Free Tier Maximization)"
-echo "Target Revenue: $100/year minimum"
+echo "Target Revenue: \$100/year minimum"
 echo ""
 
 # Configuration

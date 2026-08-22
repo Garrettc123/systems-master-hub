@@ -66,4 +66,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Alert on failed upgrade cycle
-        run: echo "Upgrade cycle failed — no changes applied, previous state preserved. Rule: never repeat, only upgrade or hold."
+        run: 'echo "Upgrade cycle failed - no changes applied, previous state preserved. Rule: never repeat, only upgrade or hold."'

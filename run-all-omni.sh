@@ -158,7 +158,7 @@ fi
 log "\n${MAGENTA}═══ PHASE 4: Build Docker Images ═══${NC}"
 
 info "Building all Docker images..."
-if [ -f docker compose.yml ]; then
+if [ -f docker-compose.yml ]; then
     docker compose build --parallel 2>&1 | tee -a "$LOG_FILE" || warn "Some images failed to build"
     success "Docker images built"
 else
@@ -206,7 +206,7 @@ success "Monitoring configuration created"
 log "\n${MAGENTA}═══ PHASE 6: Launch All Services ═══${NC}"
 
 info "Starting all services with docker compose..."
-if [ -f docker compose.yml ]; then
+if [ -f docker-compose.yml ]; then
     docker compose up -d 2>&1 | tee -a "$LOG_FILE" || error "Failed to start some services"
     success "Services launched"
 
