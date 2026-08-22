@@ -121,31 +121,17 @@ preflight_repo_access() {
   if [[ "$status" != "200" ]]; then
     local message
     message="$(extract_api_message "$response_file")"
+    if [[ "$message" == "No API error payload." ]]; then
+      log "PREFLIGHT WARN: ${repo} / ${workflow} check unavailable (HTTP ${status}); continuing to dispatch attempt."
+      rm -f "$response_file"
+      return 0
+    fi
     log "PREFLIGHT FAILED: ${repo} / ${workflow} (HTTP ${status}): ${message}"
     rm -f "$response_file"
     return 1
   fi
 
   rm -f "$response_file"
-  return 0
-}
-
-preflight_auth() {
-  local response_file
-  response_file="$(mktemp)"
-
-  local status
-  status="$(api_get_status "${API_BASE}/user" "$response_file")"
-  if [[ "$status" != "200" ]]; then
-    local message
-    message="$(extract_api_message "$response_file")"
-    log "AUTH FAILED: token cannot access GitHub API user endpoint (HTTP ${status}): ${message}"
-    rm -f "$response_file"
-    return 1
-  fi
-
-  rm -f "$response_file"
-  log "Preflight auth OK"
   return 0
 }
 
@@ -195,10 +181,6 @@ deploy_repo() {
 
 PASS=0
 FAIL=0
-
-if [[ "$DRY_RUN" == "false" && "$SKIP_PREFLIGHT" != "true" ]]; then
-  preflight_auth || exit 1
-fi
 
 if [[ -n "$SPECIFIC_REPO" ]]; then
   if [[ -z "${REPO_WORKFLOWS[$SPECIFIC_REPO]+x}" ]]; then
