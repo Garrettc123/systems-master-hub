@@ -2,18 +2,16 @@
 Keyless Providers
 =================
 Thin facades that materialize secrets only for the exact call that needs them.
-Never hold long-lived clients that embed secrets in their constructor if avoidable.
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from resolver import KeylessError, get_resolver
+from .resolver import KeylessError, get_resolver
 
 
 def stripe_client():
-    """Returns a configured stripe module for the duration of the call."""
     import stripe
     resolver = get_resolver()
     key = resolver.get("STRIPE_SECRET_KEY", required=True)
@@ -22,7 +20,6 @@ def stripe_client():
 
 
 def verify_stripe_webhook(payload: bytes, sig_header: str) -> None:
-    """Signature check using keyless secret. Raises on failure."""
     resolver = get_resolver()
     secret = resolver.get("STRIPE_WEBHOOK_SECRET", required=True)
     import hashlib
@@ -53,7 +50,6 @@ def verify_stripe_webhook(payload: bytes, sig_header: str) -> None:
 
 
 def supabase_headers() -> Dict[str, str]:
-    """Short-lived headers for a single REST call."""
     r = get_resolver()
     url = r.get("SUPABASE_URL", required=True)
     key = r.get("SUPABASE_SERVICE_KEY", required=True)
@@ -95,7 +91,6 @@ def apollo_key() -> Optional[str]:
 
 
 def health() -> Dict[str, Any]:
-    """Key presence without values — safe for status endpoints."""
     r = get_resolver()
     return {
         "revenue_ready": all(
