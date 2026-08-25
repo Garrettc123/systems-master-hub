@@ -40,7 +40,7 @@ jobs:
 
       - name: Validate all required secrets
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GHPAT || secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           ARGS=""
           if [ -n "${{ github.event.inputs.target_repo }}" ]; then
@@ -50,7 +50,7 @@ jobs:
 
       - name: Post validation matrix to summary
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GHPAT || secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           echo "## 🔐 AutoKey Secret Validation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -72,6 +72,10 @@ jobs:
       - name: Notify Slack on failure
         if: failure()
         run: |
+          if [ -z "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            echo "SLACK_WEBHOOK_URL not set; skip notify"
+            exit 0
+          fi
           curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
             -H 'Content-type: application/json' \
             --data '{
