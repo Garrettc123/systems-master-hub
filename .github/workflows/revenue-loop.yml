@@ -40,22 +40,30 @@ jobs:
           test -f .github/workflows/revenue-loop.yml
 
       - name: Validate revenue configuration
+        id: config
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           REVENUE_WEBHOOK_URL: ${{ secrets.REVENUE_WEBHOOK_URL }}
         run: |
           set -euo pipefail
+          READY=true
           if [ -z "${STRIPE_SECRET_KEY:-}" ]; then
-            echo 'STRIPE_SECRET_KEY is not configured; revenue execution is blocked.'
-            exit 1
+            echo 'STRIPE_SECRET_KEY is not configured; revenue execution will skip.'
+            READY=false
           fi
           if [ -z "${REVENUE_WEBHOOK_URL:-}" ]; then
-            echo 'REVENUE_WEBHOOK_URL is not configured; revenue execution is blocked.'
-            exit 1
+            echo 'REVENUE_WEBHOOK_URL is not configured; revenue execution will skip.'
+            READY=false
           fi
-          echo 'Revenue configuration present.'
+          echo "ready=$READY" >> "$GITHUB_OUTPUT"
+          if [ "$READY" = true ]; then
+            echo 'Revenue configuration present.'
+          else
+            echo 'Revenue loop soft-skipped (secrets not provisioned).'
+          fi
 
       - name: Execute revenue agent
+        if: steps.config.outputs.ready == 'true'
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           REVENUE_WEBHOOK_URL: ${{ secrets.REVENUE_WEBHOOK_URL }}
@@ -76,3 +84,9 @@ jobs:
                   raise
           PY
           echo "Revenue service reachable; downstream lead processing is delegated to the configured revenue service."
+
+      - name: Soft-skip notice
+        if: steps.config.outputs.ready != 'true'
+        run: |
+          echo "Revenue loop completed in soft-skip mode."
+          echo "Provision STRIPE_SECRET_KEY and REVENUE_WEBHOOK_URL to enable live execution."
