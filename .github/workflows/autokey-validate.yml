@@ -71,14 +71,17 @@ jobs:
 
       - name: Notify Slack on failure
         if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+          if [ -z "${SLACK_WEBHOOK_URL}" ]; then
             echo "SLACK_WEBHOOK_URL not set; skip notify"
             exit 0
           fi
-          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+          ACTIONS_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions"
+          curl -s -X POST "${SLACK_WEBHOOK_URL}" \
             -H 'Content-type: application/json' \
             --data '{
-              "text": "🚨 *AutoKey Validation FAILED*\n• One or more required secrets are MISSING\n• Time: '"$(date -u)"'\n• Action needed: Run bash vault/vault-setup.sh\n• Run: <https://github.com/Garrettc123/systems-master-hub/actions|View Logs>"
+              "text": "🚨 *AutoKey Validation FAILED*\n• One or more required secrets are MISSING\n• Time: '"$(date -u)"'\n• Action needed: Run bash vault/vault-setup.sh\n• Run: <'"${ACTIONS_URL}"'|View Logs>"
             }'
         continue-on-error: true
