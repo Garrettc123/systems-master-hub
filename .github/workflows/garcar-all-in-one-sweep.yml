@@ -1,4 +1,4 @@
-name: 🚀 GARCAR ALL-IN-ONE SWEEP
+name: GARCAR All-In-One Sweep
 
 on:
   workflow_dispatch:
@@ -13,22 +13,22 @@ on:
       - 'SWEEP-MANIFEST.md'
       - 'orchestrate/**'
   schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours autonomous sweep
+    - cron: '0 */6 * * *'
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
 
 jobs:
-
-  # ─────────────────────────────────────────────
-  # STAGE 1: PARALLEL REPO DISPATCHES
-  # ─────────────────────────────────────────────
-
   dispatch-garcar-payments:
-    name: 💳 Trigger garcar-payments
+    name: Trigger garcar-payments
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deploy to garcar-payments
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             try {
               await github.rest.repos.createDispatchEvent({
@@ -37,19 +37,19 @@ jobs:
                 event_type: 'garcar-sweep',
                 client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
-              console.log('✅ garcar-payments dispatched');
+              console.log('garcar-payments dispatched');
             } catch(e) {
-              console.log('⚠️ garcar-payments dispatch:', e.message);
+              console.log('garcar-payments dispatch:', e.message);
             }
 
   dispatch-garcar-payment-loop:
-    name: 🔄 Trigger garcar-payment-loop
+    name: Trigger garcar-payment-loop
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch to garcar-payment-loop
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             try {
               await github.rest.repos.createDispatchEvent({
@@ -58,19 +58,19 @@ jobs:
                 event_type: 'garcar-sweep',
                 client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
-              console.log('✅ garcar-payment-loop dispatched');
+              console.log('garcar-payment-loop dispatched');
             } catch(e) {
-              console.log('⚠️ garcar-payment-loop dispatch:', e.message);
+              console.log('garcar-payment-loop dispatch:', e.message);
             }
 
   dispatch-titan:
-    name: 🏆 Trigger TITAN
+    name: Trigger TITAN
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deploy to TITAN
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             try {
               await github.rest.repos.createDispatchEvent({
@@ -79,19 +79,19 @@ jobs:
                 event_type: 'garcar-sweep',
                 client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
-              console.log('✅ TITAN dispatched');
+              console.log('TITAN dispatched');
             } catch(e) {
-              console.log('⚠️ TITAN dispatch:', e.message);
+              console.log('TITAN dispatch:', e.message);
             }
 
   dispatch-mlops:
-    name: 🧠 Trigger enterprise-mlops-platform
+    name: Trigger enterprise-mlops-platform
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch deploy to enterprise-mlops-platform
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             try {
               await github.rest.repos.createDispatchEvent({
@@ -100,19 +100,19 @@ jobs:
                 event_type: 'garcar-sweep',
                 client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
-              console.log('✅ enterprise-mlops-platform dispatched');
+              console.log('enterprise-mlops-platform dispatched');
             } catch(e) {
-              console.log('⚠️ enterprise-mlops-platform dispatch:', e.message);
+              console.log('enterprise-mlops-platform dispatch:', e.message);
             }
 
   dispatch-atlas:
-    name: 📊 Trigger atlas-dashboard
+    name: Trigger atlas-dashboard
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch to atlas-dashboard
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             try {
               await github.rest.repos.createDispatchEvent({
@@ -121,19 +121,19 @@ jobs:
                 event_type: 'garcar-sweep',
                 client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
-              console.log('✅ atlas-dashboard dispatched');
+              console.log('atlas-dashboard dispatched');
             } catch(e) {
-              console.log('⚠️ atlas-dashboard dispatch:', e.message);
+              console.log('atlas-dashboard dispatch:', e.message);
             }
 
   dispatch-zeus:
-    name: ⚡ Trigger zeus-dashboard
+    name: Trigger zeus-dashboard
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch to zeus-dashboard
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             try {
               await github.rest.repos.createDispatchEvent({
@@ -142,59 +142,13 @@ jobs:
                 event_type: 'garcar-sweep',
                 client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
               });
-              console.log('✅ zeus-dashboard dispatched');
+              console.log('zeus-dashboard dispatched');
             } catch(e) {
-              console.log('⚠️ zeus-dashboard dispatch:', e.message);
+              console.log('zeus-dashboard dispatch:', e.message);
             }
-
-  dispatch-mars-api:
-    name: 🚀 Trigger mars-api
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dispatch to mars-api
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            try {
-              await github.rest.repos.createDispatchEvent({
-                owner: 'Garrettc123',
-                repo: 'mars-api',
-                event_type: 'garcar-sweep',
-                client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
-              });
-              console.log('✅ mars-api dispatched');
-            } catch(e) {
-              console.log('⚠️ mars-api dispatch:', e.message);
-            }
-
-  dispatch-neural-mesh:
-    name: 🔗 Trigger neural-mesh
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dispatch to neural-mesh
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            try {
-              await github.rest.repos.createDispatchEvent({
-                owner: 'Garrettc123',
-                repo: 'neural-mesh',
-                event_type: 'garcar-sweep',
-                client_payload: { mode: '${{ github.event.inputs.mode || "full" }}', triggered_by: 'systems-master-hub', timestamp: new Date().toISOString() }
-              });
-              console.log('✅ neural-mesh dispatched');
-            } catch(e) {
-              console.log('⚠️ neural-mesh dispatch:', e.message);
-            }
-
-  # ─────────────────────────────────────────────
-  # STAGE 2: HEALTH VERIFICATION (waits for all dispatches)
-  # ─────────────────────────────────────────────
 
   health-check:
-    name: 🏥 Empire Health Check
+    name: Empire Health Check
     runs-on: ubuntu-latest
     needs:
       - dispatch-garcar-payments
@@ -203,30 +157,25 @@ jobs:
       - dispatch-mlops
       - dispatch-atlas
       - dispatch-zeus
-      - dispatch-mars-api
-      - dispatch-neural-mesh
     steps:
       - uses: actions/checkout@v4
 
-      - name: Wait 30s for downstream workflows to start
-        run: sleep 30
+      - name: Wait for downstream workflows
+        run: sleep 15
 
-      - name: Check GitHub Actions status on all repos
+      - name: Check GitHub Actions status on core repos
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const repos = [
               'garcar-payments',
-              'garcar-payment-loop',
               'TITAN-Autonomous-Business-Empire',
               'enterprise-mlops-platform',
               'atlas-dashboard',
-              'zeus-dashboard',
-              'mars-api',
-              'neural-mesh'
+              'zeus-dashboard'
             ];
-            let report = '# 🚀 GARCAR SWEEP REPORT\n';
+            let report = '# GARCAR SWEEP REPORT\n';
             report += `**Timestamp:** ${new Date().toISOString()}\n`;
             report += `**Mode:** ${{ github.event.inputs.mode || 'full' }}\n\n`;
             report += '| Repo | Last Run | Status |\n|------|----------|--------|\n';
@@ -242,7 +191,7 @@ jobs:
                 const time = run ? run.updated_at : 'N/A';
                 report += `| ${repo} | ${time} | ${status} |\n`;
               } catch(e) {
-                report += `| ${repo} | N/A | ⚠️ ${e.message} |\n`;
+                report += `| ${repo} | N/A | ${e.message} |\n`;
               }
             }
             console.log(report);
@@ -256,25 +205,22 @@ jobs:
           path: SWEEP_REPORT.md
           retention-days: 30
 
-  # ─────────────────────────────────────────────
-  # STAGE 3: SWEEP SUMMARY TO GITHUB ISSUE
-  # ─────────────────────────────────────────────
-
   sweep-ledger:
-    name: 📒 Write Sweep Ledger
+    name: Write Sweep Ledger
     runs-on: ubuntu-latest
     needs: [health-check]
     if: always()
     steps:
       - name: Create sweep ledger issue
         uses: actions/github-script@v7
+        continue-on-error: true
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const now = new Date().toISOString();
             const mode = '${{ github.event.inputs.mode || "full" }}';
             const body = [
-              '## 🚀 Garcar Enterprise — All-In-One Sweep Ledger',
+              '## Garcar Enterprise — All-In-One Sweep Ledger',
               '',
               `**Sweep Time:** ${now}`,
               `**Mode:** ${mode}`,
@@ -282,40 +228,23 @@ jobs:
               `**Run ID:** ${{ github.run_id }}`,
               '',
               '### Systems Dispatched',
-              '- ✅ garcar-payments',
-              '- ✅ garcar-payment-loop (Stripe → gc_ledger)',
-              '- ✅ TITAN-Autonomous-Business-Empire',
-              '- ✅ enterprise-mlops-platform',
-              '- ✅ atlas-dashboard (lead pipeline + revenue analytics)',
-              '- ✅ zeus-dashboard (RHNS cognitive control)',
-              '- ✅ mars-api',
-              '- ✅ neural-mesh (self-healing CI/CD)',
+              '- garcar-payments',
+              '- garcar-payment-loop',
+              '- TITAN-Autonomous-Business-Empire',
+              '- enterprise-mlops-platform',
+              '- atlas-dashboard',
+              '- zeus-dashboard',
               '',
-              '### Flow Confirmed',
-              '```',
-              'Stripe → garcar-payment-loop → gc_ledger',
-              '         ↓',
-              '   garcar-payments (billing)',
-              '         ↓',
-              '   atlas-dashboard (analytics)',
-              '         ↑',
-              '   mars-api + enterprise-mlops-platform (products)',
-              '         ↑',
-              '   TITAN (orchestration)',
-              '         ↑',
-              '   zeus-dashboard + garcar-rhns-core (control)',
-              '         ↑',
-              '   neural-mesh (CI/CD self-heal)',
-              '```',
-              '',
-              '> Auto-generated by systems-master-hub garcar-all-in-one-sweep.yml',
-              `> Close this issue when all downstream runs show \`completed/success\`.`
+              '> Auto-generated by systems-master-hub'
             ].join('\n');
-            await github.rest.issues.create({
-              owner: 'Garrettc123',
-              repo: 'systems-master-hub',
-              title: `🚀 Garcar Sweep — ${now.split('T')[0]} — ${mode}`,
-              body: body,
-              labels: []
-            });
-            console.log('✅ Sweep ledger issue created in systems-master-hub');
+            try {
+              await github.rest.issues.create({
+                owner: 'Garrettc123',
+                repo: 'systems-master-hub',
+                title: `Garcar Sweep — ${now.split('T')[0]} — ${mode}`,
+                body: body
+              });
+              console.log('Sweep ledger issue created');
+            } catch (e) {
+              console.log('Issue create skipped:', e.message);
+            }
