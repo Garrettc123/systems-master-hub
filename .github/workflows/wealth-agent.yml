@@ -5,6 +5,9 @@ on:
     - cron: '0 */6 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   run-agent:
     runs-on: ubuntu-latest
@@ -16,10 +19,34 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install stripe requests httpx
+          fi
+
+      - name: Check secrets
+        id: secrets
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+        run: |
+          if [ -z "${STRIPE_SECRET_KEY:-}" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "STRIPE_SECRET_KEY missing — soft-skip wealth agent"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run Wealth Loop Agent
-        run: python agents/wealth_loop.py
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          if [ -f agents/wealth_loop.py ]; then
+            python agents/wealth_loop.py
+          else
+            echo "agents/wealth_loop.py not found"
+            exit 1
+          fi
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
@@ -27,8 +54,10 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
 
-      - name: Post status to Linear
+      - name: Soft-skip notice
+        if: steps.secrets.outputs.ready != 'true'
+        run: echo "Wealth agent completed in soft-skip mode (secrets not provisioned)."
+
+      - name: Post status
         if: always()
-        run: |
-          echo "Wealth agent run complete at $(date)" 
-          # Linear comment posted via agent itself
+        run: echo "Wealth agent run complete at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
