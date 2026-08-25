@@ -41,13 +41,15 @@ jobs:
       - name: Install deps
         run: pip install -r vault/hashicorp/requirements.txt
 
-      - name: Detect Vault
+      - name: Detect Vault + PAT
         id: vault
         env:
           VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
           VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
           VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
           VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+          GHPAT: ${{ secrets.GHPAT }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           set -euo pipefail
           READY=false
@@ -56,10 +58,14 @@ jobs:
               READY=true
             fi
           fi
+          HAS_PAT=false
+          if [ -n "${GHPAT:-}" ] || [ -n "${PAT_TOKEN:-}" ]; then
+            HAS_PAT=true
+          fi
           echo "ready=$READY" >> "$GITHUB_OUTPUT"
-          echo "Vault ready=$READY"
+          echo "has_pat=$HAS_PAT" >> "$GITHUB_OUTPUT"
+          echo "Vault ready=$READY has_pat=$HAS_PAT"
 
-      # ── Path A: Vault configured — never touch secret values by hand ──
       - name: Zero-touch orchestrator (Vault path)
         if: steps.vault.outputs.ready == 'true' && github.event.inputs.mode != 'github_only'
         env:
@@ -71,8 +77,6 @@ jobs:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GHPAT }}
           GH_TOKEN: ${{ secrets.GHPAT || secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_ORG: Garrettc123
-          # Inject every known plane secret so ingest can lift them into Vault
-          # without anyone editing .vault.env
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
@@ -115,12 +119,11 @@ jobs:
             *) python zero_touch.py full ;;
           esac
 
-      # ── Path B: No Vault — still never hand-edit; auto-generate internals ──
       - name: GitHub-only internal ensure (no Vault)
         if: steps.vault.outputs.ready != 'true' || github.event.inputs.mode == 'github_only'
         env:
-          GHPAT: ${{ secrets.GHPAT || secrets.PAT_TOKEN }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GHPAT }}
+          GHPAT: ${{ secrets.GHPAT }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
           GH_TOKEN: ${{ secrets.GHPAT || secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_ORG: Garrettc123
         working-directory: vault/hashicorp
@@ -130,5 +133,8 @@ jobs:
         run: |
           echo "Zero-touch secret plane finished."
           echo "Vault ready: ${{ steps.vault.outputs.ready }}"
+          echo "Has GHPAT: ${{ steps.vault.outputs.has_pat }}"
           echo "Mode: ${{ github.event.inputs.mode || 'schedule/full' }}"
-          echo "You do not need to edit secret values in git or .vault.env for ongoing ops."
+          if [ "${{ steps.vault.outputs.ready }}" != "true" ] && [ "${{ steps.vault.outputs.has_pat }}" != "true" ]; then
+            echo "::notice::Bootstrap once: add GHPAT (secrets:write) and optionally VAULT_* — then re-run full. No ongoing secret edits required after that."
+          fi
