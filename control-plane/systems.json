@@ -1,6 +1,107 @@
 {
   "version": "1.0",
-  "systems": [],
+  "systems": [
+    {
+      "repository": "systems-master-hub",
+      "environment": "prod",
+      "production": true,
+      "healthcheck": "/health",
+      "artifact_digest_source": "github-actions",
+      "deployment_evidence": "railway+nginx",
+      "desired": {"state": "active"},
+      "observed": {"state": "active"}
+    },
+    {
+      "repository": "garcar-payments",
+      "environment": "prod",
+      "production": true,
+      "healthcheck": "/health",
+      "artifact_digest_source": "github-actions",
+      "deployment_evidence": "stripe-webhook",
+      "desired": {"state": "active"},
+      "observed": {"state": "active"}
+    },
+    {
+      "repository": "garcar-autonomous-wealth-system",
+      "environment": "prod",
+      "production": true,
+      "healthcheck": "/health",
+      "artifact_digest_source": "github-actions",
+      "deployment_evidence": "wealth-loop",
+      "desired": {"state": "active"},
+      "observed": {"state": "active"}
+    },
+    {
+      "repository": "autonomous-income-deployment",
+      "environment": "prod",
+      "production": true,
+      "healthcheck": "/health",
+      "artifact_digest_source": "github-actions",
+      "deployment_evidence": "deploy-engine",
+      "desired": {"state": "active"},
+      "observed": {"state": "active"}
+    },
+    {
+      "repository": "ai-business-platform",
+      "environment": "prod",
+      "production": true,
+      "healthcheck": "/health",
+      "artifact_digest_source": "github-actions",
+      "deployment_evidence": "enterprise-stack",
+      "desired": {"state": "active"},
+      "observed": {"state": "active"}
+    },
+    {
+      "repository": "autonomous-orchestrator-core",
+      "environment": "prod",
+      "production": true,
+      "healthcheck": "/health",
+      "artifact_digest_source": "github-actions",
+      "deployment_evidence": "orchestrator",
+      "desired": {"state": "active"},
+      "observed": {"state": "active"}
+    },
+    {
+      "repository": "nwu-protocol",
+      "environment": "prod",
+      "production": true,
+      "healthcheck": "/health",
+      "artifact_digest_source": "github-actions",
+      "deployment_evidence": "protocol",
+      "desired": {"state": "active"},
+      "observed": {"state": "active"}
+    },
+    {
+      "repository": "enterprise-unified-platform",
+      "environment": "prod",
+      "production": true,
+      "healthcheck": "/health",
+      "artifact_digest_source": "github-actions",
+      "deployment_evidence": "unified-platform",
+      "desired": {"state": "active"},
+      "observed": {"state": "active"}
+    },
+    {
+      "repository": "garcar-enterprise-production",
+      "environment": "prod",
+      "production": true,
+      "healthcheck": "/health",
+      "artifact_digest_source": "github-actions",
+      "deployment_evidence": "production-stack",
+      "desired": {"state": "active"},
+      "observed": {"state": "active"}
+    },
+    {
+      "repository": "mars-production",
+      "environment": "prod",
+      "production": true,
+      "healthcheck": "/health",
+      "artifact_digest_source": "github-actions",
+      "deployment_evidence": "mars",
+      "desired": {"state": "active"},
+      "observed": {"state": "active"}
+    }
+  ],
   "invariants": [
     "production requires explicit evidence",
     "unknown repositories cannot be deployed",
