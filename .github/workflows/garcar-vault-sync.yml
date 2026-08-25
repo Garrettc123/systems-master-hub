@@ -2,21 +2,32 @@ name: Garcar Vault GitHub Sync
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
+    # Every 6 hours — keep GitHub distribution plane aligned with Vault
+    - cron: '17 */6 * * *'
   workflow_dispatch:
     inputs:
-      confirm:
-        description: 'Type SYNC to pull from Vault and propagate'
+      mode:
+        description: 'sync | rotate_and_sync | dry_run'
         required: true
-        type: string
+        default: 'sync'
+        type: choice
+        options:
+          - sync
+          - rotate_and_sync
+          - dry_run
 
 permissions:
   contents: read
 
+concurrency:
+  group: garcar-vault-sync
+  cancel-in-progress: false
+
 jobs:
-  vault-sync:
+  vault-e2e:
+    name: Vault → GitHub (zero-touch)
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || inputs.confirm == 'SYNC'
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -24,49 +35,68 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install vault client deps
+        run: pip install -r vault/hashicorp/requirements.txt
+
       - name: Check Vault credentials
         id: vault
         env:
           VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+          VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
+          VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
         run: |
+          set -euo pipefail
           if [ -z "${VAULT_ADDR:-}" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "VAULT_ADDR not set — soft-skip vault sync"
-            echo "Add VAULT_ADDR + (VAULT_TOKEN or VAULT_ROLE_ID/VAULT_SECRET_ID)"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "VAULT_ADDR not set — soft-skip (bootstrap Vault first)"
+            exit 0
           fi
-
-      - name: Install dependencies
-        if: steps.vault.outputs.ready == 'true'
-        run: |
-          if [ -f vault/hashicorp/requirements.txt ]; then
-            pip install -r vault/hashicorp/requirements.txt
-          else
-            pip install hvac requests
+          if [ -z "${VAULT_TOKEN:-}" ] && { [ -z "${VAULT_ROLE_ID:-}" ] || [ -z "${VAULT_SECRET_ID:-}" ]; }; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Need VAULT_TOKEN or VAULT_ROLE_ID+VAULT_SECRET_ID"
+            exit 0
           fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
 
-      - name: Sync Vault to GitHub
+      - name: Health check Vault
         if: steps.vault.outputs.ready == 'true'
         env:
           VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
           VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
           VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
           VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
-          GHPAT: ${{ secrets.GHPAT }}
-        run: |
-          set -euo pipefail
-          if [ ! -f vault/hashicorp/sync_to_github.py ]; then
-            echo "sync_to_github.py missing; soft-skip"
-            exit 0
-          fi
-          cd vault/hashicorp
-          python sync_to_github.py
+        working-directory: vault/hashicorp
+        run: python client.py
+
+      - name: Rotate internal secrets
+        if: steps.vault.outputs.ready == 'true' && (github.event.inputs.mode == 'rotate_and_sync' || github.event_name == 'schedule')
+        env:
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+          VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
+          VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+        working-directory: vault/hashicorp
+        run: python rotate_internal.py
+
+      - name: Sync Vault → GitHub (all repos / all keys)
+        if: steps.vault.outputs.ready == 'true'
+        env:
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+          VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
+          VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+          GHPAT: ${{ secrets.GHPAT || secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GHPAT || secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.mode == 'dry_run' && '1' || '0' }}
+          GITHUB_ORG: Garrettc123
+        working-directory: vault/hashicorp
+        run: python sync_to_github.py
 
       - name: Summary
         run: |
           if [ "${{ steps.vault.outputs.ready }}" = "true" ]; then
-            echo "Vault sync finished"
+            echo "Vault E2E finished mode=${{ github.event.inputs.mode || 'schedule' }}"
           else
-            echo "Vault sync soft-skipped (credentials not provisioned)"
+            echo "Vault E2E soft-skipped — set VAULT_ADDR + AppRole (or token) once, then re-run."
           fi
