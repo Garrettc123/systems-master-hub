@@ -25,8 +25,8 @@ class GarcarVault:
         namespace: str = "garcar",
     ):
         self.addr = (addr or os.environ.get("VAULT_ADDR") or "").rstrip("/")
-        self.mount = mount
-        self.namespace = namespace.rstrip("/")
+        self.mount = mount or os.environ.get("VAULT_MOUNT", "secret")
+        self.namespace = (namespace or os.environ.get("VAULT_NAMESPACE", "garcar")).rstrip("/")
         self._token = token or os.environ.get("VAULT_TOKEN")
         self.role_id = role_id or os.environ.get("VAULT_ROLE_ID")
         self.secret_id = secret_id or os.environ.get("VAULT_SECRET_ID")
@@ -65,6 +65,10 @@ class GarcarVault:
             mount_point=self.mount,
         )
 
+    def write_value(self, key: str, value: str, **extra: Any) -> None:
+        payload = {"value": value, **extra}
+        self.write(key, payload)
+
     def read(self, key: str) -> Dict[str, Any]:
         resp = self.client.secrets.kv.v2.read_secret_version(
             path=self._path(key),
@@ -75,18 +79,22 @@ class GarcarVault:
     def read_value(self, key: str, field: str = "value") -> Optional[str]:
         try:
             data = self.read(key)
-            return data.get(field) or data.get(key)
+            if field in data:
+                return data.get(field)
+            # tolerate flat maps where the only key is the secret name
+            if len(data) == 1:
+                return next(iter(data.values()))
+            return data.get(field)
         except Exception:
             return None
 
-    def list_keys(self, prefix: str = "") -> List[str]:
-        path = self._path(prefix) if prefix else self.namespace
+    def list_keys(self) -> List[str]:
         try:
             resp = self.client.secrets.kv.v2.list_secrets(
-                path=path,
+                path=self.namespace,
                 mount_point=self.mount,
             )
-            return resp.get("data", {}).get("keys", [])
+            return list(resp.get("data", {}).get("keys", []) or [])
         except Exception:
             return []
 
@@ -102,6 +110,16 @@ class GarcarVault:
             return r.json()
         except Exception as e:
             return {"error": str(e)}
+
+    def read_all(self) -> Dict[str, str]:
+        """Return {SECRET_NAME: value} for every key under namespace."""
+        out: Dict[str, str] = {}
+        for key in self.list_keys():
+            key = key.rstrip("/")
+            val = self.read_value(key)
+            if val is not None and str(val).strip() != "":
+                out[key] = str(val)
+        return out
 
 
 def build_from_env() -> GarcarVault:
