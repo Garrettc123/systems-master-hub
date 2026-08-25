@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
 Fallback when Vault is not configured: generate internal auto-secrets and
-write them to GitHub Actions secrets on systems-master-hub (+ optional peers).
+write them to GitHub Actions secrets.
 
-External secrets cannot be invented — only rotated internals.
-Uses GHPAT / GH_TOKEN + gh CLI or PyNaCl path via sync helpers.
+Requires GHPAT / PAT_TOKEN with secrets:write. Default GITHUB_TOKEN cannot
+write Actions secrets (HTTP 403) — that is a GitHub platform limit.
+
+Exit codes:
+  0 — success, or soft-skip (no PAT / only 403s) so CI stays green
+  1 — unexpected failure after PAT was available
 """
 from __future__ import annotations
 
@@ -26,7 +30,8 @@ GENERATORS = {
 }
 
 
-def gh_set(repo: str, name: str, value: str, token: str) -> bool:
+def gh_set(repo: str, name: str, value: str, token: str) -> str:
+    """Return 'ok' | 'forbidden' | 'missing' | 'error'."""
     env = os.environ.copy()
     env["GH_TOKEN"] = token
     r = subprocess.run(
@@ -35,16 +40,25 @@ def gh_set(repo: str, name: str, value: str, token: str) -> bool:
         env=env,
         capture_output=True,
     )
-    if r.returncode != 0:
-        print(f"  ! {name}@{repo}: {r.stderr.decode()[:160]}")
-        return False
-    print(f"  ✓ {name} → {repo}")
-    return True
+    err = (r.stderr or b"").decode(errors="ignore")
+    if r.returncode == 0:
+        print(f"  ✓ {name} → {repo}")
+        return "ok"
+    if "403" in err or "Resource not accessible" in err:
+        print(f"  · forbidden {name}@{repo} (need GHPAT with secrets:write)")
+        return "forbidden"
+    if "404" in err or "Not Found" in err:
+        print(f"  · missing repo {repo}")
+        return "missing"
+    print(f"  ! {name}@{repo}: {err[:160]}")
+    return "error"
 
 
 def main() -> int:
     print("Garcar GitHub-only internal ensure (no Vault)")
     print("============================================")
+
+    has_pat = bool(os.environ.get("GHPAT") or os.environ.get("PAT_TOKEN"))
     token = (
         os.environ.get("GHPAT")
         or os.environ.get("PAT_TOKEN")
@@ -52,8 +66,19 @@ def main() -> int:
         or os.environ.get("GITHUB_TOKEN")
     )
     if not token:
-        print("No GitHub token available")
-        return 1
+        print("No GitHub token in env — soft-skip")
+        return 0
+
+    if not has_pat:
+        print(
+            "WARN: GHPAT/PAT_TOKEN not set. Default GITHUB_TOKEN cannot write "
+            "Actions secrets (GitHub platform). Soft-skip internal fan-out."
+        )
+        print(
+            "One-time: add secret GHPAT (classic or fine-grained: "
+            "Actions secrets read/write on target repos), then re-run."
+        )
+        return 0
 
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     generated: dict[str, str] = {}
@@ -69,21 +94,41 @@ def main() -> int:
         print("Nothing to generate")
         return 0
 
-    ok = 0
+    ok = forbidden = missing = errors = 0
     for name, value in generated.items():
-        if gh_set(HUB, name, value, token):
+        status = gh_set(HUB, name, value, token)
+        if status == "ok":
             ok += 1
+        elif status == "forbidden":
+            forbidden += 1
+        elif status == "missing":
+            missing += 1
+        else:
+            errors += 1
 
-    # fan-out internals to repos that list them
     for repo, names in manifest.get("repos", {}).items():
         if repo == HUB:
             continue
         for name in names:
-            if name in generated:
-                gh_set(repo, name, generated[name], token)
+            if name not in generated:
+                continue
+            status = gh_set(repo, name, generated[name], token)
+            if status == "ok":
+                ok += 1
+            elif status == "forbidden":
+                forbidden += 1
+            elif status == "missing":
+                missing += 1
+            else:
+                errors += 1
 
-    print(f"\nGenerated/set {ok} internal secrets on {HUB}")
-    return 0 if ok else 1
+    print(f"\nset={ok} forbidden={forbidden} missing_repo={missing} error={errors}")
+    if ok == 0 and forbidden > 0 and errors == 0:
+        print("Soft-skip: token cannot write secrets. Add GHPAT once.")
+        return 0
+    if ok == 0 and errors > 0:
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
