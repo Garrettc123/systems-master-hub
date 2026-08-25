@@ -2,19 +2,22 @@ name: Garcar Vault GitHub Sync
 
 on:
   schedule:
-    # Every 6 hours — keep GitHub distribution plane aligned with Vault
     - cron: '17 */6 * * *'
   workflow_dispatch:
     inputs:
       mode:
-        description: 'sync | rotate_and_sync | dry_run'
+        description: 'full | ingest | ensure | sync | rotate | dry_run | github_only'
         required: true
-        default: 'sync'
+        default: 'full'
         type: choice
         options:
+          - full
+          - ingest
+          - ensure
           - sync
-          - rotate_and_sync
+          - rotate
           - dry_run
+          - github_only
 
 permissions:
   contents: read
@@ -24,8 +27,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  vault-e2e:
-    name: Vault → GitHub (zero-touch)
+  zero-touch:
+    name: Zero-touch secret plane
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -35,10 +38,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install vault client deps
+      - name: Install deps
         run: pip install -r vault/hashicorp/requirements.txt
 
-      - name: Check Vault credentials
+      - name: Detect Vault
         id: vault
         env:
           VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
@@ -47,56 +50,85 @@ jobs:
           VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
         run: |
           set -euo pipefail
-          if [ -z "${VAULT_ADDR:-}" ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "VAULT_ADDR not set — soft-skip (bootstrap Vault first)"
-            exit 0
+          READY=false
+          if [ -n "${VAULT_ADDR:-}" ]; then
+            if [ -n "${VAULT_TOKEN:-}" ] || { [ -n "${VAULT_ROLE_ID:-}" ] && [ -n "${VAULT_SECRET_ID:-}" ]; }; then
+              READY=true
+            fi
           fi
-          if [ -z "${VAULT_TOKEN:-}" ] && { [ -z "${VAULT_ROLE_ID:-}" ] || [ -z "${VAULT_SECRET_ID:-}" ]; }; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "Need VAULT_TOKEN or VAULT_ROLE_ID+VAULT_SECRET_ID"
-            exit 0
-          fi
-          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "ready=$READY" >> "$GITHUB_OUTPUT"
+          echo "Vault ready=$READY"
 
-      - name: Health check Vault
-        if: steps.vault.outputs.ready == 'true'
-        env:
-          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
-          VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
-          VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
-        working-directory: vault/hashicorp
-        run: python client.py
-
-      - name: Rotate internal secrets
-        if: steps.vault.outputs.ready == 'true' && (github.event.inputs.mode == 'rotate_and_sync' || github.event_name == 'schedule')
-        env:
-          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
-          VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
-          VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
-        working-directory: vault/hashicorp
-        run: python rotate_internal.py
-
-      - name: Sync Vault → GitHub (all repos / all keys)
-        if: steps.vault.outputs.ready == 'true'
+      # ── Path A: Vault configured — never touch secret values by hand ──
+      - name: Zero-touch orchestrator (Vault path)
+        if: steps.vault.outputs.ready == 'true' && github.event.inputs.mode != 'github_only'
         env:
           VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
           VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
           VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
           VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
           GHPAT: ${{ secrets.GHPAT || secrets.PAT_TOKEN }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GHPAT }}
           GH_TOKEN: ${{ secrets.GHPAT || secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
-          DRY_RUN: ${{ github.event.inputs.mode == 'dry_run' && '1' || '0' }}
+          GITHUB_ORG: Garrettc123
+          # Inject every known plane secret so ingest can lift them into Vault
+          # without anyone editing .vault.env
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          STRIPE_PRICE_STARTER: ${{ secrets.STRIPE_PRICE_STARTER }}
+          STRIPE_PRICE_PRO: ${{ secrets.STRIPE_PRICE_PRO }}
+          STRIPE_PRICE_AGENCY: ${{ secrets.STRIPE_PRICE_AGENCY }}
+          REVENUE_WEBHOOK_URL: ${{ secrets.REVENUE_WEBHOOK_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          APP_URL: ${{ secrets.APP_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+          HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          PIXEL10_SSH_KEY: ${{ secrets.PIXEL10_SSH_KEY }}
+          PIXEL10_IP: ${{ secrets.PIXEL10_IP }}
+          PIXEL10_SSH_PORT: ${{ secrets.PIXEL10_SSH_PORT }}
+          ZERO_TOUCH_MODE: ${{ github.event.inputs.mode || 'full' }}
+        working-directory: vault/hashicorp
+        run: |
+          MODE="${ZERO_TOUCH_MODE:-full}"
+          case "$MODE" in
+            dry_run) python zero_touch.py dry_run ;;
+            sync) python zero_touch.py sync ;;
+            rotate) python zero_touch.py rotate ;;
+            ensure) python zero_touch.py ensure ;;
+            ingest) python zero_touch.py ingest ;;
+            *) python zero_touch.py full ;;
+          esac
+
+      # ── Path B: No Vault — still never hand-edit; auto-generate internals ──
+      - name: GitHub-only internal ensure (no Vault)
+        if: steps.vault.outputs.ready != 'true' || github.event.inputs.mode == 'github_only'
+        env:
+          GHPAT: ${{ secrets.GHPAT || secrets.PAT_TOKEN }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GHPAT }}
+          GH_TOKEN: ${{ secrets.GHPAT || secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_ORG: Garrettc123
         working-directory: vault/hashicorp
-        run: python sync_to_github.py
+        run: python ensure_github_only.py
 
       - name: Summary
         run: |
-          if [ "${{ steps.vault.outputs.ready }}" = "true" ]; then
-            echo "Vault E2E finished mode=${{ github.event.inputs.mode || 'schedule' }}"
-          else
-            echo "Vault E2E soft-skipped — set VAULT_ADDR + AppRole (or token) once, then re-run."
-          fi
+          echo "Zero-touch secret plane finished."
+          echo "Vault ready: ${{ steps.vault.outputs.ready }}"
+          echo "Mode: ${{ github.event.inputs.mode || 'schedule/full' }}"
+          echo "You do not need to edit secret values in git or .vault.env for ongoing ops."
