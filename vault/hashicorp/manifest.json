@@ -1,0 +1,104 @@
+{
+  "version": "2.0.0",
+  "namespace": "garcar",
+  "mount": "secret",
+  "description": "Single source of truth. Vault holds values; GitHub Secrets is distribution only.",
+  "secrets": {
+    "GHPAT": { "plane": "orchestration", "internal": false, "rotate": "manual" },
+    "GITHUB_TOKEN": { "plane": "orchestration", "internal": true, "rotate": "auto", "generator": "github_pat_placeholder" },
+    "LINEAR_API_KEY": { "plane": "orchestration", "internal": false, "rotate": "manual" },
+    "SLACK_WEBHOOK_URL": { "plane": "orchestration", "internal": false, "rotate": "manual" },
+    "APOLLO_API_KEY": { "plane": "revenue", "internal": false, "rotate": "manual" },
+    "STRIPE_SECRET_KEY": { "plane": "revenue", "internal": false, "rotate": "manual" },
+    "STRIPE_WEBHOOK_SECRET": { "plane": "revenue", "internal": false, "rotate": "manual" },
+    "STRIPE_PUBLISHABLE_KEY": { "plane": "revenue", "internal": false, "rotate": "manual" },
+    "STRIPE_PRICE_STARTER": { "plane": "revenue", "internal": false, "rotate": "manual" },
+    "STRIPE_PRICE_PRO": { "plane": "revenue", "internal": false, "rotate": "manual" },
+    "STRIPE_PRICE_AGENCY": { "plane": "revenue", "internal": false, "rotate": "manual" },
+    "REVENUE_WEBHOOK_URL": { "plane": "revenue", "internal": false, "rotate": "manual" },
+    "SUPABASE_URL": { "plane": "app", "internal": false, "rotate": "manual" },
+    "SUPABASE_ANON_KEY": { "plane": "app", "internal": false, "rotate": "manual" },
+    "SUPABASE_SERVICE_KEY": { "plane": "app", "internal": false, "rotate": "manual" },
+    "SUPABASE_KEY": { "plane": "app", "internal": false, "rotate": "manual", "alias_of": "SUPABASE_SERVICE_KEY" },
+    "DATABASE_URL": { "plane": "app", "internal": false, "rotate": "manual" },
+    "REDIS_URL": { "plane": "app", "internal": false, "rotate": "manual" },
+    "APP_URL": { "plane": "app", "internal": false, "rotate": "manual" },
+    "APP_BASE_URL_PAYMENTS": { "plane": "app", "internal": false, "rotate": "manual" },
+    "APP_BASE_URL_RHNS": { "plane": "app", "internal": false, "rotate": "manual" },
+    "APP_BASE_URL_ATLAS": { "plane": "app", "internal": false, "rotate": "manual" },
+    "APP_BASE_URL_ZEUS": { "plane": "app", "internal": false, "rotate": "manual" },
+    "NEXT_PUBLIC_APP_URL": { "plane": "app", "internal": false, "rotate": "manual" },
+    "OPENAI_API_KEY": { "plane": "ai", "internal": false, "rotate": "manual" },
+    "ANTHROPIC_API_KEY": { "plane": "ai", "internal": false, "rotate": "manual" },
+    "GEMINI_API_KEY": { "plane": "ai", "internal": false, "rotate": "manual" },
+    "GOOGLE_API_KEY": { "plane": "ai", "internal": false, "rotate": "manual" },
+    "PERPLEXITY_API_KEY": { "plane": "ai", "internal": false, "rotate": "manual" },
+    "HUBSPOT_API_KEY": { "plane": "ai", "internal": false, "rotate": "manual" },
+    "RAILWAY_TOKEN": { "plane": "deploy", "internal": false, "rotate": "manual" },
+    "VERCEL_TOKEN": { "plane": "deploy", "internal": false, "rotate": "manual" },
+    "RENDER_API_KEY": { "plane": "deploy", "internal": false, "rotate": "manual" },
+    "PIXEL10_SSH_KEY": { "plane": "edge", "internal": false, "rotate": "manual" },
+    "PIXEL10_IP": { "plane": "edge", "internal": false, "rotate": "manual" },
+    "PIXEL10_SSH_PORT": { "plane": "edge", "internal": false, "rotate": "manual" },
+    "AUTOKEY_SESSION": { "plane": "internal", "internal": true, "rotate": "auto", "generator": "random_hex_32" },
+    "AUTOKEY_HMAC": { "plane": "internal", "internal": true, "rotate": "auto", "generator": "random_hex_64" },
+    "INTERNAL_API_TOKEN": { "plane": "internal", "internal": true, "rotate": "auto", "generator": "random_hex_48" },
+    "WEBHOOK_SIGNING_SECRET": { "plane": "internal", "internal": true, "rotate": "auto", "generator": "random_hex_32" }
+  },
+  "repos": {
+    "systems-master-hub": [
+      "GHPAT", "LINEAR_API_KEY", "SLACK_WEBHOOK_URL",
+      "APOLLO_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
+      "STRIPE_PUBLISHABLE_KEY", "STRIPE_PRICE_STARTER", "STRIPE_PRICE_PRO", "STRIPE_PRICE_AGENCY",
+      "REVENUE_WEBHOOK_URL",
+      "SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_KEY", "SUPABASE_KEY",
+      "DATABASE_URL", "REDIS_URL",
+      "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "PERPLEXITY_API_KEY", "HUBSPOT_API_KEY",
+      "RAILWAY_TOKEN", "VERCEL_TOKEN", "RENDER_API_KEY",
+      "PIXEL10_SSH_KEY", "PIXEL10_IP", "PIXEL10_SSH_PORT",
+      "AUTOKEY_SESSION", "AUTOKEY_HMAC", "INTERNAL_API_TOKEN", "WEBHOOK_SIGNING_SECRET",
+      "PAT_TOKEN"
+    ],
+    "garcar-payments": [
+      "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PUBLISHABLE_KEY",
+      "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "DATABASE_URL",
+      "SLACK_WEBHOOK_URL", "RAILWAY_TOKEN", "WEBHOOK_SIGNING_SECRET"
+    ],
+    "garcar-payment-loop": [
+      "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
+      "SUPABASE_URL", "SUPABASE_SERVICE_KEY",
+      "SLACK_WEBHOOK_URL", "WEBHOOK_SIGNING_SECRET"
+    ],
+    "mars-api": [
+      "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_KEY",
+      "DATABASE_URL", "REDIS_URL", "RAILWAY_TOKEN", "INTERNAL_API_TOKEN"
+    ],
+    "enterprise-mlops-platform": [
+      "OPENAI_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_KEY",
+      "RAILWAY_TOKEN", "SLACK_WEBHOOK_URL", "INTERNAL_API_TOKEN"
+    ],
+    "TITAN-Autonomous-Business-Empire": [
+      "STRIPE_SECRET_KEY", "APOLLO_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_KEY",
+      "RAILWAY_TOKEN", "LINEAR_API_KEY", "SLACK_WEBHOOK_URL", "INTERNAL_API_TOKEN"
+    ],
+    "atlas-dashboard": [
+      "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "VERCEL_TOKEN", "SLACK_WEBHOOK_URL"
+    ],
+    "zeus-dashboard": [
+      "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "LINEAR_API_KEY", "VERCEL_TOKEN", "SLACK_WEBHOOK_URL"
+    ],
+    "neural-mesh": [
+      "GHPAT", "SLACK_WEBHOOK_URL", "INTERNAL_API_TOKEN", "AUTOKEY_HMAC"
+    ],
+    "ai-business-platform": [
+      "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "RAILWAY_TOKEN"
+    ],
+    "autonomous-income-deployment": [
+      "STRIPE_SECRET_KEY", "APOLLO_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "RAILWAY_TOKEN"
+    ]
+  },
+  "aliases": {
+    "PAT_TOKEN": "GHPAT",
+    "SUPABASE_KEY": "SUPABASE_SERVICE_KEY"
+  }
+}
