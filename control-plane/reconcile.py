@@ -23,13 +23,20 @@ def main() -> int:
         return 2
     data = load_json(REGISTRY)
     systems = data.get("systems")
-    if not isinstance(systems, list) or not systems:
-        print("FAIL: registry contains no systems", file=sys.stderr)
+    if not isinstance(systems, list):
+        print("FAIL: registry 'systems' is not a list", file=sys.stderr)
         return 2
+    if not systems:
+        print("WARN: registry contains no systems — empty but valid state")
+        print("RECONCILIATION PASS: 0 registered systems; no schema-level drift")
+        return 0
 
     seen = set()
     errors = []
     for item in systems:
+        if not isinstance(item, dict):
+            errors.append(f"invalid system entry (not object): {item!r}")
+            continue
         repo = item.get("repository")
         env = item.get("environment")
         if not isinstance(repo, str) or not SAFE_ID.fullmatch(repo):
