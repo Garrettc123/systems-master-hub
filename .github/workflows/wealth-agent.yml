@@ -30,12 +30,23 @@ jobs:
         id: secrets
         env:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
         run: |
+          READY=true
           if [ -z "${STRIPE_SECRET_KEY:-}" ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "STRIPE_SECRET_KEY missing — soft-skip wealth agent"
-          else
+            echo "STRIPE_SECRET_KEY missing"
+            READY=false
+          fi
+          if [ -z "${APOLLO_API_KEY:-}" ]; then
+            echo "APOLLO_API_KEY missing"
+            READY=false
+          fi
+          if [ "$READY" = true ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "All required secrets present — running wealth loop"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Wealth agent soft-skip (required secrets not provisioned)"
           fi
 
       - name: Run Wealth Loop Agent
@@ -56,7 +67,9 @@ jobs:
 
       - name: Soft-skip notice
         if: steps.secrets.outputs.ready != 'true'
-        run: echo "Wealth agent completed in soft-skip mode (secrets not provisioned)."
+        run: |
+          echo "Wealth agent completed in soft-skip mode."
+          echo "Provision STRIPE_SECRET_KEY + APOLLO_API_KEY (and optionally SUPABASE_*) to enable live Apollo → Stripe checkout generation."
 
       - name: Post status
         if: always()
