@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "owner": "Garrettc123",
+  "defaults": {
+    "include_archived": false,
+    "include_forks": false,
+    "classification": "unclassified",
+    "secrets": [],
+    "mcp_servers": [],
+    "mcp_tools": []
+  },
+  "classes": {
+    "public-static": {
+      "secrets": [],
+      "mcp_servers": [],
+      "mcp_tools": []
+    },
+    "application": {
+      "secrets": ["APP_URL", "MCP_GATEWAY_URL", "MCP_GATEWAY_AUDIENCE", "MCP_REPOSITORY_ID"],
+      "mcp_servers": ["github"],
+      "mcp_tools": ["github.repository.read"]
+    },
+    "ai": {
+      "secrets": ["APP_URL", "MCP_GATEWAY_URL", "MCP_GATEWAY_AUDIENCE", "MCP_REPOSITORY_ID"],
+      "mcp_servers": ["github"],
+      "mcp_tools": ["github.repository.read"]
+    },
+    "revenue": {
+      "secrets": ["APP_URL", "MCP_GATEWAY_URL", "MCP_GATEWAY_AUDIENCE", "MCP_REPOSITORY_ID"],
+      "mcp_servers": ["github", "hubspot", "stripe"],
+      "mcp_tools": [
+        "github.repository.read",
+        "hubspot.contacts.read",
+        "hubspot.deals.read",
+        "stripe.customers.read",
+        "stripe.payments.read"
+      ]
+    },
+    "payments": {
+      "secrets": ["APP_URL", "MCP_GATEWAY_URL", "MCP_GATEWAY_AUDIENCE", "MCP_REPOSITORY_ID"],
+      "mcp_servers": ["stripe"],
+      "mcp_tools": ["stripe.customers.read", "stripe.payments.read", "stripe.checkout.create"]
+    },
+    "control-plane": {
+      "secrets": [
+        "GHPAT",
+        "VAULT_ADDR",
+        "VAULT_ROLE_ID",
+        "VAULT_SECRET_ID",
+        "MCP_GATEWAY_SIGNING_KEY",
+        "MCP_GATEWAY_URL",
+        "MCP_GATEWAY_AUDIENCE"
+      ],
+      "mcp_servers": ["github", "hubspot", "stripe"],
+      "mcp_tools": ["registry.health", "audit.read"]
+    }
+  },
+  "repositories": {
+    "systems-master-hub": "control-plane",
+    "garcar-payments": "payments",
+    "garcar-payment-loop": "payments",
+    "garcar-rhns-core": "revenue",
+    "TITAN-Autonomous-Business-Empire": "revenue",
+    "autonomous-income-deployment": "revenue",
+    "ai-business-platform": "ai",
+    "mars-api": "ai",
+    "enterprise-mlops-platform": "ai",
+    "atlas-dashboard": "application",
+    "zeus-dashboard": "application",
+    "neural-mesh": "application"
+  }
+}

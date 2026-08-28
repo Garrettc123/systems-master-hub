@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "servers": {
+    "github": {
+      "url_env": "MCP_GITHUB_URL",
+      "credential_vault_path": "secret/data/garcar/MCP_GITHUB_TOKEN",
+      "tools": ["github.repository.read"]
+    },
+    "hubspot": {
+      "url_env": "MCP_HUBSPOT_URL",
+      "credential_vault_path": "secret/data/garcar/HUBSPOT_ACCESS_TOKEN",
+      "tools": ["hubspot.contacts.read", "hubspot.deals.read"]
+    },
+    "stripe": {
+      "url_env": "MCP_STRIPE_URL",
+      "credential_vault_path": "secret/data/garcar/STRIPE_SECRET_KEY",
+      "tools": ["stripe.customers.read", "stripe.payments.read", "stripe.checkout.create"]
+    }
+  }
+}

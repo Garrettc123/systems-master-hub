@@ -1,0 +1,41 @@
+name: Garcar Control Plane Policy
+
+on:
+  workflow_call:
+    outputs:
+      classification:
+        value: ${{ jobs.policy.outputs.classification }}
+      mcp_servers:
+        value: ${{ jobs.policy.outputs.mcp_servers }}
+      mcp_tools:
+        value: ${{ jobs.policy.outputs.mcp_tools }}
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    outputs:
+      classification: ${{ steps.resolve.outputs.classification }}
+      mcp_servers: ${{ steps.resolve.outputs.mcp_servers }}
+      mcp_tools: ${{ steps.resolve.outputs.mcp_tools }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Garrettc123/systems-master-hub
+          ref: main
+          path: control-plane-hub
+      - id: resolve
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          cd control-plane-hub
+          RESULT="$(python control-plane/resolve_policy.py "$REPOSITORY")"
+          echo "classification=$(jq -r .classification <<<"$RESULT")" >> "$GITHUB_OUTPUT"
+          echo "mcp_servers=$(jq -c .mcp_servers <<<"$RESULT")" >> "$GITHUB_OUTPUT"
+          echo "mcp_tools=$(jq -c .mcp_tools <<<"$RESULT")" >> "$GITHUB_OUTPUT"
+          test "$(jq -r .managed <<<"$RESULT")" = true || {
+            echo "Repository is unclassified; access denied by default" >&2
+            exit 1
+          }
