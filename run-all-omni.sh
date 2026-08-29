@@ -77,10 +77,10 @@ log "\n${MAGENTA}═══ PHASE 1: Pre-flight Checks ═══${NC}"
 
 # Check for required tools
 info "Checking required tools..."
-REQUIRED_TOOLS=("docker" "docker compose" "git" "make")
 MISSING_TOOLS=()
 
-for tool in "${REQUIRED_TOOLS[@]}"; do
+# Check single-word tools
+for tool in "docker" "git" "make"; do
     if command -v "$tool" &> /dev/null; then
         success "$tool installed"
     else
@@ -88,6 +88,16 @@ for tool in "${REQUIRED_TOOLS[@]}"; do
         MISSING_TOOLS+=("$tool")
     fi
 done
+
+# Check docker compose (v2 plugin or v1 standalone)
+if docker compose version &> /dev/null; then
+    success "docker compose installed"
+elif command -v docker-compose &> /dev/null; then
+    success "docker-compose installed"
+else
+    error "docker compose not found"
+    MISSING_TOOLS+=("docker compose")
+fi
 
 if [ ${#MISSING_TOOLS[@]} -gt 0 ]; then
     error "Missing required tools: ${MISSING_TOOLS[*]}"
