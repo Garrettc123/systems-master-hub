@@ -35,59 +35,50 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ──────────────────────────────────────────
-  # TIER 1 — Critical revenue & control systems
-  # ──────────────────────────────────────────
   sync-garcar-payments:
     name: "→ garcar-payments (Tier 1)"
     runs-on: ubuntu-latest
     if: inputs.target_tier == 'all' || inputs.target_tier == 'tier1' || (inputs.target_tier == 'single' && inputs.single_repo == 'garcar-payments')
     steps:
+      - uses: actions/checkout@v4
       - name: Propagate secrets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_PAT }}
-          # Supabase
           VAL_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VAL_SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           VAL_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          # Stripe
           VAL_STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           VAL_STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           VAL_STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
-          # Notion
           VAL_NOTION_TOKEN: ${{ secrets.NOTION_API_KEY }}
           VAL_NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           VAL_NOTION_CRM_DB_ID: ${{ secrets.NOTION_CRM_DB_ID }}
           VAL_NOTION_CUSTOMERS_DB_ID: ${{ secrets.NOTION_CUSTOMERS_DB_ID }}
-          # Linear
           VAL_LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           VAL_LINEAR_TEAM_ID: ${{ secrets.LINEAR_TEAM_ID }}
-          # AI
           VAL_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           VAL_PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
-          # Comms
           VAL_SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
           VAL_SENDGRID_FROM_EMAIL: ${{ secrets.SENDGRID_FROM_EMAIL }}
           VAL_SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          # Shopify
           VAL_SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
           VAL_SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET }}
           VAL_SHOPIFY_STORE_URL: ${{ secrets.SHOPIFY_STORE_URL }}
           VAL_SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
-          # Infra
           VAL_RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           VAL_APP_URL: ${{ secrets.APP_URL }}
           VAL_GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
           VAL_GITHUB_PAT_DISPATCH: ${{ secrets.GITHUB_PAT_DISPATCH }}
         run: |
           TARGET="Garrettc123/garcar-payments"
-          .github/scripts/autokey-push.sh "$TARGET"
+          bash .github/scripts/autokey-push.sh "$TARGET"
 
   sync-garcar-payment-loop:
     name: "→ garcar-payment-loop (Tier 1)"
     runs-on: ubuntu-latest
     if: inputs.target_tier == 'all' || inputs.target_tier == 'tier1' || (inputs.target_tier == 'single' && inputs.single_repo == 'garcar-payment-loop')
     steps:
+      - uses: actions/checkout@v4
       - name: Propagate secrets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_PAT }}
@@ -114,7 +105,7 @@ jobs:
           VAL_GITHUB_PAT_DISPATCH: ${{ secrets.GITHUB_PAT_DISPATCH }}
         run: |
           TARGET="Garrettc123/garcar-payment-loop"
-          .github/scripts/autokey-push.sh "$TARGET"
+          bash .github/scripts/autokey-push.sh "$TARGET"
 
   sync-mars-api:
     name: "→ mars-api (Tier 1)"
@@ -138,7 +129,7 @@ jobs:
           VAL_SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           TARGET="Garrettc123/mars-api"
-          .github/scripts/autokey-push.sh "$TARGET"
+          bash .github/scripts/autokey-push.sh "$TARGET"
 
   sync-enterprise-mlops:
     name: "→ enterprise-mlops-platform (Tier 1)"
@@ -158,11 +149,8 @@ jobs:
           VAL_NOTION_TOKEN: ${{ secrets.NOTION_API_KEY }}
         run: |
           TARGET="Garrettc123/enterprise-mlops-platform"
-          .github/scripts/autokey-push.sh "$TARGET"
+          bash .github/scripts/autokey-push.sh "$TARGET"
 
-  # ──────────────────────────────────────────
-  # TIER 2 — Core operational systems
-  # ──────────────────────────────────────────
   sync-titan:
     name: "→ TITAN-Autonomous-Business-Empire (Tier 2)"
     needs: [sync-garcar-payments, sync-garcar-payment-loop]
@@ -193,7 +181,7 @@ jobs:
           VAL_SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           TARGET="Garrettc123/TITAN-Autonomous-Business-Empire"
-          .github/scripts/autokey-push.sh "$TARGET"
+          bash .github/scripts/autokey-push.sh "$TARGET"
 
   sync-atlas-dashboard:
     name: "→ atlas-dashboard (Tier 2)"
@@ -217,7 +205,7 @@ jobs:
           VAL_NOTION_TOKEN: ${{ secrets.NOTION_API_KEY }}
         run: |
           TARGET="Garrettc123/atlas-dashboard"
-          .github/scripts/autokey-push.sh "$TARGET"
+          bash .github/scripts/autokey-push.sh "$TARGET"
 
   sync-zeus-dashboard:
     name: "→ zeus-dashboard (Tier 2)"
@@ -242,7 +230,7 @@ jobs:
           VAL_SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           TARGET="Garrettc123/zeus-dashboard"
-          .github/scripts/autokey-push.sh "$TARGET"
+          bash .github/scripts/autokey-push.sh "$TARGET"
 
   sync-atlas-orchestration:
     name: "→ atlas-orchestration (Tier 2)"
@@ -270,9 +258,8 @@ jobs:
           VAL_RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           TARGET="Garrettc123/atlas-orchestration"
-          .github/scripts/autokey-push.sh "$TARGET"
+          bash .github/scripts/autokey-push.sh "$TARGET"
 
-  # Also sync the staging/prod pipeline repo
   sync-autonomous-deploy:
     name: "→ autonomous-zero-touch-deploy"
     needs: [sync-garcar-payments]
@@ -306,7 +293,7 @@ jobs:
           VAL_GITHUB_PAT_DISPATCH: ${{ secrets.GITHUB_PAT_DISPATCH }}
         run: |
           TARGET="Garrettc123/autonomous-zero-touch-deploy"
-          .github/scripts/autokey-push.sh "$TARGET"
+          bash .github/scripts/autokey-push.sh "$TARGET"
 
   sync-garcar-operator-fabric:
     name: "→ garcar-operator-fabric"
@@ -347,11 +334,8 @@ jobs:
           VAL_GITHUB_PAT_DISPATCH: ${{ secrets.GITHUB_PAT_DISPATCH }}
         run: |
           TARGET="Garrettc123/garcar-operator-fabric"
-          .github/scripts/autokey-push.sh "$TARGET"
+          bash .github/scripts/autokey-push.sh "$TARGET"
 
-  # ──────────────────────────────────────────
-  # SWEEP SUMMARY
-  # ──────────────────────────────────────────
   sweep-summary:
     name: Sweep Summary
     needs:
