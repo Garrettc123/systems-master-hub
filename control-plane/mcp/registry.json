@@ -1,20 +1,20 @@
 {
-  "version": 1,
+  "version": 2,
+  "tool_classes": {
+    "read": ["github.repository.read", "hubspot.contacts.read", "hubspot.deals.read", "stripe.customers.read", "stripe.payments.read", "realestate.listings.read", "realestate.public_records.read", "realestate.comps.read", "calendar.availability.read"],
+    "draft": ["realestate.offer.draft", "realestate.valuation_support.draft", "documents.transaction.draft", "communications.email.draft", "crm.task.draft"],
+    "consequential": ["stripe.checkout.create", "communications.email.send", "calendar.appointment.create", "realestate.offer.submit", "realestate.listing.update", "documents.signature.request", "payments.disbursement.initiate"]
+  },
+  "capability_groups": {
+    "lead-to-close": ["hubspot.contacts.read", "hubspot.deals.read", "calendar.availability.read", "realestate.offer.draft", "calendar.appointment.create", "realestate.offer.submit", "stripe.payments.read"],
+    "property-intelligence": ["realestate.listings.read", "realestate.public_records.read", "realestate.comps.read", "realestate.valuation_support.draft"],
+    "agent-operations": ["communications.email.draft", "documents.transaction.draft", "crm.task.draft", "communications.email.send", "documents.signature.request"]
+  },
   "servers": {
-    "github": {
-      "url_env": "MCP_GITHUB_URL",
-      "credential_vault_path": "secret/data/garcar/MCP_GITHUB_TOKEN",
-      "tools": ["github.repository.read"]
-    },
-    "hubspot": {
-      "url_env": "MCP_HUBSPOT_URL",
-      "credential_vault_path": "secret/data/garcar/HUBSPOT_ACCESS_TOKEN",
-      "tools": ["hubspot.contacts.read", "hubspot.deals.read"]
-    },
-    "stripe": {
-      "url_env": "MCP_STRIPE_URL",
-      "credential_vault_path": "secret/data/garcar/STRIPE_SECRET_KEY",
-      "tools": ["stripe.customers.read", "stripe.payments.read", "stripe.checkout.create"]
-    }
+    "github": { "url_env": "MCP_GITHUB_URL", "credential_vault_path": "secret/data/garcar/MCP_GITHUB_TOKEN", "tools": ["github.repository.read"] },
+    "hubspot": { "url_env": "MCP_HUBSPOT_URL", "credential_vault_path": "secret/data/garcar/HUBSPOT_ACCESS_TOKEN", "tools": ["hubspot.contacts.read", "hubspot.deals.read", "crm.task.draft"] },
+    "stripe": { "url_env": "MCP_STRIPE_URL", "credential_vault_path": "secret/data/garcar/STRIPE_SECRET_KEY", "tools": ["stripe.customers.read", "stripe.payments.read", "stripe.checkout.create", "payments.disbursement.initiate"] },
+    "realestate": { "url_env": "MCP_REALESTATE_URL", "credential_vault_path": "secret/data/garcar/MCP_REALESTATE_TOKEN", "tools": ["realestate.listings.read", "realestate.public_records.read", "realestate.comps.read", "realestate.offer.draft", "realestate.valuation_support.draft", "realestate.offer.submit", "realestate.listing.update"] },
+    "operations": { "url_env": "MCP_OPERATIONS_URL", "credential_vault_path": "secret/data/garcar/MCP_OPERATIONS_TOKEN", "tools": ["calendar.availability.read", "calendar.appointment.create", "documents.transaction.draft", "documents.signature.request", "communications.email.draft", "communications.email.send"] }
   }
 }

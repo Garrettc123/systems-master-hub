@@ -7,6 +7,7 @@ import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from approval import verify_approval
 
 ROOT=Path(__file__).resolve().parents[1]
 POLICY=json.loads((ROOT/"policy.json").read_text())
@@ -58,13 +59,33 @@ async def limits(request:Request,call_next):
 @app.get("/health")
 def health(): return {"status":"ok","policy_version":POLICY["version"],"registry_version":REGISTRY["version"]}
 
+@app.get("/v1/capabilities")
+def capabilities(authorization:str|None=Header(default=None)):
+    claims=authenticate(authorization); scope=scope_for(claims["sub"]); allowed=set(scope.get("mcp_tools",[]))
+    groups={}
+    for group,tools in REGISTRY.get("capability_groups",{}).items():
+        group_allowed=allowed.intersection(tools)
+        if not group_allowed: level="unavailable"
+        elif any(tool in REGISTRY["tool_classes"]["consequential"] for tool in group_allowed): level="approval-enabled"
+        elif any(tool in REGISTRY["tool_classes"]["draft"] for tool in group_allowed): level="draft-enabled"
+        else: level="read-only"
+        groups[group]=level
+    return {"repository":claims["sub"],"approval_enabled":bool(scope.get("human_approval_required")),"capability_groups":groups}
+
 @app.post("/v1/invoke")
-async def invoke(body:Invocation,authorization:str|None=Header(default=None)):
+async def invoke(body:Invocation,authorization:str|None=Header(default=None),x_human_approval:str|None=Header(default=None)):
     request_id=str(uuid.uuid4()); claims=authenticate(authorization); repository=claims["sub"]; scope=scope_for(repository)
     if body.server not in scope.get("mcp_servers",[]) or body.tool not in scope.get("mcp_tools",[]):
         audit(request_id,repository,body.server,body.tool,"denied"); raise HTTPException(403,"tool not authorized")
     server=REGISTRY.get("servers",{}).get(body.server)
     if not server or body.tool not in server.get("tools",[]): raise HTTPException(403,"tool not registered")
+    if body.tool in REGISTRY.get("tool_classes",{}).get("consequential",[]):
+        try:
+            approval=verify_approval(x_human_approval,repository,body.server,body.tool,body.arguments)
+            audit(request_id,repository,body.server,body.tool,f"approved:{approval['actor']}")
+        except ValueError as exc:
+            audit(request_id,repository,body.server,body.tool,"approval_denied")
+            raise HTTPException(403,str(exc)) from exc
     url=os.environ.get(server["url_env"],"")
     if not url: raise HTTPException(503,"upstream unavailable")
     # Provider credentials stay at the upstream MCP service/Vault boundary.

@@ -13,7 +13,7 @@ POLICY_PATH = Path(__file__).with_name("policy.json")
 
 def load_policy(path: Path = POLICY_PATH) -> dict[str, Any]:
     policy = json.loads(path.read_text())
-    if policy.get("version") != 1:
+    if policy.get("version") not in {1, 2}:
         raise ValueError("unsupported policy version")
     return policy
 
@@ -30,6 +30,8 @@ def resolve(repository: str, policy: dict[str, Any]) -> dict[str, Any]:
         "secrets": sorted(set(class_policy.get("secrets", []))),
         "mcp_servers": sorted(set(class_policy.get("mcp_servers", []))),
         "mcp_tools": sorted(set(class_policy.get("mcp_tools", []))),
+        "capability_groups": sorted(set(class_policy.get("capability_groups", []))),
+        "human_approval_required": class_policy.get("human_approval_required", False) is True,
         "managed": class_name != "unclassified",
     }
 
