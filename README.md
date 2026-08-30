@@ -1,6 +1,29 @@
-# 🏗️ Systems Master Hub
+# Garcar Enterprise — Autonomous AI Business Infrastructure
 
-## Enterprise AI Ecosystem - $102M+ Multi-System Architecture
+> Revenue automation, agent orchestration, and cloud deployment — all running without human intervention.
+
+🌐 **[Live Site](https://garrettc123.github.io/systems-master-hub)** &nbsp;|&nbsp; 📊 **[Investor Data Room](https://app.notion.com/p/338024e8799b811cbd26d2019831ccab)** &nbsp;|&nbsp; 🐙 **[GitHub](https://github.com/Garrettc123)**
+
+---
+
+## Stack Overview
+
+| Repository | Purpose | Tech | Status |
+|---|---|---|---|
+| [autonomous-butler-core](https://github.com/Garrettc123/autonomous-butler-core) | Managed AI Ops — $2,500/mo | Python, LLM agents | 🟢 Active |
+| [NEXUS-AI-CORE](https://github.com/Garrettc123/NEXUS-AI-CORE) | Real Estate Intelligence Engine — $1,000/report | Python, ML, APIs | 🟢 Active |
+| [garcar-product-factory](https://github.com/Garrettc123/garcar-product-factory) | Digital Product Catalog — from $49 | Node.js, Stripe | 🟢 Active |
+| [systems-master-hub](https://github.com/Garrettc123/systems-master-hub) | Architecture & cross-repo orchestration | Shell, Python | 🟢 Active |
+| [control-plane](https://github.com/Garrettc123/control-plane) | Infrastructure control plane | Terraform, Docker | 🟢 Active |
+| [zero-human](https://github.com/Garrettc123/zero-human) | Zero-human-intervention automation | Python, GitHub Actions | 🟢 Active |
+
+---
+
+## Key Metrics
+
+- **263** repositories across the Garcar Enterprise ecosystem
+- **172** public systems live and operational
+- **Active since 2020**
 
 ---
 
