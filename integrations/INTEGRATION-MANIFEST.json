@@ -1,0 +1,104 @@
+{
+  "garcar_integration_manifest": {
+    "version": "3.0.0",
+    "authored": "2026-08-30",
+    "owner": "Garrettc123",
+    "enterprise": "Garcar Enterprise",
+    "description": "Full 8-platform integration wire — GitHub, Slack, Base by Coinbase, Shopify, Notion, Linear, Supabase, HuggingFace",
+    "event_bus": "github_actions",
+    "primary_hub": "systems-master-hub",
+    "integrations": [
+      {
+        "id": "github",
+        "name": "GitHub",
+        "role": "CI/CD backbone, repo orchestration, secret management, Actions event bus",
+        "repos_wired": [
+          "autonomous-butler-core",
+          "NEXUS-AI-CORE",
+          "apex-revenue-system",
+          "garcar-payment-loop",
+          "lead-enrichment-engine",
+          "systems-master-hub"
+        ],
+        "secrets_required": ["GITHUB_TOKEN", "GH_PAT"],
+        "webhook_events": ["push", "pull_request", "workflow_run", "release"],
+        "status": "ACTIVE"
+      },
+      {
+        "id": "slack",
+        "name": "Slack",
+        "role": "Real-time alerts, revenue notifications, agent status, error escalation",
+        "channels": [
+          "#garcar-revenue",
+          "#garcar-alerts",
+          "#garcar-deployments",
+          "#garcar-leads"
+        ],
+        "secrets_required": ["SLACK_BOT_TOKEN", "SLACK_WEBHOOK_URL", "SLACK_REVENUE_CHANNEL", "SLACK_ALERTS_CHANNEL"],
+        "trigger_events": ["payment_received", "deployment_complete", "lead_enriched", "agent_error", "revenue_milestone"],
+        "status": "ACTIVE"
+      },
+      {
+        "id": "base_coinbase",
+        "name": "Base by Coinbase",
+        "role": "Onchain revenue settlement, smart contract payments, crypto treasury",
+        "chain": "Base Mainnet (Chain ID 8453)",
+        "contracts": ["PaymentSplitter", "RevenueVault", "GarcarToken"],
+        "secrets_required": ["BASE_RPC_URL", "BASE_PRIVATE_KEY", "BASE_CONTRACT_ADDRESS", "COINBASE_API_KEY"],
+        "trigger_events": ["stripe_payment_confirmed", "invoice_paid", "revenue_threshold_hit"],
+        "status": "WIRED"
+      },
+      {
+        "id": "shopify",
+        "name": "Shopify",
+        "role": "E-commerce revenue, product sales, order fulfillment automation",
+        "store_domain": "garcar-enterprise.myshopify.com",
+        "secrets_required": ["SHOPIFY_API_KEY", "SHOPIFY_API_SECRET", "SHOPIFY_ACCESS_TOKEN", "SHOPIFY_WEBHOOK_SECRET"],
+        "webhook_topics": ["orders/create", "orders/paid", "refunds/create", "products/update"],
+        "trigger_events": ["order_paid", "product_sold", "refund_issued"],
+        "status": "WIRED"
+      },
+      {
+        "id": "notion",
+        "name": "Notion",
+        "role": "Knowledge base, deal documentation, CRM records, SOPs",
+        "databases": ["Deals Pipeline", "Revenue Tracker", "Lead CRM", "System Registry", "Agent Logs"],
+        "secrets_required": ["NOTION_API_KEY", "NOTION_DEALS_DB_ID", "NOTION_REVENUE_DB_ID", "NOTION_LEADS_DB_ID"],
+        "trigger_events": ["lead_qualified", "deal_closed", "revenue_recorded", "agent_report_generated"],
+        "status": "WIRED"
+      },
+      {
+        "id": "linear",
+        "name": "Linear",
+        "role": "Sprint management, issue tracking, autonomous agent task dispatch",
+        "teams": ["Revenue", "Engineering", "Infrastructure", "AI Agents"],
+        "secrets_required": ["LINEAR_API_KEY", "LINEAR_TEAM_ID", "LINEAR_REVENUE_PROJECT_ID"],
+        "trigger_events": ["deployment_failed", "revenue_anomaly", "agent_task_required", "bug_detected"],
+        "status": "WIRED"
+      },
+      {
+        "id": "supabase",
+        "name": "Supabase",
+        "role": "Primary database, real-time data sync, auth, edge functions, gc_ledger",
+        "tables": ["gc_ledger", "leads", "transactions", "agents", "deployments", "revenue_events"],
+        "secrets_required": ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_DB_URL"],
+        "realtime_subscriptions": ["gc_ledger", "revenue_events", "agents"],
+        "status": "ACTIVE"
+      },
+      {
+        "id": "huggingface",
+        "name": "Hugging Face",
+        "role": "AI model inference, NLP lead scoring, document classification, autonomous decision models",
+        "models": [
+          "Qwen/Qwen2.5-72B-Instruct",
+          "mistralai/Mistral-7B-Instruct-v0.3",
+          "sentence-transformers/all-MiniLM-L6-v2"
+        ],
+        "spaces": ["garcar-lead-scorer", "garcar-deal-classifier"],
+        "secrets_required": ["HUGGINGFACE_API_KEY", "HF_TOKEN"],
+        "trigger_events": ["lead_received", "document_ingested", "contract_uploaded"],
+        "status": "WIRED"
+      }
+    ]
+  }
+}

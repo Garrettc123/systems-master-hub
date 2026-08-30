@@ -1,0 +1,90 @@
+# Garcar Enterprise — Master Event Dispatcher
+# Central GitHub Actions workflow that fans out events to all 8 platforms
+# This is the MULTIPLEXER — one trigger fans out to all integration workflows
+
+name: Garcar Master Event Dispatcher
+
+on:
+  repository_dispatch:
+    types:
+      - garcar_revenue_event
+      - garcar_lead_event
+      - garcar_agent_event
+      - garcar_deployment_event
+
+jobs:
+  dispatch-to-all-platforms:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse Event
+        id: parse
+        run: |
+          echo "event_action=${{ github.event.action }}" >> $GITHUB_OUTPUT
+          echo "event_type=${{ github.event.client_payload.type }}" >> $GITHUB_OUTPUT
+          echo "amount=${{ github.event.client_payload.amount }}" >> $GITHUB_OUTPUT
+          echo "source=${{ github.event.client_payload.source }}" >> $GITHUB_OUTPUT
+
+      # Fan-out: Supabase Ledger (all revenue events)
+      - name: Dispatch → Supabase Ledger
+        if: contains(github.event.action, 'revenue') || contains(github.event.action, 'payment')
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/Garrettc123/systems-master-hub/dispatches \
+            -d '{"event_type":"payment_received","client_payload":${{ toJson(github.event.client_payload) }}}'
+
+      # Fan-out: Notion Sync
+      - name: Dispatch → Notion
+        if: contains(github.event.action, 'revenue') || contains(github.event.action, 'lead')
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/Garrettc123/systems-master-hub/dispatches \
+            -d '{"event_type":"revenue_recorded","client_payload":${{ toJson(github.event.client_payload) }}}'
+
+      # Fan-out: Linear Task (agent events)
+      - name: Dispatch → Linear
+        if: contains(github.event.action, 'agent') || contains(github.event.action, 'deployment')
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/Garrettc123/systems-master-hub/dispatches \
+            -d '{"event_type":"agent_task_required","client_payload":${{ toJson(github.event.client_payload) }}}'
+
+      # Fan-out: HuggingFace (lead events)
+      - name: Dispatch → HuggingFace
+        if: contains(github.event.action, 'lead')
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/Garrettc123/systems-master-hub/dispatches \
+            -d '{"event_type":"lead_received","client_payload":${{ toJson(github.event.client_payload) }}}'
+
+      # Fan-out: Base settlement (large revenue events)
+      - name: Dispatch → Base Coinbase
+        if: contains(github.event.action, 'revenue') && github.event.client_payload.amount > 100
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/Garrettc123/systems-master-hub/dispatches \
+            -d '{"event_type":"stripe_payment_confirmed","client_payload":${{ toJson(github.event.client_payload) }}}'
+
+      # Always: Slack notify
+      - name: Slack Summary Notification
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          channel-id: ${{ secrets.SLACK_ALERTS_CHANNEL }}
+          slack-message: |
+            :zap: *GARCAR MASTER DISPATCH*
+            Event: `${{ github.event.action }}`
+            Type: `${{ github.event.client_payload.type }}`
+            Source: `${{ github.event.client_payload.source }}`
+            Amount: `${{ github.event.client_payload.amount }}`
+            Fan-out to: Supabase, Notion, Linear, HuggingFace, Base ✅
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

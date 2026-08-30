@@ -1,0 +1,64 @@
+# Garcar Enterprise — Supabase gc_ledger Sync
+# Central revenue ledger — all payment sources write here
+# Secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+
+name: Garcar Supabase Ledger Sync
+
+on:
+  repository_dispatch:
+    types:
+      - payment_received
+      - stripe_payment_confirmed
+      - shopify_order_paid
+      - crypto_settlement_confirmed
+      - invoice_paid
+
+jobs:
+  write-ledger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Supabase Client
+        run: npm install @supabase/supabase-js
+
+      - name: Write to gc_ledger
+        run: |
+          node - <<'EOF'
+          const { createClient } = require('@supabase/supabase-js');
+          const supabase = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+          const payload = JSON.parse(process.env.EVENT_PAYLOAD);
+          const { data, error } = await supabase.from('gc_ledger').insert({
+            source: payload.source || process.env.EVENT_ACTION,
+            amount: parseFloat(payload.amount || 0),
+            currency: payload.currency || 'USD',
+            reference_id: payload.reference_id || payload.id,
+            customer_email: payload.customer_email || payload.email,
+            metadata: payload,
+            status: 'confirmed',
+            created_at: new Date().toISOString()
+          }).select();
+          if (error) { console.error('Supabase error:', error.message); process.exit(1); }
+          console.log('Ledger entry written:', data[0].id);
+
+          // Also write to revenue_events for real-time dashboard
+          await supabase.from('revenue_events').insert({
+            event_type: process.env.EVENT_ACTION,
+            amount: parseFloat(payload.amount || 0),
+            source: payload.source,
+            ledger_id: data[0].id,
+            timestamp: new Date().toISOString()
+          });
+          console.log('Revenue event broadcast complete');
+          EOF
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EVENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+          EVENT_ACTION: ${{ github.event.action }}

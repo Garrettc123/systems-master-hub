@@ -1,0 +1,65 @@
+# Garcar Enterprise — Shopify Order → Revenue Pipeline
+# Captures order webhooks, records to Supabase, notifies Slack, creates Linear task
+# Secrets: SHOPIFY_ACCESS_TOKEN, SHOPIFY_WEBHOOK_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+
+name: Garcar Shopify Pipeline
+
+on:
+  repository_dispatch:
+    types: [order_paid, shopify_order_created]
+
+jobs:
+  process-order:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Record Order to Supabase gc_ledger
+        run: |
+          node - <<'EOF'
+          const { createClient } = require('@supabase/supabase-js');
+          const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+          const order = JSON.parse(process.env.ORDER_PAYLOAD);
+          const { error } = await supabase.from('gc_ledger').insert({
+            source: 'shopify',
+            amount: order.total_price,
+            currency: order.currency,
+            reference_id: order.id,
+            customer_email: order.email,
+            status: 'confirmed',
+            created_at: new Date().toISOString()
+          });
+          if (error) throw new Error(error.message);
+          console.log('Order recorded to gc_ledger:', order.id);
+          EOF
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ORDER_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+
+      - name: Create Fulfillment Task in Linear
+        run: |
+          curl -s -X POST https://api.linear.app/graphql \
+            -H "Authorization: ${{ secrets.LINEAR_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "query": "mutation { issueCreate(input: { teamId: \"${{ secrets.LINEAR_TEAM_ID }}\", title: \"Shopify Order Fulfillment: ${{ github.event.client_payload.id }}\", description: \"Order ${{ github.event.client_payload.id }} for ${{ github.event.client_payload.total_price }} received. Auto-dispatched from Garcar pipeline.\", priority: 2 }) { success issue { id } } }"
+            }'
+
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          channel-id: ${{ secrets.SLACK_REVENUE_CHANNEL }}
+          slack-message: |
+            :shopping_bags: *SHOPIFY ORDER RECEIVED*
+            Order ID: `${{ github.event.client_payload.id }}`
+            Amount: `${{ github.event.client_payload.total_price }} ${{ github.event.client_payload.currency }}`
+            Customer: `${{ github.event.client_payload.email }}`
+            Status: Recorded to gc_ledger ✅
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

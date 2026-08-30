@@ -1,0 +1,62 @@
+# Garcar Enterprise — Base by Coinbase Onchain Settlement
+# Triggers onchain revenue settlement when Stripe payment confirmed
+# Secrets: BASE_RPC_URL, BASE_PRIVATE_KEY, BASE_CONTRACT_ADDRESS, COINBASE_API_KEY
+
+name: Garcar Base Settlement
+
+on:
+  repository_dispatch:
+    types: [stripe_payment_confirmed, invoice_paid]
+
+jobs:
+  settle-onchain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install ethers @coinbase/coinbase-sdk
+
+      - name: Settle Revenue Onchain via Base
+        run: |
+          node - <<'EOF'
+          const { ethers } = require('ethers');
+          const provider = new ethers.JsonRpcProvider(process.env.BASE_RPC_URL);
+          const wallet = new ethers.Wallet(process.env.BASE_PRIVATE_KEY, provider);
+          const amount = process.env.PAYMENT_AMOUNT;
+          const source = process.env.PAYMENT_SOURCE;
+          console.log(`Settling $${amount} from ${source} to Base contract ${process.env.BASE_CONTRACT_ADDRESS}`);
+          // Contract ABI call: recordRevenue(amount, source)
+          const abi = ['function recordRevenue(uint256 amount, string source) external'];
+          const contract = new ethers.Contract(process.env.BASE_CONTRACT_ADDRESS, abi, wallet);
+          const tx = await contract.recordRevenue(
+            ethers.parseUnits(amount, 6),
+            source
+          );
+          console.log(`TX Hash: ${tx.hash}`);
+          await tx.wait();
+          console.log('Onchain settlement confirmed');
+          EOF
+        env:
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+          BASE_PRIVATE_KEY: ${{ secrets.BASE_PRIVATE_KEY }}
+          BASE_CONTRACT_ADDRESS: ${{ secrets.BASE_CONTRACT_ADDRESS }}
+          PAYMENT_AMOUNT: ${{ github.event.client_payload.amount }}
+          PAYMENT_SOURCE: ${{ github.event.client_payload.source }}
+
+      - name: Notify Slack — Onchain Settlement
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          channel-id: ${{ secrets.SLACK_REVENUE_CHANNEL }}
+          slack-message: |
+            :link: *BASE ONCHAIN SETTLEMENT COMPLETE*
+            Amount: `${{ github.event.client_payload.amount }}`
+            Chain: Base Mainnet
+            Contract: `${{ secrets.BASE_CONTRACT_ADDRESS }}`
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

@@ -1,0 +1,75 @@
+# Garcar Enterprise — Hugging Face Inference
+# Runs AI lead scoring, document classification, deal analysis
+# Secrets: HF_TOKEN, HUGGINGFACE_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+
+name: Garcar HuggingFace Inference
+
+on:
+  repository_dispatch:
+    types:
+      - lead_received
+      - document_ingested
+      - contract_uploaded
+
+jobs:
+  run-inference:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install huggingface_hub supabase requests
+
+      - name: Score Lead / Classify Document
+        run: |
+          python3 - <<'PYEOF'
+          import os, json, requests
+          from supabase import create_client
+
+          payload = json.loads(os.environ['EVENT_PAYLOAD'])
+          event_action = os.environ['EVENT_ACTION']
+          hf_token = os.environ['HF_TOKEN']
+
+          headers = {"Authorization": f"Bearer {hf_token}"}
+
+          if event_action == 'lead_received':
+              # Use sentence-transformers for lead scoring
+              model = "sentence-transformers/all-MiniLM-L6-v2"
+              text = f"{payload.get('company', '')} {payload.get('title', '')} {payload.get('description', '')}"
+              resp = requests.post(
+                  f"https://api-inference.huggingface.co/models/{model}",
+                  headers=headers,
+                  json={"inputs": text}
+              )
+              score = resp.json()
+              print(f"Lead score computed: {score}")
+
+              # Write score back to Supabase leads table
+              supabase = create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_ROLE_KEY'])
+              supabase.table('leads').update({'hf_score': str(score), 'status': 'scored'}).eq('id', payload.get('id')).execute()
+              print('Lead score written to Supabase')
+
+          elif event_action in ['document_ingested', 'contract_uploaded']:
+              # Use Mistral for document classification
+              model = "mistralai/Mistral-7B-Instruct-v0.3"
+              prompt = f"Classify this document and extract key terms: {payload.get('content', '')[:2000]}"
+              resp = requests.post(
+                  f"https://api-inference.huggingface.co/models/{model}",
+                  headers=headers,
+                  json={"inputs": prompt, "parameters": {"max_new_tokens": 256}}
+              )
+              result = resp.json()
+              print(f"Document classified: {result}")
+
+          print(f"HuggingFace inference complete for: {event_action}")
+          PYEOF
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EVENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+          EVENT_ACTION: ${{ github.event.action }}

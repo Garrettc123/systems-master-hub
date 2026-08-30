@@ -1,0 +1,63 @@
+# Garcar Enterprise — Slack Integration
+# Sends revenue, deployment, and agent alerts to Slack channels
+# Secrets required: SLACK_BOT_TOKEN, SLACK_WEBHOOK_URL, SLACK_REVENUE_CHANNEL, SLACK_ALERTS_CHANNEL
+
+name: Garcar Slack Notifier
+
+on:
+  workflow_run:
+    workflows: ["*"]
+    types: [completed]
+  repository_dispatch:
+    types:
+      - payment_received
+      - lead_enriched
+      - agent_error
+      - revenue_milestone
+      - deployment_complete
+
+jobs:
+  notify-slack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Revenue Alert
+        if: github.event.action == 'payment_received' || github.event.action == 'revenue_milestone'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          channel-id: ${{ secrets.SLACK_REVENUE_CHANNEL }}
+          slack-message: |
+            :moneybag: *GARCAR REVENUE EVENT*
+            Type: `${{ github.event.action }}`
+            Amount: `${{ github.event.client_payload.amount }}`
+            Source: `${{ github.event.client_payload.source }}`
+            Time: `${{ github.event.client_payload.timestamp }}`
+            Ledger ID: `${{ github.event.client_payload.ledger_id }}`
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Agent Error Alert
+        if: github.event.action == 'agent_error'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          channel-id: ${{ secrets.SLACK_ALERTS_CHANNEL }}
+          slack-message: |
+            :rotating_light: *GARCAR AGENT ERROR*
+            Agent: `${{ github.event.client_payload.agent_name }}`
+            Error: `${{ github.event.client_payload.error_message }}`
+            Repo: `${{ github.event.client_payload.repo }}`
+            Time: `${{ github.event.client_payload.timestamp }}`
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Deployment Complete
+        if: github.event.action == 'deployment_complete' || github.event_name == 'workflow_run'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          channel-id: ${{ secrets.SLACK_ALERTS_CHANNEL }}
+          slack-message: |
+            :rocket: *GARCAR DEPLOYMENT*
+            Workflow: `${{ github.event.workflow_run.name || github.event.client_payload.workflow }}`
+            Status: `${{ github.event.workflow_run.conclusion || 'dispatched' }}`
+            Repo: `${{ github.event.workflow_run.repository.full_name || github.event.client_payload.repo }}`
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

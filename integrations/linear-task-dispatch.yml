@@ -1,0 +1,41 @@
+# Garcar Enterprise — Linear Task Dispatch
+# Auto-creates Linear issues for agent tasks, anomalies, and revenue ops
+# Secrets: LINEAR_API_KEY, LINEAR_TEAM_ID, LINEAR_REVENUE_PROJECT_ID
+
+name: Garcar Linear Dispatch
+
+on:
+  repository_dispatch:
+    types:
+      - agent_task_required
+      - deployment_failed
+      - revenue_anomaly
+      - bug_detected
+      - lead_needs_followup
+
+jobs:
+  create-linear-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Linear Issue
+        run: |
+          PRIORITY=2
+          if [[ "$EVENT_ACTION" == "deployment_failed" || "$EVENT_ACTION" == "revenue_anomaly" ]]; then
+            PRIORITY=1
+          fi
+
+          TITLE="[$EVENT_ACTION] $ISSUE_TITLE"
+          DESCRIPTION="**Auto-dispatched by Garcar Autonomous Butler**\n\nEvent: \`$EVENT_ACTION\`\n\nPayload:\n\`\`\`json\n$EVENT_PAYLOAD\n\`\`\`\n\nTriggered: $(date -u)"
+
+          curl -s -X POST https://api.linear.app/graphql \
+            -H "Authorization: $LINEAR_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"query\": \"mutation { issueCreate(input: { teamId: \\\"$LINEAR_TEAM_ID\\\", title: \\\"$TITLE\\\", description: \\\"$DESCRIPTION\\\", priority: $PRIORITY }) { success issue { id identifier url } } }\"
+            }"
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          LINEAR_TEAM_ID: ${{ secrets.LINEAR_TEAM_ID }}
+          EVENT_ACTION: ${{ github.event.action }}
+          ISSUE_TITLE: ${{ github.event.client_payload.title || github.event.action }}
+          EVENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}

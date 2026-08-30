@@ -1,0 +1,74 @@
+# Garcar Enterprise — Notion Sync
+# Writes deals, leads, revenue events, and agent logs to Notion databases
+# Secrets: NOTION_API_KEY, NOTION_DEALS_DB_ID, NOTION_REVENUE_DB_ID, NOTION_LEADS_DB_ID
+
+name: Garcar Notion Sync
+
+on:
+  repository_dispatch:
+    types:
+      - lead_qualified
+      - deal_closed
+      - revenue_recorded
+      - agent_report_generated
+
+jobs:
+  sync-to-notion:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Notion SDK
+        run: npm install @notionhq/client
+
+      - name: Write Lead to Notion CRM
+        if: github.event.action == 'lead_qualified'
+        run: |
+          node - <<'EOF'
+          const { Client } = require('@notionhq/client');
+          const notion = new Client({ auth: process.env.NOTION_API_KEY });
+          const payload = JSON.parse(process.env.EVENT_PAYLOAD);
+          await notion.pages.create({
+            parent: { database_id: process.env.NOTION_LEADS_DB_ID },
+            properties: {
+              'Name': { title: [{ text: { content: payload.company_name || payload.email } }] },
+              'Email': { email: payload.email },
+              'Score': { number: payload.score },
+              'Source': { select: { name: payload.source || 'enrichment-engine' } },
+              'Status': { select: { name: 'Qualified' } },
+              'Date': { date: { start: new Date().toISOString() } }
+            }
+          });
+          console.log('Lead written to Notion CRM');
+          EOF
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_LEADS_DB_ID: ${{ secrets.NOTION_LEADS_DB_ID }}
+          EVENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+
+      - name: Write Revenue Event to Notion
+        if: github.event.action == 'revenue_recorded' || github.event.action == 'deal_closed'
+        run: |
+          node - <<'EOF'
+          const { Client } = require('@notionhq/client');
+          const notion = new Client({ auth: process.env.NOTION_API_KEY });
+          const payload = JSON.parse(process.env.EVENT_PAYLOAD);
+          await notion.pages.create({
+            parent: { database_id: process.env.NOTION_REVENUE_DB_ID },
+            properties: {
+              'Deal': { title: [{ text: { content: payload.deal_name || payload.reference_id } }] },
+              'Amount': { number: parseFloat(payload.amount) },
+              'Source': { select: { name: payload.source || 'unknown' } },
+              'Status': { select: { name: 'Confirmed' } },
+              'Date': { date: { start: new Date().toISOString() } }
+            }
+          });
+          console.log('Revenue recorded to Notion');
+          EOF
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_REVENUE_DB_ID: ${{ secrets.NOTION_REVENUE_DB_ID }}
+          EVENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
