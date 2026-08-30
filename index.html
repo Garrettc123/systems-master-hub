@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Garcar Enterprise — Autonomous AI Business Infrastructure</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bg: '#0a0a0a',
+            accent: '#00ff88',
+          },
+          fontFamily: {
+            mono: ['JetBrains Mono', 'Fira Mono', 'Courier New', 'monospace'],
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    body { background-color: #0a0a0a; color: #e5e5e5; font-family: 'JetBrains Mono', 'Fira Mono', 'Courier New', monospace; }
+    .accent { color: #00ff88; }
+    .accent-border { border-color: #00ff88; }
+    .accent-bg { background-color: #00ff88; }
+    .card { background-color: #111111; border: 1px solid #1f1f1f; }
+    .card:hover { border-color: #00ff88; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- Nav -->
+  <nav class="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+    <span class="accent font-bold text-lg tracking-widest">GARCAR</span>
+    <div class="flex gap-6 text-sm text-gray-400">
+      <a href="#products" class="hover:text-white transition">Products</a>
+      <a href="#metrics" class="hover:text-white transition">Metrics</a>
+      <a href="https://app.notion.com/p/338024e8799b811cbd26d2019831ccab" target="_blank" rel="noopener noreferrer" class="accent hover:underline transition">Data Room</a>
+      <a href="https://github.com/Garrettc123" target="_blank" rel="noopener noreferrer" class="hover:text-white transition">GitHub</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="max-w-5xl mx-auto px-6 py-24 text-center">
+    <p class="accent text-sm tracking-widest mb-4 uppercase">Enterprise AI Infrastructure</p>
+    <h1 class="text-4xl md:text-6xl font-bold text-white leading-tight mb-6">
+      Garcar Enterprise —<br />
+      <span class="accent">Autonomous AI Business Infrastructure</span>
+    </h1>
+    <p class="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto mb-10">
+      Revenue automation, agent orchestration, and cloud deployment —<br class="hidden md:block" />
+      all running without human intervention.
+    </p>
+    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+      <a
+        href="https://app.notion.com/p/338024e8799b811cbd26d2019831ccab"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="accent-bg text-black font-bold px-8 py-3 rounded hover:opacity-90 transition text-sm tracking-wide"
+      >
+        Investor Data Room →
+      </a>
+      <a
+        href="mailto:garcar.enterprise@gmail.com"
+        class="border accent-border text-white font-bold px-8 py-3 rounded hover:bg-gray-900 transition text-sm tracking-wide"
+      >
+        Contact Us
+      </a>
+    </div>
+  </section>
+
+  <!-- Products -->
+  <section id="products" class="max-w-5xl mx-auto px-6 pb-20">
+    <h2 class="text-sm accent tracking-widest uppercase mb-10">// Product Suite</h2>
+    <div class="grid md:grid-cols-3 gap-6">
+
+      <!-- autonomous-butler-core -->
+      <div class="card rounded-lg p-6 transition">
+        <div class="accent text-xs tracking-widest uppercase mb-3">Managed AI Ops</div>
+        <h3 class="text-white text-xl font-bold mb-2">autonomous-butler-core</h3>
+        <p class="text-gray-400 text-sm mb-4">
+          Fully managed AI operations layer. Handles workflow automation, agent scheduling, and self-healing infrastructure — zero ops overhead required.
+        </p>
+        <div class="accent font-bold text-lg mb-4">$2,500 / mo</div>
+        <a
+          href="https://autonomous-butler-core.github.io"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-xs accent hover:underline tracking-wide"
+        >
+          View Landing Page →
+        </a>
+      </div>
+
+      <!-- NEXUS-AI-CORE -->
+      <div class="card rounded-lg p-6 transition">
+        <div class="accent text-xs tracking-widest uppercase mb-3">Real Estate Intelligence Engine</div>
+        <h3 class="text-white text-xl font-bold mb-2">NEXUS-AI-CORE</h3>
+        <p class="text-gray-400 text-sm mb-4">
+          AI-driven real estate market analysis. Generates deep-dive intelligence reports on property markets, investment opportunities, and risk scoring.
+        </p>
+        <div class="accent font-bold text-lg mb-4">$1,000 / report</div>
+        <a
+          href="https://github.com/Garrettc123/NEXUS-AI-CORE"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-xs accent hover:underline tracking-wide"
+        >
+          View Repository →
+        </a>
+      </div>
+
+      <!-- garcar-product-factory -->
+      <div class="card rounded-lg p-6 transition">
+        <div class="accent text-xs tracking-widest uppercase mb-3">Digital Product Catalog</div>
+        <h3 class="text-white text-xl font-bold mb-2">garcar-product-factory</h3>
+        <p class="text-gray-400 text-sm mb-4">
+          Automated digital product generation and distribution pipeline. Launch, price, and sell AI-generated digital products at scale.
+        </p>
+        <div class="accent font-bold text-lg mb-4">Starting at $49</div>
+        <a
+          href="https://github.com/Garrettc123/garcar-product-factory"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-xs accent hover:underline tracking-wide"
+        >
+          View Repository →
+        </a>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Metrics -->
+  <section id="metrics" class="border-t border-gray-800 py-16">
+    <div class="max-w-5xl mx-auto px-6">
+      <h2 class="text-sm accent tracking-widest uppercase mb-10">// System Metrics</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 text-center">
+        <div>
+          <div class="text-5xl font-bold accent">263</div>
+          <div class="text-gray-400 text-sm mt-2 tracking-wide">Repositories</div>
+        </div>
+        <div>
+          <div class="text-5xl font-bold accent">172</div>
+          <div class="text-gray-400 text-sm mt-2 tracking-wide">Public Systems</div>
+        </div>
+        <div>
+          <div class="text-5xl font-bold accent">2020</div>
+          <div class="text-gray-400 text-sm mt-2 tracking-wide">Active Since</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-20 border-t border-gray-800">
+    <div class="max-w-3xl mx-auto px-6 text-center">
+      <h2 class="text-3xl font-bold text-white mb-4">Ready to deploy autonomous infrastructure?</h2>
+      <p class="text-gray-400 mb-8">Access our full investor data room or reach out directly to start a conversation.</p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a
+          href="https://app.notion.com/p/338024e8799b811cbd26d2019831ccab"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="accent-bg text-black font-bold px-8 py-3 rounded hover:opacity-90 transition text-sm tracking-wide"
+        >
+          Investor Data Room →
+        </a>
+        <a
+          href="mailto:garcar.enterprise@gmail.com"
+          class="border accent-border text-white font-bold px-8 py-3 rounded hover:bg-gray-900 transition text-sm tracking-wide"
+        >
+          garcar.enterprise@gmail.com
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-800 px-6 py-8 text-center text-gray-500 text-xs">
+    <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+      <span class="accent font-bold tracking-widest">GARCAR ENTERPRISE</span>
+      <span class="hidden sm:inline text-gray-700">|</span>
+      <a href="https://github.com/Garrettc123" target="_blank" rel="noopener noreferrer" class="hover:text-white transition">
+        github.com/Garrettc123
+      </a>
+      <span class="hidden sm:inline text-gray-700">|</span>
+      <a href="mailto:garcar.enterprise@gmail.com" class="hover:text-white transition">garcar.enterprise@gmail.com</a>
+    </div>
+    <p class="mt-4 text-gray-700">© 2024 Garcar Enterprise. All rights reserved.</p>
+  </footer>
+
+</body>
+</html>
