@@ -113,43 +113,39 @@ jobs:
     name: Secrets and Vault Health
     runs-on: ubuntu-latest
     outputs:
-      secrets_ok: ${{ steps.health.outputs.secrets_ok }}
+      secrets_ok: ${{ steps.vault.outputs.ok }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate required GitHub secrets exist
-        id: health
-        shell: bash
+      - name: Install Vault CLI
+        run: |
+          curl -fsSL https://releases.hashicorp.com/vault/1.15.4/vault_1.15.4_linux_amd64.zip -o vault.zip
+          unzip vault.zip && sudo mv vault /usr/local/bin/
+
+      - name: Validate Vault connectivity and read secrets
+        id: vault
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
           VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
-          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
         run: |
-          missing=0
-          for name in CLOUDFLARE_API_TOKEN VERCEL_TOKEN RAILWAY_TOKEN VAULT_ADDR VAULT_TOKEN STRIPE_WEBHOOK_SECRET; do
-            if [ -z "${!name}" ]; then
-              echo "Missing $name"
-              missing=1
+          ok=1
+          for path in \
+            "secret/data/garcar/vercel" \
+            "secret/data/garcar/cloudflare" \
+            "secret/data/garcar/railway" \
+            "secret/data/garcar/stripe" \
+          ; do
+            if ! vault kv get -field=token "$path" >/dev/null 2>&1; then
+              echo "Missing or unreadable: $path"
+              ok=0
             fi
           done
-          if [ "$missing" = "0" ]; then
-            echo "secrets_ok=true" >> "$GITHUB_OUTPUT"
+          if [ "$ok" = "1" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
           else
-            echo "secrets_ok=false" >> "$GITHUB_OUTPUT"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
-
-      - name: Vault health probe
-        if: steps.health.outputs.secrets_ok == 'true'
-        shell: bash
-        env:
-          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
-        run: |
-          curl -fsS -H "X-Vault-Token: $VAULT_TOKEN" "$VAULT_ADDR/v1/sys/health"
 
   deploy-vercel:
     name: Deploy Vercel Frontends
@@ -167,24 +163,33 @@ jobs:
       - name: Install Vercel CLI
         run: npm i -g vercel
 
+      - name: Load Vercel token from Vault
+        id: vercel-secret
+        env:
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+        run: |
+          token=$(vault kv get -field=token secret/data/garcar/vercel)
+          echo "VERCEL_TOKEN=$token" >> "$GITHUB_OUTPUT"
+
       - name: Deploy believe-revenue-site
         if: ${{ hashFiles('believe-revenue-site/**') != '' }}
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ steps.vercel-secret.outputs.VERCEL_TOKEN }}
         run: |
           cd believe-revenue-site && vercel --prod --token "$VERCEL_TOKEN" --yes
 
       - name: Deploy garcar.io
         if: ${{ hashFiles('garcar.io/**') != '' }}
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ steps.vercel-secret.outputs.VERCEL_TOKEN }}
         run: |
           cd garcar.io && vercel --prod --token "$VERCEL_TOKEN" --yes
 
       - name: Deploy ueep
         if: ${{ hashFiles('ueep/**') != '' }}
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ steps.vercel-secret.outputs.VERCEL_TOKEN }}
         run: |
           cd ueep && vercel --prod --token "$VERCEL_TOKEN" --yes
 
@@ -204,24 +209,33 @@ jobs:
       - name: Install Wrangler
         run: npm i -g wrangler
 
+      - name: Load Cloudflare token from Vault
+        id: cf-secret
+        env:
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+        run: |
+          token=$(vault kv get -field=api_token secret/data/garcar/cloudflare)
+          echo "CF_TOKEN=$token" >> "$GITHUB_OUTPUT"
+
       - name: Deploy stripe-webhook-worker
         if: ${{ hashFiles('stripe-webhook-worker/**') != '' }}
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ steps.cf-secret.outputs.CF_TOKEN }}
         run: |
           cd stripe-webhook-worker && wrangler deploy
 
       - name: Deploy agent-api-worker
         if: ${{ hashFiles('agent-api-worker/**') != '' }}
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ steps.cf-secret.outputs.CF_TOKEN }}
         run: |
           cd agent-api-worker && wrangler deploy
 
       - name: Deploy nexusos-edge
         if: ${{ hashFiles('nexusos-edge/**') != '' }}
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ steps.cf-secret.outputs.CF_TOKEN }}
         run: |
           cd nexusos-edge && wrangler deploy
 
@@ -238,24 +252,33 @@ jobs:
           curl -fsSL https://railway.app/install.sh | sh
           echo "$HOME/.railway/bin" >> $GITHUB_PATH
 
+      - name: Load Railway token from Vault
+        id: rw-secret
+        env:
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+        run: |
+          token=$(vault kv get -field=token secret/data/garcar/railway)
+          echo "RAILWAY_TOKEN=$token" >> "$GITHUB_OUTPUT"
+
       - name: Deploy outbox-worker
         if: ${{ hashFiles('outbox-worker/**') != '' }}
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_TOKEN: ${{ steps.rw-secret.outputs.RAILWAY_TOKEN }}
         run: |
           railway up -d outbox-worker
 
       - name: Deploy rhnes-flywheel
         if: ${{ hashFiles('rhnes-flywheel/**') != '' }}
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_TOKEN: ${{ steps.rw-secret.outputs.RAILWAY_TOKEN }}
         run: |
           railway up -d rhnes-flywheel
 
       - name: Deploy durable-event-queue
         if: ${{ hashFiles('durable-event-queue/**') != '' }}
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_TOKEN: ${{ steps.rw-secret.outputs.RAILWAY_TOKEN }}
         run: |
           railway up -d durable-event-queue
 
@@ -270,6 +293,15 @@ jobs:
 
       - name: Health check garcar.io
         run: curl -fsS https://garcar.io/api/health
+
+      - name: Load Stripe webhook secret from Vault
+        id: stripe-secret
+        env:
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+        run: |
+          secret=$(vault kv get -field=webhook_secret secret/data/garcar/stripe)
+          echo "STRIPE_WEBHOOK_SECRET=$secret" >> "$GITHUB_OUTPUT"
 
       - name: Stripe webhook endpoint smoke test
         run: |
