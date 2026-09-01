@@ -1,0 +1,21 @@
+name: Deploy Mesh
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "vercel, cloudflare, railway, or all"
+        required: true
+        default: "all"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/enterprise-control-plane.yml
+    secrets: inherit
+    with:
+      apply_remediation: "false"
+      deploy_target: ${{ github.event.inputs.target }}

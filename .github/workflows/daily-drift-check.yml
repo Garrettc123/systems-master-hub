@@ -1,0 +1,18 @@
+name: Daily IaC Drift Check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 11 * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    uses: ./.github/workflows/enterprise-control-plane.yml
+    secrets: inherit
+    with:
+      apply_remediation: "false"
+      deploy_target: "none"
