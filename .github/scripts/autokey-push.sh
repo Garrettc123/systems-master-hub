@@ -18,18 +18,24 @@ if [ -z "${GH_TOKEN:-}" ]; then
   exit 1
 fi
 
+DRY_RUN="${DRY_RUN:-false}"
 OK=0; FAIL=0; SKIP=0
 
 push_secret() {
   local name="$1"
   local value="$2"
   if [ -n "$value" ]; then
-    if printf '%s' "$value" | gh secret set "$name" --repo "$TARGET" --body - 2>&1; then
-      echo "  [OK]   $name"
+    if [ "$DRY_RUN" = "true" ]; then
+      echo "  [DRY]  $name"
       OK=$((OK+1))
     else
-      echo "  [FAIL] $name"
-      FAIL=$((FAIL+1))
+      if printf '%s' "$value" | gh secret set "$name" --repo "$TARGET" --body - 2>&1; then
+        echo "  [OK]   $name"
+        OK=$((OK+1))
+      else
+        echo "  [FAIL] $name"
+        FAIL=$((FAIL+1))
+      fi
     fi
   else
     echo "  [SKIP] $name (not set in source)"
@@ -40,6 +46,7 @@ push_secret() {
 echo "========================================"
 echo " AutoKey → $TARGET"
 echo "========================================"
+[ "$DRY_RUN" = "true" ] && echo " DRY RUN ENABLED (no writes)"
 
 # Iterate every VAL_* env var and push it as the secret name without the VAL_ prefix
 while IFS='=' read -r key value; do
