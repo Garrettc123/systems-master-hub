@@ -1,5 +1,7 @@
 # Garcar Enterprise — Autonomous AI Business Infrastructure
 
+[<img src="https://github.com/Garrettc123/systems-master-hub/actions/workflows/autokey-sweep-all.yml/badge.svg" alt="autokey-sweep-all status">](https://github.com/Garrettc123/systems-master-hub/actions/workflows/autokey-sweep-all.yml)
+
 > Revenue automation, agent orchestration, and cloud deployment — all running without human intervention.
 
 🌐 **[Live Site](https://garrettc123.github.io/systems-master-hub)** &nbsp;|&nbsp; 📊 **[Investor Data Room](https://app.notion.com/p/338024e8799b811cbd26d2019831ccab)** &nbsp;|&nbsp; 🐙 **[GitHub](https://github.com/Garrettc123)**
