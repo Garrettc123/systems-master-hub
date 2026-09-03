@@ -69,18 +69,22 @@ jobs:
 
       - name: Verify sync prerequisites
         env:
-          GH_TOKEN: ${{ secrets.GHPAT || secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          GHPAT: ${{ secrets.GHPAT }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${GH_TOKEN}" ]; then
-            echo "❌ Missing auth token. Set GHPAT or PAT_TOKEN in systems-master-hub secrets."
+          GH_SYNC_TOKEN="${GHPAT:-${PAT_TOKEN:-}}"
+          if [ -z "${GH_SYNC_TOKEN}" ]; then
+            echo "❌ Missing cross-repo auth token."
+            echo "AutoKey sweep requires GHPAT or PAT_TOKEN with Actions secrets write access on the target repositories."
+            echo "The default GITHUB_TOKEN cannot update Actions secrets across repositories."
             exit 1
           fi
-          echo "✅ Auth token is configured"
+          echo "GH_TOKEN=${GH_SYNC_TOKEN}" >> "$GITHUB_ENV"
+          echo "✅ Cross-repo auth token is configured"
 
       - name: Sync configured secrets to every selected repository
         env:
-          GH_TOKEN: ${{ secrets.GHPAT || secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_OWNER: Garrettc123
           TARGET_REPO: ${{ inputs.target_repo }}
           TARGET_SCOPE: ${{ inputs.target_scope || 'registry' }}

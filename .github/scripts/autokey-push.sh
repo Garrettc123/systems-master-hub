@@ -2,7 +2,7 @@
 # AutoKey push helper — called by every sync job in autokey-sweep-all.yml
 # Usage: autokey-push.sh <owner/repo>
 # Reads all VAL_* env vars and pushes each as a secret to the target repo.
-# Requires GH_TOKEN (classic PAT, repo + admin:repo_hook scopes).
+# Requires GH_TOKEN (GHPAT/PAT_TOKEN with Actions secrets write access on target repos).
 
 set -euo pipefail
 
@@ -13,8 +13,8 @@ if [ -z "$TARGET" ]; then
 fi
 
 if [ -z "${GH_TOKEN:-}" ]; then
-  echo "ERROR: GH_TOKEN not set. Add GITHUB_PAT to systems-master-hub secrets."
-  echo "Required scopes: repo, admin:repo_hook"
+  echo "ERROR: GH_TOKEN not set. Add GHPAT or PAT_TOKEN to systems-master-hub secrets."
+  echo "Required access: Actions secrets write on the target repositories"
   exit 1
 fi
 
