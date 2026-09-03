@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 PUSH_SCRIPT="$SCRIPT_DIR/autokey-push.sh"
 
 if [ ! -x "$PUSH_SCRIPT" ]; then
