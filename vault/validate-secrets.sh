@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ===========================================================================
 # GARCAR AUTOKEY — validate-secrets.sh
-# Validates that all required GitHub Secrets exist for all Tier-1 repos.
+# Validates that all required GitHub Secrets exist for all repos in registry/repos.json.
 # Does NOT read secret values (GitHub never returns them) — only checks
 # presence.
 #
@@ -11,10 +11,19 @@ set -euo pipefail
 
 GITHUB_ORG="Garrettc123"
 TARGET_REPO=""
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REGISTRY_FILE="${REGISTRY_FILE:-$ROOT_DIR/registry/repos.json}"
 
-for arg in "$@"; do
-  case $arg in
-    --repo) TARGET_REPO="$2"; shift ;;
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --repo)
+      [ $# -lt 2 ] && { echo "ERROR: Missing value for --repo" >&2; exit 1; }
+      TARGET_REPO="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
   esac
 done
 
@@ -29,22 +38,42 @@ if ! command -v gh &>/dev/null; then
   exit 1
 fi
 
-# Required secrets per repo
 declare -A REQUIRED
-REQUIRED["systems-master-hub"]="GITHUB_TOKEN LINEAR_API_KEY SLACK_WEBHOOK_URL RAILWAY_TOKEN"
-REQUIRED["garcar-payments"]="STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STRIPE_PUBLISHABLE_KEY SUPABASE_URL SUPABASE_SERVICE_KEY APP_URL RAILWAY_TOKEN SLACK_WEBHOOK_URL LINEAR_API_KEY"
-REQUIRED["garcar-payment-loop"]="STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET SUPABASE_URL SUPABASE_SERVICE_KEY RAILWAY_TOKEN SLACK_WEBHOOK_URL LINEAR_API_KEY"
-REQUIRED["mars-api"]="SUPABASE_URL SUPABASE_SERVICE_KEY APP_URL RAILWAY_TOKEN SLACK_WEBHOOK_URL LINEAR_API_KEY"
-REQUIRED["enterprise-mlops-platform"]="SUPABASE_URL SUPABASE_SERVICE_KEY RAILWAY_TOKEN SLACK_WEBHOOK_URL"
-REQUIRED["TITAN-Autonomous-Business-Empire"]="STRIPE_SECRET_KEY SUPABASE_URL SUPABASE_SERVICE_KEY RAILWAY_TOKEN LINEAR_API_KEY SLACK_WEBHOOK_URL"
-REQUIRED["atlas-dashboard"]="SUPABASE_URL SUPABASE_SERVICE_KEY VERCEL_TOKEN SLACK_WEBHOOK_URL"
-REQUIRED["zeus-dashboard"]="SUPABASE_URL SUPABASE_SERVICE_KEY LINEAR_API_KEY VERCEL_TOKEN SLACK_WEBHOOK_URL"
-REQUIRED["neural-mesh"]="GITHUB_TOKEN SLACK_WEBHOOK_URL"
+if [ ! -f "$REGISTRY_FILE" ]; then
+  log_error "Registry file not found: $REGISTRY_FILE"
+  exit 1
+fi
+if ! command -v jq &>/dev/null; then
+  log_error "jq not found."
+  exit 1
+fi
+
+while IFS='|' read -r repo required; do
+  [ -z "${repo:-}" ] && continue
+  REQUIRED["$repo"]="$required"
+done < <(
+  jq -r '
+    [
+      (.tier1.repos // {}),
+      (.tier2.repos // {}),
+      (.tier3.repos // {})
+    ]
+    | map(to_entries[])
+    | flatten
+    | .[]
+    | .key + "|" + ((.value.requiredSecrets // []) | join(" "))
+  ' "$REGISTRY_FILE"
+)
+
+if [ "${#REQUIRED[@]}" -eq 0 ]; then
+  log_error "No repository mappings found in registry."
+  exit 1
+fi
 
 if [ -n "$TARGET_REPO" ]; then
   REPOS=("$TARGET_REPO")
 else
-  REPOS=("systems-master-hub" "garcar-payments" "garcar-payment-loop" "mars-api" "enterprise-mlops-platform" "TITAN-Autonomous-Business-Empire" "atlas-dashboard" "zeus-dashboard" "neural-mesh")
+  mapfile -t REPOS < <(printf "%s\n" "${!REQUIRED[@]}" | sort)
 fi
 
 PASS=0

@@ -1,6 +1,6 @@
 # ===========================================================================
 # GARCAR AUTOKEY — Secret Presence Validation Workflow
-# Validates all required secrets exist across all Tier-1 repos.
+# Validates all required secrets exist across all repos listed in registry/repos.json.
 # Runs daily and after any push to vault/ or .github/workflows/.
 # ===========================================================================
 name: "🔐 AutoKey — Validate Secrets"
@@ -56,18 +56,25 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Time:** $(date -u)" >> $GITHUB_STEP_SUMMARY
           echo "**Org:** Garrettc123" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Repo:** ${{ github.event.inputs.target_repo || 'all' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Registry Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          total_repos=$(jq '[.tier1.repos, .tier2.repos, .tier3.repos] | map(keys | length) | add' registry/repos.json)
+          echo "- Repos in registry: ${total_repos}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Repo | Tier | Required Secrets |" >> $GITHUB_STEP_SUMMARY
           echo "|------|------|-----------------|" >> $GITHUB_STEP_SUMMARY
-          echo "| systems-master-hub | T1 | GITHUB_TOKEN, LINEAR_API_KEY, SLACK_WEBHOOK_URL, RAILWAY_TOKEN |" >> $GITHUB_STEP_SUMMARY
-          echo "| garcar-payments | T1 | STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, SUPABASE_URL, SUPABASE_SERVICE_KEY, APP_URL, RAILWAY_TOKEN |" >> $GITHUB_STEP_SUMMARY
-          echo "| garcar-payment-loop | T1 | STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, SUPABASE_URL, RAILWAY_TOKEN |" >> $GITHUB_STEP_SUMMARY
-          echo "| mars-api | T1 | SUPABASE_URL, APP_URL, RAILWAY_TOKEN |" >> $GITHUB_STEP_SUMMARY
-          echo "| enterprise-mlops-platform | T1 | SUPABASE_URL, RAILWAY_TOKEN |" >> $GITHUB_STEP_SUMMARY
-          echo "| TITAN | T2 | STRIPE_SECRET_KEY, SUPABASE_URL, RAILWAY_TOKEN, LINEAR_API_KEY |" >> $GITHUB_STEP_SUMMARY
-          echo "| atlas-dashboard | T2 | SUPABASE_URL, VERCEL_TOKEN |" >> $GITHUB_STEP_SUMMARY
-          echo "| zeus-dashboard | T2 | SUPABASE_URL, LINEAR_API_KEY, VERCEL_TOKEN |" >> $GITHUB_STEP_SUMMARY
-          echo "| neural-mesh | T2 | GITHUB_TOKEN, SLACK_WEBHOOK_URL |" >> $GITHUB_STEP_SUMMARY
+          jq -r '
+            [
+              ("tier1|" + ((.tier1.repos // {}) | to_entries[] | .key + "|" + ((.value.requiredSecrets // []) | join(", ")))),
+              ("tier2|" + ((.tier2.repos // {}) | to_entries[] | .key + "|" + ((.value.requiredSecrets // []) | join(", ")))),
+              ("tier3|" + ((.tier3.repos // {}) | to_entries[] | .key + "|" + ((.value.requiredSecrets // []) | join(", "))))
+            ]
+            | flatten[]
+          ' registry/repos.json | while IFS='|' read -r tier repo secrets; do
+            echo "| ${repo} | ${tier^^} | ${secrets:-—} |" >> $GITHUB_STEP_SUMMARY
+          done
 
       - name: Notify Slack on failure
         if: failure()

@@ -13,6 +13,24 @@ on:
         required: false
         default: ''
         type: string
+      target_scope:
+        description: 'Repo source: registry (systems) or owner (all account repos)'
+        required: false
+        default: 'registry'
+        type: choice
+        options:
+          - registry
+          - owner
+      target_tier:
+        description: 'Registry tier(s) to sync when target_scope=registry'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - tier1
+          - tier2
+          - tier3
       dry_run:
         description: 'Set true to preview without writing secrets'
         required: false
@@ -65,6 +83,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GHPAT || secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_OWNER: Garrettc123
           TARGET_REPO: ${{ inputs.target_repo }}
+          TARGET_SCOPE: ${{ inputs.target_scope || 'registry' }}
+          TARGET_TIER: ${{ inputs.target_tier || 'all' }}
+          REGISTRY_FILE: registry/repos.json
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
           INCLUDE_ARCHIVED: ${{ inputs.include_archived || 'false' }}
           INCLUDE_FORKS: ${{ inputs.include_forks || 'false' }}
@@ -129,6 +150,8 @@ jobs:
             echo "## 🔑 AutoKey Sweep Summary"
             echo ""
             echo "- Owner: \`Garrettc123\`"
+            echo "- Scope: \`${{ inputs.target_scope || 'registry' }}\`"
+            echo "- Tier: \`${{ inputs.target_tier || 'all' }}\`"
             echo "- Target repo input: \`${{ inputs.target_repo || 'all repositories' }}\`"
             echo "- Dry run: \`${{ inputs.dry_run || 'false' }}\`"
             echo "- Include archived: \`${{ inputs.include_archived || 'false' }}\`"
