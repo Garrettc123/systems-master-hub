@@ -52,8 +52,15 @@ jobs:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           set -euo pipefail
+          ADDR_LC="$(printf '%s' "${VAULT_ADDR:-}" | tr '[:upper:]' '[:lower:]')"
+          PLACEHOLDER_ADDR=false
+          case "$ADDR_LC" in
+            *your-vault-domain.com*|*vault.yourdomain.com*|*example.com*)
+              PLACEHOLDER_ADDR=true
+              ;;
+          esac
           READY=false
-          if [ -n "${VAULT_ADDR:-}" ]; then
+          if [ -n "${VAULT_ADDR:-}" ] && [ "$PLACEHOLDER_ADDR" != "true" ]; then
             if [ -n "${VAULT_TOKEN:-}" ] || { [ -n "${VAULT_ROLE_ID:-}" ] && [ -n "${VAULT_SECRET_ID:-}" ]; }; then
               READY=true
             fi
@@ -65,6 +72,9 @@ jobs:
           echo "ready=$READY" >> "$GITHUB_OUTPUT"
           echo "has_pat=$HAS_PAT" >> "$GITHUB_OUTPUT"
           echo "Vault ready=$READY has_pat=$HAS_PAT"
+          if [ "$PLACEHOLDER_ADDR" = "true" ]; then
+            echo "::notice::VAULT_ADDR appears to be a placeholder; falling back to GitHub-only mode."
+          fi
 
       - name: Zero-touch orchestrator (Vault path)
         if: steps.vault.outputs.ready == 'true' && github.event.inputs.mode != 'github_only'
