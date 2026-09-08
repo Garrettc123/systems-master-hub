@@ -1,0 +1,61 @@
+name: Business Operations Heartbeat
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  heartbeat:
+    name: Revenue pipeline heartbeat
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check public sales surface
+        shell: bash
+        run: |
+          set -e
+          curl -L --fail --silent --show-error --max-time 20 \
+            https://garrettc123.github.io/systems-master-hub >/dev/null
+          echo "Sales surface reachable."
+
+      - name: Inventory business assets
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          candidates = [
+              Path("SYSTEMS-INVENTORY.json"),
+              Path("SYSTEMS_STATUS.md"),
+              Path("04-business-automation/README.md"),
+          ]
+          for p in candidates:
+              print(f"{'OK' if p.exists() else 'MISSING'} {p}")
+          if Path("SYSTEMS-INVENTORY.json").exists():
+              data = json.loads(Path("SYSTEMS-INVENTORY.json").read_text())
+              overview = data.get("overview", {})
+              print("Repositories:", overview.get("total_repositories", "unknown"))
+              print("Production systems:", overview.get("production_systems", "unknown"))
+          PY
+
+      - name: Check checkout for offer and payment configuration
+        shell: bash
+        run: |
+          echo "Searching for sales/payment configuration files..."
+          find . -maxdepth 4 -type f \( \
+            -iname '*stripe*' -o \
+            -iname '*offer*' -o \
+            -iname '*checkout*' -o \
+            -iname '*lead*' \
+          \) -not -path './.git/*' | head -100
+
+      - name: Publish operational status
+        run: |
+          echo "Revenue heartbeat completed."
+          echo "No external financial action is taken by this heartbeat."
