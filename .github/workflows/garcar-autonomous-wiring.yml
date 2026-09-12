@@ -2,6 +2,15 @@ name: Garcar autonomous wiring
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry_run = validate registry only; live = open draft wiring PRs (needs PAT secret)"
+        required: true
+        default: dry_run
+        type: choice
+        options:
+          - dry_run
+          - live
 
 permissions:
   contents: read
@@ -21,16 +30,24 @@ jobs:
       - name: Install deps
         run: pip install requests
 
-      - name: Require orchestrator token
+      - name: Compile check
+        run: python -m py_compile orchestrate/autonomous_wiring.py
+
+      - name: Dry run (no secret required)
+        if: ${{ inputs.mode == 'dry_run' }}
+        env:
+          DRY_RUN: "1"
+        run: python orchestrate/autonomous_wiring.py
+
+      - name: Live wiring (draft PRs)
+        if: ${{ inputs.mode == 'live' }}
         env:
           GARCAR_ORCHESTRATOR_TOKEN: ${{ secrets.GARCAR_ORCHESTRATOR_TOKEN }}
         run: |
           if [ -z "$GARCAR_ORCHESTRATOR_TOKEN" ]; then
-            echo "Missing repo secret GARCAR_ORCHESTRATOR_TOKEN (PAT with repo scope across Garrettc123)."
+            echo "Live mode needs Actions secret GARCAR_ORCHESTRATOR_TOKEN (PAT with repo scope)."
+            echo "Set it at: Settings → Secrets and variables → Actions"
+            echo "Meanwhile Os can fan out via the GitHub connector without this secret."
             exit 1
           fi
-
-      - name: Run autonomous wiring (draft PRs only)
-        env:
-          GARCAR_ORCHESTRATOR_TOKEN: ${{ secrets.GARCAR_ORCHESTRATOR_TOKEN }}
-        run: python orchestrate/autonomous_wiring.py
+          python orchestrate/autonomous_wiring.py

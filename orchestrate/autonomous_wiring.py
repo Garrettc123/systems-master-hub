@@ -2,36 +2,53 @@
 """
 Garcar Autonomous Wiring Orchestrator
 
-Runs inside systems-master-hub via GitHub Actions.
+Runs inside systems-master-hub via GitHub Actions, or dry-run locally.
 
 - Reads SYSTEM_REGISTRY.json
 - Iterates priority_tier_1 systems
-- For each: creates a wiring branch + TODO file
+- For each (live mode): creates a wiring branch + TODO file
 - Opens a draft PR labeled `garcar-autonomous-wiring`
+
+Env:
+  GARCAR_ORCHESTRATOR_TOKEN  preferred PAT (repo scope across Garrettc123)
+  GITHUB_TOKEN               accepted alias (Actions default token is same-repo only)
+  DRY_RUN=1                  validate registry + list targets; do not call GitHub writes
 """
+
+from __future__ import annotations
 
 import base64
 import json
 import os
 import sys
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
-import requests
+DRY_RUN = os.environ.get("DRY_RUN", "").strip() in {"1", "true", "TRUE", "yes", "YES"}
+TOKEN = os.environ.get("GARCAR_ORCHESTRATOR_TOKEN") or os.environ.get("GITHUB_TOKEN")
 
-GITHUB_API = "https://api.github.com"
-TOKEN = os.environ.get("GARCAR_ORCHESTRATOR_TOKEN")
-
-if not TOKEN:
-    print("[ERROR] GARCAR_ORCHESTRATOR_TOKEN not set; cannot wire autonomously.", file=sys.stderr)
+if not DRY_RUN and not TOKEN:
+    print(
+        "[ERROR] Set GARCAR_ORCHESTRATOR_TOKEN (or GITHUB_TOKEN) for live wiring, "
+        "or DRY_RUN=1 to validate only.",
+        file=sys.stderr,
+    )
     sys.exit(1)
 
-SESSION = requests.Session()
-SESSION.headers.update({
-    "Authorization": f"Bearer {TOKEN}",
-    "Accept": "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-})
+SESSION = None
+if TOKEN:
+    import requests
+
+    SESSION = requests.Session()
+    SESSION.headers.update(
+        {
+            "Authorization": f"Bearer {TOKEN}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+    )
+
+GITHUB_API = "https://api.github.com"
 
 
 def load_system_registry() -> Dict[str, Any]:
@@ -48,13 +65,14 @@ def extract_repo_name(github_url: str) -> str:
 
 
 def get_repo_default_branch(full_name: str) -> str:
+    assert SESSION is not None
     r = SESSION.get(f"{GITHUB_API}/repos/{full_name}")
     r.raise_for_status()
-    data = r.json()
-    return data.get("default_branch", "main")
+    return r.json().get("default_branch", "main")
 
 
 def get_branch_sha(full_name: str, branch: str) -> str:
+    assert SESSION is not None
     r = SESSION.get(f"{GITHUB_API}/repos/{full_name}/git/ref/heads/{branch}")
     r.raise_for_status()
     return r.json()["object"]["sha"]
@@ -63,22 +81,20 @@ def get_branch_sha(full_name: str, branch: str) -> str:
 def create_branch_from_default(full_name: str, new_branch: str) -> str:
     default_branch = get_repo_default_branch(full_name)
     sha = get_branch_sha(full_name, default_branch)
-
-    ref_payload = {"ref": f"refs/heads/{new_branch}", "sha": sha}
-    r = SESSION.post(f"{GITHUB_API}/repos/{full_name}/git/refs", json=ref_payload)
-    # 201 = created, 422 = already exists
+    r = SESSION.post(
+        f"{GITHUB_API}/repos/{full_name}/git/refs",
+        json={"ref": f"refs/heads/{new_branch}", "sha": sha},
+    )
     if r.status_code not in (201, 422):
         r.raise_for_status()
     return new_branch
 
 
 def create_or_update_file(full_name: str, branch: str, path: str, content: str, message: str) -> None:
+    assert SESSION is not None
     get_url = f"{GITHUB_API}/repos/{full_name}/contents/{path}?ref={branch}"
     r = SESSION.get(get_url)
-    sha = None
-    if r.status_code == 200:
-        sha = r.json()["sha"]
-
+    sha = r.json()["sha"] if r.status_code == 200 else None
     payload = {
         "message": message,
         "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
@@ -86,13 +102,13 @@ def create_or_update_file(full_name: str, branch: str, path: str, content: str, 
     }
     if sha:
         payload["sha"] = sha
-
     r2 = SESSION.put(f"{GITHUB_API}/repos/{full_name}/contents/{path}", json=payload)
     r2.raise_for_status()
     print(f"[INFO] Wrote {path} in {full_name}@{branch}")
 
 
 def ensure_label(full_name: str, name: str, color: str = "0E8A16") -> None:
+    assert SESSION is not None
     r = SESSION.post(
         f"{GITHUB_API}/repos/{full_name}/labels",
         json={"name": name, "color": color, "description": "Garcar autonomous wiring draft"},
@@ -101,24 +117,30 @@ def ensure_label(full_name: str, name: str, color: str = "0E8A16") -> None:
         print(f"[WARN] Could not ensure label {name} on {full_name}: {r.status_code}")
 
 
-def open_draft_pr(full_name: str, head_branch: str, base_branch: str, title: str, body: str, labels: List[str]) -> None:
-    payload = {
-        "title": title,
-        "head": head_branch,
-        "base": base_branch,
-        "body": body,
-        "draft": True,
-    }
-    r = SESSION.post(f"{GITHUB_API}/repos/{full_name}/pulls", json=payload)
+def open_draft_pr(
+    full_name: str, head_branch: str, base_branch: str, title: str, body: str, labels: List[str]
+) -> None:
+    assert SESSION is not None
+    r = SESSION.post(
+        f"{GITHUB_API}/repos/{full_name}/pulls",
+        json={
+            "title": title,
+            "head": head_branch,
+            "base": base_branch,
+            "body": body,
+            "draft": True,
+        },
+    )
     if r.status_code not in (201, 422):
         r.raise_for_status()
-
     if r.status_code == 201:
         pr = r.json()
         for label in labels:
             ensure_label(full_name, label)
-        issue_url = f"{GITHUB_API}/repos/{full_name}/issues/{pr['number']}"
-        SESSION.post(issue_url + "/labels", json={"labels": labels})
+        SESSION.post(
+            f"{GITHUB_API}/repos/{full_name}/issues/{pr['number']}/labels",
+            json={"labels": labels},
+        )
         print(f"[INFO] Opened draft PR #{pr['number']} in {full_name}: {pr.get('html_url')}")
     else:
         print(f"[WARN] PR might already exist for {full_name}")
@@ -127,8 +149,7 @@ def open_draft_pr(full_name: str, head_branch: str, base_branch: str, title: str
 def build_wiring_todo(system: Dict[str, Any]) -> str:
     name = system["name"]
     role = system.get("role")
-    components = system.get("full_stack_components", {})
-
+    components = system.get("full_stack_components", {}) or {}
     lines = [
         f"# Garcar Autonomous Wiring TODO for {name}",
         "",
@@ -165,20 +186,22 @@ def main() -> None:
     registry = load_system_registry()
     systems = registry.get("systems", [])
     tier1 = set(registry.get("fullstack_gap_analysis", {}).get("priority_tier_1", []))
-
     if not tier1:
         print("[ERROR] No priority_tier_1 systems in SYSTEM_REGISTRY.json", file=sys.stderr)
         sys.exit(1)
 
-    print(f"[INFO] Wiring {len(tier1)} tier-1 systems: {', '.join(sorted(tier1))}")
+    targets = [s for s in systems if s.get("name") in tier1]
+    missing = sorted(tier1 - {s.get("name") for s in targets})
+    print(f"[INFO] Tier-1 count={len(tier1)} matched={len(targets)} missing_entries={missing}")
+    for s in targets:
+        print(f"[INFO] target {s['name']} -> {s.get('github_url')}")
 
-    for system in systems:
-        if system["name"] not in tier1:
-            continue
+    if DRY_RUN:
+        print("[INFO] DRY_RUN=1 — registry validated; no GitHub writes.")
+        return
 
-        github_url = system["github_url"]
-        full_name = extract_repo_name(github_url)
-
+    for system in targets:
+        full_name = extract_repo_name(system["github_url"])
         try:
             default_branch = get_repo_default_branch(full_name)
         except Exception as e:
