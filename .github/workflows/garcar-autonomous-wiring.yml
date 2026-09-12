@@ -1,0 +1,36 @@
+name: Garcar autonomous wiring
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wire-tier1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install requests
+
+      - name: Require orchestrator token
+        env:
+          GARCAR_ORCHESTRATOR_TOKEN: ${{ secrets.GARCAR_ORCHESTRATOR_TOKEN }}
+        run: |
+          if [ -z "$GARCAR_ORCHESTRATOR_TOKEN" ]; then
+            echo "Missing repo secret GARCAR_ORCHESTRATOR_TOKEN (PAT with repo scope across Garrettc123)."
+            exit 1
+          fi
+
+      - name: Run autonomous wiring (draft PRs only)
+        env:
+          GARCAR_ORCHESTRATOR_TOKEN: ${{ secrets.GARCAR_ORCHESTRATOR_TOKEN }}
+        run: python orchestrate/autonomous_wiring.py
