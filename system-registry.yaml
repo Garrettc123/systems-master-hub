@@ -1,0 +1,146 @@
+version: "1.0"
+name: garcar-unified-os
+source_of_truth: systems-master-hub
+status_semantics:
+  design: planned or conceptual
+  development: actively being built
+  validated: CI/tests or equivalent evidence passed
+  deployed: deployment evidence exists
+  observed: runtime health evidence exists
+  degraded: deployed but unhealthy
+  retired: intentionally decommissioned
+confidence_semantics:
+  verified: backed by operational evidence
+  partially_verified: some evidence, incomplete coverage
+  claimed: documentation claim not independently verified
+
+layers:
+  command_control:
+    - systems-master-hub
+    - APEX-Universal-AI-Operating-System
+    - NEXUS-Master-Orchestration-Hub
+    - meta-orchestration-engine
+    - enterprise-unified-platform
+    - zero-human-governance-core
+  revenue:
+    - revenue-agent-system
+    - autonomous-revenue-architect
+    - autonomous-income-deployment
+    - ai-sales-engine
+    - saas-revenue-accelerator
+    - subscription-intelligence-engine
+    - ai-business-automation-tree
+    - ai-consulting-automaton
+    - enterprise-proposal-generator
+  data_intelligence:
+    - intelligent-customer-data-platform
+    - customer-intelligence-branch
+    - semantic-knowledge-nexus
+    - document-intelligence-hub
+    - conversational-ai-engine
+    - multimodal-input-api
+    - ai-training-data-factory
+    - real-time-streaming-analytics
+    - iot-analytics-pipeline
+  ai_agents:
+    - ai-agent-platform
+    - AutoGenesis-AI-Platform
+    - neural-code-synthesizer
+    - quantum-neural-synthesizer
+    - NEXUS-Quantum-Intelligence-Framework
+    - SINGULARITY-AGI-Research-Platform
+    - neural-mesh
+    - neural-mesh-pipeline
+    - hypervelocity-orchestrator
+    - async-automation-framework
+    - autohelix
+  infrastructure:
+    - enterprise-devops-platform
+    - ai-infrastructure-architect-master
+    - infrastructure-code-architect
+    - infrastructure-templates
+    - intelligent-ci-cd-orchestrator
+    - distributed-job-orchestration-engine
+    - predictive-infrastructure-optimizer
+    - observability-intelligence-platform
+    - enterprise-mlops-platform
+    - enterprise-feature-flag-system
+    - security-sentinel-framework
+    - zero-human-enterprise-grid
+    - enterprise-ai-grid
+    - enterprise-automation-system
+    - zero-human-ai-platform
+  edge_mobile:
+    - termux-automation-scripts
+    - termux-workspace-sync
+    - termux-automation-app
+    - termux-automation-service
+    - termux-automation-docs
+    - mobile-builds-catalog
+    - NEXUS-Mobile-Command-Center
+    - mobile-nexus-dashboard
+    - code-snippets-vault
+  finance_protocols:
+    - stablecoin-protocol
+    - ai-swarm-crypto-bounty-system
+    - nwu-protocol
+    - ai-wealth-ecosystem
+  domain_specialized:
+    - paleontology-analysis-tools
+    - ml-fraud-detection
+    - ecommerce-microservices
+    - process-copilot
+    - tree-of-life-system
+    - tree-of-life-minimal
+    - genesis-consciousness-deploy
+    - monarch-nexus-core
+    - monarch-nexus-v2
+    - ARCHITECT_Pro-Enterprise
+    - gwc1
+    - ueep-ha-system
+  presentation:
+    - Garrettc123
+    - portfolio
+    - portfolio-website
+    - Garrettc123.github.io
+
+contracts:
+  required:
+    - identity
+    - health
+    - capability
+    - events
+    - policy
+    - execution
+    - evidence
+    - telemetry
+    - rollback
+    - revenue_attribution
+  event_envelope:
+    required:
+      - event_id
+      - event_type
+      - source_system
+      - timestamp
+      - correlation_id
+      - payload
+      - schema_version
+  action_policy:
+    default: approval_required_for_consequential_external_actions
+
+commercial_priority:
+  p0:
+    - payment_loop
+    - revenue_intelligence
+    - prospect_to_checkout
+    - customer_entitlement
+    - delivery
+  p1:
+    - customer_intelligence
+    - subscription_intelligence
+    - observability
+    - reliability
+  p2:
+    - experimental_ai
+    - blockchain_experiments
+    - speculative_optimization
