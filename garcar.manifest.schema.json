@@ -1,101 +1,78 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "GARCAR System Manifest",
-  "description": "Universal manifest standard for all 332 Garcar Enterprise systems. Every system must implement this contract to participate in the APEX organism.",
-  "version": "3.0.0",
+  "$id": "https://garcar.internal/schemas/garcar.manifest.schema.json",
+  "title": "Garcar System Manifest",
   "type": "object",
-  "required": ["system_id", "name", "domain", "role", "capabilities", "revenue", "endpoints", "events"],
+  "required": ["system_id", "display_name", "layer", "version", "tier", "capabilities", "apis", "events_published", "events_consumed", "health_endpoints", "dependencies", "owners"],
   "properties": {
     "system_id": {
       "type": "string",
-      "description": "Unique slug matching GitHub repo name",
-      "pattern": "^[a-z0-9-]+$"
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Unique kebab-case identifier for the system"
     },
-    "name": { "type": "string" },
-    "version": { "type": "string", "default": "1.0.0" },
-    "domain": {
+    "display_name": {
       "type": "string",
-      "enum": [
-        "payments", "revenue-intelligence", "ai-agents", "devops-cicd",
-        "customer-acquisition", "observability", "data-monetization",
-        "legal-compliance", "blockchain", "ml-platform",
-        "frontend-ui", "api-gateway", "security", "infrastructure",
-        "quantum", "fleet-management", "mlops", "governance", "neural-pipeline"
-      ]
+      "minLength": 1,
+      "description": "Human-readable system name"
     },
-    "role": {
+    "layer": {
       "type": "string",
-      "enum": ["producer", "consumer", "processor", "orchestrator", "gateway", "store"]
+      "enum": ["revenue", "intelligence", "infrastructure", "data", "compliance", "interface"],
+      "description": "Architectural layer in the Continuum Grid"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version (major.minor.patch)"
+    },
+    "tier": {
+      "type": "string",
+      "enum": ["prototype", "production", "intelligent", "autonomous"],
+      "description": "Maturity tier determining autonomy level"
     },
     "capabilities": {
-      "type": "object",
-      "description": "Capability checklist — the evolution engine reads this to determine upgrade targets",
-      "properties": {
-        "health_endpoint": { "type": "boolean", "default": false },
-        "metrics_endpoint": { "type": "boolean", "default": false },
-        "webhook_receiver": { "type": "boolean", "default": false },
-        "stripe_billing_hook": { "type": "boolean", "default": false },
-        "auth_layer": { "type": "boolean", "default": false },
-        "rate_limiting": { "type": "boolean", "default": false },
-        "audit_log_emission": { "type": "boolean", "default": false },
-        "event_bus_connected": { "type": "boolean", "default": false },
-        "auto_rollback": { "type": "boolean", "default": false },
-        "drift_detection": { "type": "boolean", "default": false },
-        "self_healing": { "type": "boolean", "default": false },
-        "revenue_signal_emitter": { "type": "boolean", "default": false },
-        "atlas_dashboard_feed": { "type": "boolean", "default": false },
-        "termux_compatible": { "type": "boolean", "default": false }
-      }
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Capability tags for routing and discovery"
     },
-    "revenue": {
-      "type": "object",
-      "properties": {
-        "model": {
-          "type": "string",
-          "enum": ["saas-subscription", "usage-based", "one-time", "api-calls", "revenue-share", "internal-cost-center", "none"]
-        },
-        "stripe_product_id": { "type": "string" },
-        "monthly_target_usd": { "type": "number" },
-        "attribution_code": { "type": "string" }
-      }
+    "apis": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "endpoint", "protocol"],
+        "properties": {
+          "name": {"type": "string"},
+          "endpoint": {"type": "string", "format": "uri"},
+          "protocol": {"type": "string", "enum": ["http", "grpc", "ws", "mcp"]}
+        }
+      },
+      "description": "Exposed API endpoints"
     },
-    "endpoints": {
-      "type": "object",
-      "properties": {
-        "health": { "type": "string" },
-        "metrics": { "type": "string" },
-        "webhook": { "type": "string" },
-        "api_base": { "type": "string" },
-        "dashboard_url": { "type": "string" }
-      }
+    "events_published": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Event types this system publishes to the event bus"
     },
-    "events": {
-      "type": "object",
-      "properties": {
-        "emits": { "type": "array", "items": { "type": "string" } },
-        "consumes": { "type": "array", "items": { "type": "string" } }
-      }
+    "events_consumed": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Event types this system consumes from the event bus"
     },
-    "deployment": {
-      "type": "object",
-      "properties": {
-        "platform": {
-          "type": "string",
-          "enum": ["railway", "vercel", "aws-ecs", "aws-eks", "aws-lambda", "github-actions", "docker-compose", "local", "aws-braket"]
-        },
-        "docker_image": { "type": "string" },
-        "env_secrets": { "type": "array", "items": { "type": "string" } }
-      }
+    "health_endpoints": {
+      "type": "array",
+      "items": {"type": "string", "format": "uri"},
+      "description": "Health/readiness check URLs"
     },
-    "evolution": {
-      "type": "object",
-      "properties": {
-        "last_evolved": { "type": "string", "format": "date-time" },
-        "evolution_count": { "type": "integer", "default": 0 },
-        "maturity_score": { "type": "number", "minimum": 0, "maximum": 100 },
-        "last_capability_added": { "type": "string" },
-        "next_upgrade_target": { "type": "string" }
-      }
+    "dependencies": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "System IDs this system depends on"
+    },
+    "owners": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "GitHub usernames responsible for this system"
     }
-  }
+  },
+  "additionalProperties": false
 }
