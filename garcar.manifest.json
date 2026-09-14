@@ -1,0 +1,40 @@
+{
+  "$schema": "https://garcar.internal/schemas/garcar.manifest.schema.json",
+  "system_id": "example-system",
+  "display_name": "Example System",
+  "layer": "infrastructure",
+  "version": "0.1.0",
+  "tier": "prototype",
+  "capabilities": ["api", "containerized", "lang:python"],
+  "apis": [
+    {
+      "name": "health",
+      "endpoint": "https://example-system.garcar.internal/health",
+      "protocol": "http"
+    },
+    {
+      "name": "metrics",
+      "endpoint": "https://example-system.garcar.internal/metrics",
+      "protocol": "http"
+    }
+  ],
+  "events_published": [
+    "system.deployed",
+    "system.health_changed"
+  ],
+  "events_consumed": [
+    "config.updated",
+    "secret.rotated"
+  ],
+  "health_endpoints": [
+    "https://example-system.garcar.internal/health",
+    "https://example-system.garcar.internal/ready"
+  ],
+  "dependencies": [
+    "garcar-base",
+    "supabase"
+  ],
+  "owners": [
+    "Garrettc123"
+  ]
+}
