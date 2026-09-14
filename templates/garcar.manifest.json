@@ -1,0 +1,63 @@
+{
+  "$schema": "../garcar.manifest.schema.json",
+  "system_id": "REPLACE_WITH_REPO_SLUG",
+  "name": "REPLACE_WITH_HUMAN_NAME",
+  "version": "1.0.0",
+  "domain": "ai-agents",
+  "role": "processor",
+  "capabilities": {
+    "health_endpoint": false,
+    "metrics_endpoint": false,
+    "webhook_receiver": false,
+    "stripe_billing_hook": false,
+    "auth_layer": false,
+    "rate_limiting": false,
+    "audit_log_emission": false,
+    "event_bus_connected": false,
+    "auto_rollback": false,
+    "drift_detection": false,
+    "self_healing": false,
+    "revenue_signal_emitter": false,
+    "atlas_dashboard_feed": false,
+    "termux_compatible": false
+  },
+  "revenue": {
+    "model": "none",
+    "stripe_product_id": "",
+    "monthly_target_usd": 0,
+    "attribution_code": ""
+  },
+  "endpoints": {
+    "health": "/health",
+    "metrics": "/metrics",
+    "webhook": "/webhook",
+    "api_base": "/api/v1",
+    "dashboard_url": ""
+  },
+  "events": {
+    "emits": [],
+    "consumes": []
+  },
+  "deployment": {
+    "platform": "github-actions",
+    "docker_image": "",
+    "env_secrets": []
+  },
+  "evolution": {
+    "last_evolved": null,
+    "evolution_count": 0,
+    "maturity_score": 0,
+    "last_capability_added": null,
+    "next_upgrade_target": null
+  },
+  "ownership": {
+    "team": "garcar",
+    "maintainers": [],
+    "oncall": ""
+  },
+  "continuum": {
+    "opt_in": true,
+    "pilot": false,
+    "max_risk": "low"
+  }
+}

@@ -1,0 +1,176 @@
+name: Daily Evolution Engine (Continuum Grid v1)
+
+on:
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run only (no PRs created)'
+        type: boolean
+        required: true
+        default: true
+      max_repos:
+        description: 'Maximum repositories to process'
+        type: string
+        required: false
+        default: '10'
+      allowlist:
+        description: 'Comma-separated repo allowlist'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+  pull_requests: write
+
+jobs:
+  discover-and-plan:
+    name: Discover & Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      plan_path: ${{ steps.plan.outputs.plan_path }}
+      run_id: ${{ steps.plan.outputs.run_id }}
+    steps:
+      - name: Checkout master hub
+        uses: actions/checkout@v4
+        with:
+          repository: Garrettc123/systems-master-hub
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: master-hub
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install requests pyyaml
+        working-directory: master-hub
+
+      - name: Run Continuum Engine
+        id: plan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ORG: Garrettc123
+        run: |
+          python continuum_engine.py \
+            --token "${GITHUB_TOKEN}" \
+            --dry-run \
+            --max-repos ${{ github.event.inputs.max_repos || '10' }} \
+            --output plan.json
+        working-directory: master-hub
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-plan
+          path: master-hub/plan.json
+          retention-days: 30
+
+      - name: Summarize plan
+        run: |
+          cat master-hub/plan.json | jq -r '.actions[] | "\(.repo): \(.title) [risk: \(.risk_tier)/8]"'
+        working-directory: master-hub
+
+  create-upgrade-prs:
+    name: Create Upgrade PRs
+    needs: discover-and-plan
+    if: github.event.inputs.dry_run == 'false' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download plan
+        uses: actions/download-artifact@v4
+        with:
+          name: upgrade-plan
+          path: plan
+
+      - name: Validate plan
+        run: |
+          cat plan/plan.json | jq '.actions | length'
+          cat plan/plan.json | jq '.summary'
+
+      - name: Checkout master hub
+        uses: actions/checkout@v4
+        with:
+          repository: Garrettc123/systems-master-hub
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: master-hub
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests pyyaml
+        working-directory: master-hub
+
+      - name: Execute PR creation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ORG: Garrettc123
+        run: |
+          python continuum_engine.py \
+            --token "${GITHUB_TOKEN}" \
+            --execute \
+            --max-repos ${{ github.event.inputs.max_repos || '10' }} \
+            --output /dev/null
+        working-directory: master-hub
+
+  notify:
+    name: Notify Results
+    needs: [discover-and-plan, create-upgrade-prs]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download plan
+        uses: actions/download-artifact@v4
+        with:
+          name: upgrade-plan
+          path: plan
+
+      - name: Post summary
+        run: |
+          PLAN_FILE="plan/plan.json"
+          if [ -f "$PLAN_FILE" ]; then
+            TOTAL=$(cat $PLAN_FILE | jq '.actions | length')
+            RUN_ID=$(cat $PLAN_FILE | jq -r '.run_id')
+            echo "## 📊 Continuum Grid Daily Evolution Summary" >> $GITHUB_STEP_SUMMARY
+            echo "**Run ID**: \`$RUN_ID\`" >> $GITHUB_STEP_SUMMARY
+            echo "**Timestamp**: $(cat $PLAN_FILE | jq -r '.timestamp')" >> $GITHUB_STEP_SUMMARY
+            echo "**Mode**: ${{ github.event.inputs.dry_run == 'true' && '🔍 Dry Run' || '🚀 Execute' }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Actions Planned**: $TOTAL" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Actions by Type" >> $GITHUB_STEP_SUMMARY
+            cat $PLAN_FILE | jq -r '.summary | to_entries[] | "- \(.key): \(.value)"" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Details" >> $GITHUB_STEP_SUMMARY
+            cat $PLAN_FILE | jq -r '.actions[] | "- **[\\(.repo)]** \(.title) — risk: \(.risk_tier)/8"' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No plan generated" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Create issue if high-risk
+        if: github.event.inputs.dry_run == 'true'
+        run: |
+          PLAN_FILE="plan/plan.json"
+          if [ -f "$PLAN_FILE" ]; then
+            HIGH_RISK=$(cat $PLAN_FILE | jq '[.actions[] | select(.risk_tier >= 6)] | length')
+            if [ "$HIGH_RISK" -gt 0 ]; then
+              gh issue create \
+                --repo Garrettc123/systems-master-hub \
+                --title "[Continuum Grid] High-risk actions detected in run $(cat $PLAN_FILE | jq -r '.run_id')" \
+                --body "$(cat $PLAN_FILE | jq -r '.actions[] | select(.risk_tier >= 6) | "- **[\\(.repo)]** \(.title) — risk: \(.risk_tier)/8"')" \
+                --label "continuum-grid,high-risk,review-needed" || true
+            fi
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
