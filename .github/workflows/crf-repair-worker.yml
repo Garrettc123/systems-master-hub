@@ -1,0 +1,33 @@
+name: CRF Repair Worker
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  crf-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: CRF worker preflight
+        run: |
+          test -f crf/worker/policy.json
+          python - <<'PY'
+          import json
+          p=json.load(open('crf/worker/policy.json'))
+          assert p['autonomy_level'] == 2
+          assert p['production_merge'] == 'human_approval_required'
+          assert p['rules']['verification_required'] is True
+          print('CRF policy preflight: OK')
+          PY
+      - name: Worker boundary
+        run: |
+          echo 'CRF Level 2 worker boundary active.'
+          echo 'Diagnosis/verification/draft-PR execution is permitted.'
+          echo 'Autonomous production merge is prohibited.'
