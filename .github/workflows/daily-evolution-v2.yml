@@ -1,0 +1,69 @@
+# Continuum Grid — Daily Evolution v2
+# Observe / plan / propose only. Never auto-merges. Never injects secrets.
+# Caps mutations per run. Pilot allowlist enforced in engine.
+
+name: Continuum Grid — Daily Evolution v2
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # 07:00 UTC — after legacy daily-evolution
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'observe | plan | dry-run'
+        required: true
+        default: 'dry-run'
+        type: choice
+        options:
+          - observe
+          - plan
+          - dry-run
+      max_actions:
+        description: 'Hard cap on proposeable actions this run'
+        required: false
+        default: '10'
+
+permissions:
+  contents: read
+  pull-requests: write  # only for opening PRs when explicitly enabled later
+
+env:
+  CONTINUUM_MODE: ${{ github.event.inputs.mode || 'dry-run' }}
+
+jobs:
+  continuum:
+    name: Continuum observe/plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout hub only
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run Continuum engine (read-only by default)
+        run: |
+          python3 continuum/continuum_engine.py \
+            --mode "${CONTINUUM_MODE}" \
+            --out continuum/upgrade_plans/latest_plan.json \
+            --ledger continuum/upgrade_ledger.jsonl
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: continuum-plan-${{ github.run_id }}
+          path: |
+            continuum/upgrade_plans/latest_plan.json
+            continuum/upgrade_ledger.jsonl
+          if-no-files-found: warn
+
+      - name: Safety notice
+        run: |
+          echo "Continuum Grid v2 safety invariants:"
+          echo "  - No auto-merge"
+          echo "  - No secret write"
+          echo "  - No cross-repo default-branch push"
+          echo "  - Pilot allowlist enforced in continuum_engine.py"
+          echo "  - Existing daily-evolution.yml is NOT replaced; v2 is additive"
