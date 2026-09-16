@@ -1,0 +1,13 @@
+# Least-privilege baseline for all GitHub Actions workflows
+# Place at top level of the workflow or on individual jobs
+
+permissions:
+  contents: read
+  # Uncomment ONLY what the job requires:
+  # actions: read
+  # checks: write
+  # pull-requests: write
+  # issues: write
+  # security-events: write
+  # packages: read
+  # id-token: write   # OIDC / cloud deploy only

@@ -1,0 +1,11 @@
+# Least-privilege baseline — add to every .github/workflows/*.yml
+permissions:
+  contents: read
+  # Uncomment only what is required:
+  # actions: read
+  # checks: write
+  # pull-requests: write
+  # issues: write
+  # security-events: write
+  # packages: read
+  # id-token: write
