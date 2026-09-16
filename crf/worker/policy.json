@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "autonomy_level": 2,
+  "default_action": "draft_pr",
+  "production_merge": "human_approval_required",
+  "rules": {
+    "verification_required": true,
+    "evidence_required": true,
+    "rollback_plan_required": true,
+    "cross_repository_propagation": "blocked_without_explicit_scope",
+    "secret_changes": "blocked",
+    "auth_changes": "human_review",
+    "billing_changes": "human_review",
+    "data_destructive_operations": "blocked",
+    "dependency_major_upgrade": "human_review"
+  },
+  "risk_thresholds": {
+    "low": 0.30,
+    "medium": 0.60,
+    "high": 0.80,
+    "critical": 0.80
+  }
+}
