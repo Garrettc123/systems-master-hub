@@ -1,0 +1,16 @@
+{
+  "name": "garcar-core",
+  "version": "1.0.0",
+  "description": "Garcar Core - Lead Response Engine with Vercel Speed Insights",
+  "private": true,
+  "scripts": {
+    "dev": "uvicorn revenue.garcar_core.app:app --reload",
+    "test": "pytest"
+  },
+  "dependencies": {
+    "@vercel/speed-insights": "^1.0.12"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
