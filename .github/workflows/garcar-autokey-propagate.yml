@@ -28,6 +28,7 @@ jobs:
       - name: Validate master secrets
         env:
           GHPAT: ${{ secrets.GHPAT }}
+          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
@@ -42,21 +43,22 @@ jobs:
           PIXEL10_SSH_KEY: ${{ secrets.PIXEL10_SSH_KEY }}
           PIXEL10_SSH_PORT: ${{ secrets.PIXEL10_SSH_PORT }}
         run: |
+          # Accept either GHPAT or GITHUB_PAT as the write token
+          TOKEN="${GHPAT:-$GITHUB_PAT}"
           MISSING=""
-          [ -z "$GHPAT" ]                  && MISSING="$MISSING GHPAT"
-          [ -z "$RAILWAY_TOKEN" ]           && MISSING="$MISSING RAILWAY_TOKEN"
-          [ -z "$STRIPE_SECRET_KEY" ]       && MISSING="$MISSING STRIPE_SECRET_KEY"
-          [ -z "$OPENAI_API_KEY" ]          && MISSING="$MISSING OPENAI_API_KEY"
+          [ -z "$TOKEN" ]                 && MISSING="$MISSING GHPAT/GITHUB_PAT"
+          [ -z "$STRIPE_SECRET_KEY" ]     && MISSING="$MISSING STRIPE_SECRET_KEY"
           if [ -n "$MISSING" ]; then
             echo "❌ Critical secrets missing:$MISSING"
             echo "Add at: https://github.com/Garrettc123/systems-master-hub/settings/secrets/actions"
-            echo "Or vault locally: secret set <NAME>"
             exit 1
           fi
-          echo "✅ Critical secrets present"
+          echo "✅ Critical secrets present (GHPAT + STRIPE_SECRET_KEY)"
           echo ""
           echo "Full inventory status:"
           [ -n "$STRIPE_WEBHOOK_SECRET" ]  && echo "  ✓ STRIPE_WEBHOOK_SECRET" || echo "  ○ STRIPE_WEBHOOK_SECRET"
+          [ -n "$RAILWAY_TOKEN" ]          && echo "  ✓ RAILWAY_TOKEN" || echo "  ○ RAILWAY_TOKEN"
+          [ -n "$OPENAI_API_KEY" ]         && echo "  ✓ OPENAI_API_KEY" || echo "  ○ OPENAI_API_KEY"
           [ -n "$PERPLEXITY_API_KEY" ]     && echo "  ✓ PERPLEXITY_API_KEY" || echo "  ○ PERPLEXITY_API_KEY"
           [ -n "$CLOUDFLARE_ACCOUNT_ID" ]  && echo "  ✓ CLOUDFLARE_ACCOUNT_ID" || echo "  ○ CLOUDFLARE_ACCOUNT_ID"
           [ -n "$CLOUDFLARE_API_TOKEN" ]   && echo "  ✓ CLOUDFLARE_API_TOKEN" || echo "  ○ CLOUDFLARE_API_TOKEN"
@@ -74,22 +76,26 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+          HUBSPOT_ACCESS_TOKEN: ${{ secrets.HUBSPOT_ACCESS_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
           STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: |
           echo "Additional substrate keys:"
-          [ -n "$APOLLO_API_KEY" ]         && echo "  ✓ APOLLO_API_KEY" || echo "  ○ APOLLO_API_KEY"
-          [ -n "$STRIPE_PUBLISHABLE_KEY" ] && echo "  ✓ STRIPE_PUBLISHABLE_KEY" || echo "  ○ STRIPE_PUBLISHABLE_KEY"
-          [ -n "$ANTHROPIC_API_KEY" ]      && echo "  ✓ ANTHROPIC_API_KEY" || echo "  ○ ANTHROPIC_API_KEY"
-          [ -n "$GEMINI_API_KEY" ]         && echo "  ✓ GEMINI_API_KEY" || echo "  ○ GEMINI_API_KEY"
-          [ -n "$GOOGLE_API_KEY" ]         && echo "  ✓ GOOGLE_API_KEY" || echo "  ○ GOOGLE_API_KEY"
-          [ -n "$HUBSPOT_API_KEY" ]        && echo "  ✓ HUBSPOT_API_KEY" || echo "  ○ HUBSPOT_API_KEY"
-          [ -n "$SUPABASE_URL" ]           && echo "  ✓ SUPABASE_URL" || echo "  ○ SUPABASE_URL"
-          [ -n "$SUPABASE_SERVICE_KEY" ]   && echo "  ✓ SUPABASE_SERVICE_KEY" || echo "  ○ SUPABASE_SERVICE_KEY"
-          [ -n "$LINEAR_API_KEY" ]         && echo "  ✓ LINEAR_API_KEY" || echo "  ○ LINEAR_API_KEY"
+          [ -n "$APOLLO_API_KEY" ]               && echo "  ✓ APOLLO_API_KEY" || echo "  ○ APOLLO_API_KEY"
+          [ -n "$STRIPE_PUBLISHABLE_KEY" ]       && echo "  ✓ STRIPE_PUBLISHABLE_KEY" || echo "  ○ STRIPE_PUBLISHABLE_KEY"
+          [ -n "$ANTHROPIC_API_KEY" ]            && echo "  ✓ ANTHROPIC_API_KEY" || echo "  ○ ANTHROPIC_API_KEY"
+          [ -n "$GEMINI_API_KEY" ]               && echo "  ✓ GEMINI_API_KEY" || echo "  ○ GEMINI_API_KEY"
+          [ -n "$GOOGLE_API_KEY" ]               && echo "  ✓ GOOGLE_API_KEY" || echo "  ○ GOOGLE_API_KEY"
+          [ -n "$HUBSPOT_API_KEY" ]              && echo "  ✓ HUBSPOT_API_KEY" || echo "  ○ HUBSPOT_API_KEY"
+          [ -n "$HUBSPOT_ACCESS_TOKEN" ]         && echo "  ✓ HUBSPOT_ACCESS_TOKEN" || echo "  ○ HUBSPOT_ACCESS_TOKEN"
+          [ -n "$SUPABASE_URL" ]                 && echo "  ✓ SUPABASE_URL" || echo "  ○ SUPABASE_URL"
+          [ -n "$SUPABASE_SERVICE_KEY" ]         && echo "  ✓ SUPABASE_SERVICE_KEY" || echo "  ○ SUPABASE_SERVICE_KEY"
+          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]    && echo "  ✓ SUPABASE_SERVICE_ROLE_KEY" || echo "  ○ SUPABASE_SERVICE_ROLE_KEY"
+          [ -n "$LINEAR_API_KEY" ]               && echo "  ✓ LINEAR_API_KEY" || echo "  ○ LINEAR_API_KEY"
 
       # ── Install gh CLI ───────────────────────────────────────────────────
       - name: Install gh CLI
@@ -105,6 +111,7 @@ jobs:
       - name: Propagate secrets to full Garcar empire
         env:
           GHPAT: ${{ secrets.GHPAT }}
+          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
           GC_PAT_DISPATCH: ${{ secrets.GC_PAT_DISPATCH }}
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
@@ -120,9 +127,11 @@ jobs:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+          HUBSPOT_ACCESS_TOKEN: ${{ secrets.HUBSPOT_ACCESS_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -136,13 +145,14 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DEALS_DB_ID: ${{ secrets.NOTION_DEALS_DB_ID }}
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
           PIXEL10_IP: ${{ secrets.PIXEL10_IP }}
           PIXEL10_SSH_KEY: ${{ secrets.PIXEL10_SSH_KEY }}
           PIXEL10_SSH_PORT: ${{ secrets.PIXEL10_SSH_PORT }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          export GH_TOKEN="$GHPAT"
+          export GH_TOKEN="${GHPAT:-$GITHUB_PAT}"
 
           set_secret() {
             local REPO="$1" NAME="$2" VALUE="$3"
@@ -159,7 +169,10 @@ jobs:
 
           TARGETS=(
             systems-master-hub
+            garcar-enterprise-production
+            garcar-emergency-payments
             garcar-payments
+            garcar-payment-loop
             garcar-rhns-core
             atlas-dashboard
             zeus-dashboard
@@ -169,9 +182,9 @@ jobs:
             enterprise-mlops-platform
             neural-mesh
             ai-ops-studio
-            ai-business-automation-tree
-            garcar-payment-loop
             mars-api
+            NEXUS-AI-CORE
+            apex-revenue-system
           )
 
           for REPO in "${TARGETS[@]}"; do
@@ -179,7 +192,8 @@ jobs:
             echo "━━ $REPO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
             # GitHub / Dispatch
-            set_secret "$REPO" "GHPAT"                  "$GHPAT"
+            set_secret "$REPO" "GHPAT"                  "$GH_TOKEN"
+            set_secret "$REPO" "GITHUB_PAT"             "$GH_TOKEN"
             set_secret "$REPO" "GC_PAT_DISPATCH"         "$GC_PAT_DISPATCH"
 
             # Infrastructure
@@ -191,7 +205,7 @@ jobs:
             set_secret "$REPO" "CLOUDFLARE_ACCOUNT_ID"   "$CLOUDFLARE_ACCOUNT_ID"
             set_secret "$REPO" "CLOUDFLARE_API_TOKEN"    "$CLOUDFLARE_API_TOKEN"
 
-            # Stripe
+            # Stripe (revenue critical)
             set_secret "$REPO" "STRIPE_SECRET_KEY"       "$STRIPE_SECRET_KEY"
             set_secret "$REPO" "STRIPE_WEBHOOK_SECRET"   "$STRIPE_WEBHOOK_SECRET"
             set_secret "$REPO" "STRIPE_PUBLISHABLE_KEY"  "$STRIPE_PUBLISHABLE_KEY"
@@ -208,13 +222,16 @@ jobs:
 
             # CRM / Productivity
             set_secret "$REPO" "HUBSPOT_API_KEY"         "$HUBSPOT_API_KEY"
+            set_secret "$REPO" "HUBSPOT_ACCESS_TOKEN"    "$HUBSPOT_ACCESS_TOKEN"
             set_secret "$REPO" "NOTION_API_KEY"          "$NOTION_API_KEY"
+            set_secret "$REPO" "NOTION_DEALS_DB_ID"      "$NOTION_DEALS_DB_ID"
             set_secret "$REPO" "SENDGRID_API_KEY"        "$SENDGRID_API_KEY"
 
             # Data
             set_secret "$REPO" "SUPABASE_URL"            "$SUPABASE_URL"
             set_secret "$REPO" "SUPABASE_ANON_KEY"       "$SUPABASE_ANON_KEY"
             set_secret "$REPO" "SUPABASE_SERVICE_KEY"    "$SUPABASE_SERVICE_KEY"
+            set_secret "$REPO" "SUPABASE_SERVICE_ROLE_KEY" "$SUPABASE_SERVICE_ROLE_KEY"
             set_secret "$REPO" "DATABASE_URL"            "$DATABASE_URL"
             set_secret "$REPO" "REDIS_URL"               "$REDIS_URL"
 
@@ -233,8 +250,8 @@ jobs:
           set_secret "atlas-dashboard"  "APP_BASE_URL" "$APP_BASE_URL_ATLAS"
           set_secret "zeus-dashboard"   "APP_BASE_URL" "$APP_BASE_URL_ZEUS"
 
-          # Frontend
-          for REPO in atlas-dashboard zeus-dashboard; do
+          # Frontend + production webhook host
+          for REPO in atlas-dashboard zeus-dashboard garcar-enterprise-production; do
             set_secret "$REPO" "VERCEL_TOKEN"        "$VERCEL_TOKEN"
             set_secret "$REPO" "NEXT_PUBLIC_APP_URL" "$NEXT_PUBLIC_APP_URL"
           done
@@ -253,9 +270,10 @@ jobs:
         if: inputs.dry_run != 'true'
         env:
           GHPAT: ${{ secrets.GHPAT }}
+          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
         run: |
-          export GH_TOKEN="$GHPAT"
-          for REPO in garcar-payments garcar-rhns-core atlas-dashboard zeus-dashboard; do
+          export GH_TOKEN="${GHPAT:-$GITHUB_PAT}"
+          for REPO in garcar-enterprise-production garcar-emergency-payments garcar-payments atlas-dashboard zeus-dashboard; do
             gh workflow run deploy.yml --repo "Garrettc123/$REPO" --ref main 2>/dev/null \
               && echo "  ✓ deploy triggered: $REPO" \
               || echo "  ○ no deploy.yml yet: $REPO"
@@ -267,26 +285,16 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo " GARCAR AUTOKEY COMPLETE"
           echo ""
-          echo " Implemented secrets:"
-          echo "   CLOUDFLARE_ACCOUNT_ID | CLOUDFLARE_API_TOKEN"
-          echo "   GC_PAT_DISPATCH"
-          echo "   NOTION_API_KEY | SENDGRID_API_KEY"
-          echo "   OPENAI_API_KEY | PERPLEXITY_API_KEY"
-          echo "   PIXEL10_IP | PIXEL10_SSH_KEY | PIXEL10_SSH_PORT"
-          echo "   RAILWAY_TOKEN"
+          echo " Targets now include:"
+          echo "   garcar-enterprise-production (hardened Stripe webhook)"
+          echo "   garcar-emergency-payments"
+          echo "   + full empire list"
+          echo ""
+          echo " Revenue keys propagated when present:"
           echo "   STRIPE_SECRET_KEY | STRIPE_WEBHOOK_SECRET"
+          echo "   SUPABASE_* | NOTION_* | HUBSPOT_* | SLACK_*"
           echo ""
-          echo " + full existing stack (Apollo, HubSpot, Supabase, etc.)"
-          echo ""
-          echo " Local SuperSecret:"
-          echo "   secret set CLOUDFLARE_ACCOUNT_ID"
-          echo "   secret set CLOUDFLARE_API_TOKEN"
-          echo "   secret set GC_PAT_DISPATCH"
-          echo "   secret set NOTION_API_KEY"
-          echo "   secret set SENDGRID_API_KEY"
-          echo "   secret set PIXEL10_IP"
-          echo "   secret set PIXEL10_SSH_KEY"
-          echo "   secret set PIXEL10_SSH_PORT"
-          echo ""
+          echo " If any key shows ○ above, add it once at:"
+          echo "   https://github.com/Garrettc123/systems-master-hub/settings/secrets/actions"
           echo " Then re-run this workflow with PROPAGATE"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
