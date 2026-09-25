@@ -1,0 +1,48 @@
+name: Living Registry Daily Sync
+
+on:
+  schedule:
+    - cron: "0 1 * * *"   # 01:00 UTC — one hour before nightly upgrade loop
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sync-registry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install --quiet requests
+
+      - name: Run living registry sync
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: set REGISTRY_GITHUB_TOKEN (fine-grained or classic PAT with repo scope)
+          # so private repos appear in the registry. Falls back to GITHUB_TOKEN.
+          REGISTRY_GITHUB_TOKEN: ${{ secrets.REGISTRY_GITHUB_TOKEN }}
+          GITHUB_OWNER: Garrettc123
+        run: |
+          python registry/sync.py
+
+      - name: Commit & push registry
+        run: |
+          git config user.name "garcar-registry-bot"
+          git config user.email "registry@garcar.enterprise"
+          git add registry/registry.json SYSTEM_REGISTRY.json
+          if git diff --staged --quiet; then
+            echo "No registry changes"
+          else
+            git commit -m "chore(registry): living sync $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi
