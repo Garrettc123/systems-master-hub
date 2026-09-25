@@ -1,0 +1,147 @@
+name: Autonomous Upgrade Loop (upgrade-all)
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # 02:00 UTC — after living registry sync
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: "Tier to upgrade (1=highest value)"
+        default: "1"
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout hub
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install --quiet requests PyGithub
+
+      - name: Ensure living registry is fresh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_GITHUB_TOKEN: ${{ secrets.REGISTRY_GITHUB_TOKEN }}
+        run: |
+          if [ -f registry/sync.py ]; then
+            python registry/sync.py || true
+          fi
+
+      - name: Load registry & select upgrade targets
+        id: targets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TIER: ${{ github.event.inputs.tier || '1' }}
+        run: |
+          python3 <<'PY'
+          import json, os, pathlib
+          p = pathlib.Path("SYSTEM_REGISTRY.json")
+          if not p.exists():
+              p = pathlib.Path("registry/registry.json")
+          if not p.exists():
+              print("No registry found — skip")
+              raise SystemExit(0)
+          reg = json.loads(p.read_text())
+          systems = reg.get("systems") or []
+          # Prefer systems with health_score if present, else full health dict
+          def score(s):
+              if "health_score" in s:
+                  return s["health_score"]
+              h = s.get("health") or {}
+              return h.get("score", 50)
+          # Tier-1 names from original plan + low health
+          tier1 = {
+              "NEXUS-AI-CORE", "TITAN-Autonomous-Business-Empire",
+              "APEX-AI-ENGINE", "garcar-apex-nexus", "garcar-rhns-edge",
+              "garcar-rhns", "zeus-dashboard", "systems-master-hub",
+              "autonomous-butler-core", "garcar-payments",
+          }
+          ranked = sorted(systems, key=score)
+          targets = [s for s in ranked if s.get("name") in tier1][:8]
+          if not targets:
+              targets = ranked[:5]
+          out = [{"name": t["name"], "url": t.get("github_url"), "health": score(t)} for t in targets]
+          pathlib.Path("upgrade_targets.json").write_text(json.dumps(out, indent=2))
+          print(f"Selected {len(out)} upgrade targets:")
+          for t in out:
+              print(f"  {t['name']} health={t['health']}")
+          PY
+
+      - name: Emit upgrade event on bus (best-effort)
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+        run: |
+          python3 <<'PY'
+          import json, pathlib, sys
+          sys.path.insert(0, "packages")
+          try:
+              from garcar_bus import bus
+              targets = json.loads(pathlib.Path("upgrade_targets.json").read_text())
+              bus.publish("upgrade.cycle_started", {"targets": [t["name"] for t in targets]})
+              print("Published upgrade.cycle_started")
+          except Exception as e:
+              print(f"Bus publish skipped: {e}")
+          PY
+
+      - name: Open upgrade issues for targets (PAT optional)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          python3 <<'PY'
+          import json, os, pathlib
+          from github import Github
+          token = os.environ.get("GITHUB_TOKEN")
+          if not token:
+              print("No token — skip issue creation")
+              raise SystemExit(0)
+          g = Github(token)
+          targets = json.loads(pathlib.Path("upgrade_targets.json").read_text())
+          for t in targets:
+              name = t["name"]
+              try:
+                  repo = g.get_repo(f"Garrettc123/{name}")
+              except Exception as e:
+                  print(f"Skip {name}: {e}")
+                  continue
+              title = f"[AUTO-UPGRADE] Health={t['health']} — advance capability tier"
+              body = f"""Autonomous upgrade cycle.
+
+Health score: **{t['health']}**
+Source: systems-master-hub nightly upgrade-all
+
+Directive: NEVER_REPEAT_ONLY_UPGRADE
+- Wire Event Mesh (`garcar_bus`) if missing
+- Post any money events to `gc_ledger` within 24h
+- Ensure CI + README + health endpoint exist
+- Close this issue when the next capability tier is live
+"""
+              # Avoid duplicate open issues with same title
+              open_titles = {i.title for i in repo.get_issues(state="open")}
+              if title in open_titles:
+                  print(f"Already open: {name}")
+                  continue
+              issue = repo.create_issue(title=title, body=body, labels=["upgrade", "autonomous"])
+              print(f"Opened {name}#{issue.number}")
+          PY
+
+      - name: Commit targets snapshot
+        run: |
+          git config user.name "garcar-upgrade-bot"
+          git config user.email "bot@garcar.enterprise"
+          git add upgrade_targets.json SYSTEM_REGISTRY.json registry/ || true
+          git diff --staged --quiet || git commit -m "chore(upgrade): cycle $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push || true
