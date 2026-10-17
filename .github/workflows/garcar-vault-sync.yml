@@ -1,22 +1,24 @@
 name: Garcar Vault GitHub Sync
 
 on:
+  # Scheduled runs only distribute Vault's current values. They must never
+  # ingest GitHub values or rotate internal credentials implicitly.
   schedule:
     - cron: '17 */6 * * *'
   workflow_dispatch:
     inputs:
       mode:
-        description: 'full | ingest | ensure | sync | rotate | dry_run | github_only'
+        description: 'sync is the safe default; ingest/full/rotate are explicit maintenance actions'
         required: true
-        default: 'full'
+        default: 'sync'
         type: choice
         options:
-          - full
+          - sync
+          - dry_run
           - ingest
           - ensure
-          - sync
           - rotate
-          - dry_run
+          - full
           - github_only
 
 permissions:
@@ -28,65 +30,95 @@ concurrency:
 
 jobs:
   zero-touch:
-    name: Zero-touch secret plane
+    name: Vault secret distribution
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: pip
+          cache-dependency-path: vault/hashicorp/requirements.txt
 
-      - name: Install deps
-        run: pip install -r vault/hashicorp/requirements.txt
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check -r vault/hashicorp/requirements.txt
 
-      - name: Detect Vault + PAT
-        id: vault
+      - name: Validate bootstrap configuration
+        id: config
         env:
           VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
-          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
           VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
           VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
           GHPAT: ${{ secrets.GHPAT }}
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          REQUESTED_MODE: ${{ github.event.inputs.mode || 'sync' }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
         run: |
           set -euo pipefail
-          ADDR_LC="$(printf '%s' "${VAULT_ADDR:-}" | tr '[:upper:]' '[:lower:]')"
-          PLACEHOLDER_ADDR=false
-          case "$ADDR_LC" in
-            *your-vault-domain.com*|*vault.yourdomain.com*|*example.com*)
-              PLACEHOLDER_ADDR=true
+          addr="${VAULT_ADDR:-}"
+          addr_lc="$(printf '%s' "$addr" | tr '[:upper:]' '[:lower:]')"
+          placeholder=false
+          case "$addr_lc" in
+            *your-vault-domain.com*|*vault.yourdomain.com*|*example.com*|*your-vault*)
+              placeholder=true
               ;;
           esac
-          READY=false
-          if [ -n "${VAULT_ADDR:-}" ] && [ "$PLACEHOLDER_ADDR" != "true" ]; then
-            if [ -n "${VAULT_TOKEN:-}" ] || { [ -n "${VAULT_ROLE_ID:-}" ] && [ -n "${VAULT_SECRET_ID:-}" ]; }; then
-              READY=true
-            fi
-          fi
-          HAS_PAT=false
-          if [ -n "${GHPAT:-}" ] || [ -n "${PAT_TOKEN:-}" ]; then
-            HAS_PAT=true
-          fi
-          echo "ready=$READY" >> "$GITHUB_OUTPUT"
-          echo "has_pat=$HAS_PAT" >> "$GITHUB_OUTPUT"
-          echo "Vault ready=$READY has_pat=$HAS_PAT"
-          if [ "$PLACEHOLDER_ADDR" = "true" ]; then
-            echo "::notice::VAULT_ADDR appears to be a placeholder; falling back to GitHub-only mode."
+
+          vault_ready=false
+          if [[ -n "$addr" && "$placeholder" == false ]] &&
+             { [[ -n "${VAULT_TOKEN:-}" ]] ||
+               { [[ -n "${VAULT_ROLE_ID:-}" ]] && [[ -n "${VAULT_SECRET_ID:-}" ]]; }; }; then
+            vault_ready=true
           fi
 
-      - name: Zero-touch orchestrator (Vault path)
-        if: steps.vault.outputs.ready == 'true' && github.event.inputs.mode != 'github_only'
+          pat_ready=false
+          if [[ -n "${GHPAT:-}" || -n "${PAT_TOKEN:-}" ]]; then
+            pat_ready=true
+          fi
+
+          echo "vault_ready=$vault_ready" >> "$GITHUB_OUTPUT"
+          echo "pat_ready=$pat_ready" >> "$GITHUB_OUTPUT"
+          echo "mode=$REQUESTED_MODE" >> "$GITHUB_OUTPUT"
+          echo "Vault configuration present: $vault_ready"
+          echo "GitHub PAT present: $pat_ready"
+
+          if [[ "$EVENT_NAME" == "schedule" && "$vault_ready" != "true" ]]; then
+            echo "::error::Scheduled sync requires VAULT_ADDR and VAULT_TOKEN or both AppRole credentials. Configure them before relying on scheduled distribution."
+            exit 1
+          fi
+
+      - name: Validate requested mode
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          MODE: ${{ steps.config.outputs.mode }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            sync|dry_run|ingest|ensure|rotate|full|github_only) ;;
+            *) echo "::error::Unsupported mode"; exit 2 ;;
+          esac
+          if [[ "$MODE" == "full" || "$MODE" == "rotate" ]]; then
+            echo "::warning::Mode '$MODE' can rotate internal credentials. Downstream services may need coordinated updates. Prefer sync unless rotation is intentional."
+          fi
+
+      - name: Vault orchestrator
+        if: steps.config.outputs.vault_ready == 'true' && steps.config.outputs.mode != 'github_only'
         env:
           VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
           VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
           VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
           VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
-          GHPAT: ${{ secrets.GHPAT || secrets.PAT_TOKEN }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GHPAT }}
-          GH_TOKEN: ${{ secrets.GHPAT || secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
-          GITHUB_ORG: Garrettc123
+          # Ingest variables are only used by the explicitly selected ingest/full
+          # modes. Existing Vault values are preserved by ingest_from_github.py.
+          GHPAT: ${{ secrets.GHPAT }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
@@ -104,6 +136,11 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
           APP_URL: ${{ secrets.APP_URL }}
+          APP_BASE_URL_PAYMENTS: ${{ secrets.APP_BASE_URL_PAYMENTS }}
+          APP_BASE_URL_RHNS: ${{ secrets.APP_BASE_URL_RHNS }}
+          APP_BASE_URL_ATLAS: ${{ secrets.APP_BASE_URL_ATLAS }}
+          APP_BASE_URL_ZEUS: ${{ secrets.APP_BASE_URL_ZEUS }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -116,21 +153,26 @@ jobs:
           PIXEL10_SSH_KEY: ${{ secrets.PIXEL10_SSH_KEY }}
           PIXEL10_IP: ${{ secrets.PIXEL10_IP }}
           PIXEL10_SSH_PORT: ${{ secrets.PIXEL10_SSH_PORT }}
-          ZERO_TOUCH_MODE: ${{ github.event.inputs.mode || 'full' }}
+          GITHUB_ORG: Garrettc123
+          ZERO_TOUCH_MODE: ${{ steps.config.outputs.mode }}
         working-directory: vault/hashicorp
+        shell: bash
         run: |
-          MODE="${ZERO_TOUCH_MODE:-full}"
-          case "$MODE" in
-            dry_run) python zero_touch.py dry_run ;;
+          set -euo pipefail
+          mode="${ZERO_TOUCH_MODE:-sync}"
+          case "$mode" in
             sync) python zero_touch.py sync ;;
-            rotate) python zero_touch.py rotate ;;
-            ensure) python zero_touch.py ensure ;;
+            dry_run) python zero_touch.py dry_run ;;
             ingest) python zero_touch.py ingest ;;
-            *) python zero_touch.py full ;;
+            ensure) python zero_touch.py ensure ;;
+            rotate) python zero_touch.py rotate ;;
+            full) python zero_touch.py full ;;
+            github_only) echo "::error::github_only must use the dedicated fallback step"; exit 2 ;;
+            *) echo "::error::Unsupported mode"; exit 2 ;;
           esac
 
-      - name: GitHub-only internal ensure (no Vault)
-        if: steps.vault.outputs.ready != 'true' || github.event.inputs.mode == 'github_only'
+      - name: GitHub-only fallback
+        if: steps.config.outputs.vault_ready != 'true' || steps.config.outputs.mode == 'github_only'
         env:
           GHPAT: ${{ secrets.GHPAT }}
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -139,12 +181,24 @@ jobs:
         working-directory: vault/hashicorp
         run: python ensure_github_only.py
 
-      - name: Summary
+      - name: Job summary
+        if: always()
+        env:
+          VAULT_READY: ${{ steps.config.outputs.vault_ready }}
+          PAT_READY: ${{ steps.config.outputs.pat_ready }}
+          MODE: ${{ steps.config.outputs.mode }}
+          EVENT_NAME: ${{ github.event_name }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
         run: |
-          echo "Zero-touch secret plane finished."
-          echo "Vault ready: ${{ steps.vault.outputs.ready }}"
-          echo "Has GHPAT: ${{ steps.vault.outputs.has_pat }}"
-          echo "Mode: ${{ github.event.inputs.mode || 'schedule/full' }}"
-          if [ "${{ steps.vault.outputs.ready }}" != "true" ] && [ "${{ steps.vault.outputs.has_pat }}" != "true" ]; then
-            echo "::notice::Bootstrap once: add GHPAT (secrets:write) and optionally VAULT_* — then re-run full. No ongoing secret edits required after that."
-          fi
+          {
+            echo "## Garcar Vault Sync"
+            echo ""
+            echo "- Trigger: `$EVENT_NAME`"
+            echo "- Requested mode: `${MODE:-unknown}`"
+            echo "- Vault configuration present: `${VAULT_READY:-unknown}`"
+            echo "- GitHub PAT present: `${PAT_READY:-unknown}`"
+            echo "- Job result: `$JOB_STATUS`"
+            echo ""
+            echo "This summary reports configuration presence only; it does not display secret values."
+          } >> "$GITHUB_STEP_SUMMARY"
