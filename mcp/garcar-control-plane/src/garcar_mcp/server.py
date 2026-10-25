@@ -262,17 +262,18 @@ def execute_action(request_id: str) -> dict[str, Any]:
     """Fail-closed execution entrypoint; no external adapter is enabled in this release."""
     with _connect() as conn:
         row = conn.execute("SELECT * FROM approvals WHERE request_id=?", (request_id,)).fetchone()
-        if not row:
-            return {"executed": False, "reason": "request_not_found"}
-        policy = ACTION_POLICY.get(row["action_id"], {})
-        if row["status"] != "approved":
-            return {"executed": False, "reason": "explicit_approval_required", "status": row["status"]}
-        if not policy.get("registered", False):
-            _audit("action_execution", "mcp-client", request_id, "blocked", {
-                "action_id": row["action_id"], "reason": "adapter_not_registered"
-            })
+    if not row:
+        return {"executed": False, "reason": "request_not_found"}
+    policy = ACTION_POLICY.get(row["action_id"], {})
+    if row["status"] != "approved":
+        return {"executed": False, "reason": "explicit_approval_required", "status": row["status"]}
+    if not policy.get("registered", False):
+        with _connect() as conn:
             conn.execute("UPDATE approvals SET status='blocked' WHERE request_id=? AND status='approved'", (request_id,))
-            return {"executed": False, "reason": "adapter_not_registered", "status": "blocked"}
+        _audit("action_execution", "mcp-client", request_id, "blocked", {
+            "action_id": row["action_id"], "reason": "adapter_not_registered"
+        })
+        return {"executed": False, "reason": "adapter_not_registered", "status": "blocked"}
     return {"executed": False, "reason": "no_execution_handler_registered"}
 
 
