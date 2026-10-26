@@ -102,8 +102,61 @@ def main() -> int:
             print(f"SYNCED {key} -> Preview/{GIT_BRANCH}")
 
     if failures:
-        print(f"RESULT: {failures} environment variable sync operation(s) failed.")
+        print(f"RESULT: {failures} environment variable sync operation(s) failed; redeployment skipped.")
         return 1
+
+    # Vercel environment changes apply to future deployments only. Redeploy the
+    # latest READY deployment for this feature branch, never a production target.
+    try:
+        listing = requests.get(
+            f"{VERCEL_API}/v6/deployments",
+            params={"projectId": PROJECT_ID, "teamId": TEAM_ID, "limit": 50},
+            headers=headers,
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        print(f"FAIL deployment lookup: network request failed ({type(exc).__name__})")
+        return 1
+    if listing.status_code != 200:
+        print(f"FAIL deployment lookup: Vercel API returned HTTP {listing.status_code}")
+        return 1
+
+    data = listing.json()
+    deployments = data.get("deployments", [])
+    if isinstance(deployments, dict):
+        deployments = deployments.get("deployments", [])
+    candidates = [
+        item for item in deployments
+        if (item.get("meta") or {}).get("githubCommitRef") == GIT_BRANCH
+        and item.get("state") == "READY"
+        and item.get("target") != "production"
+    ]
+    if not candidates:
+        print("SKIPPED redeployment: no READY preview deployment found for the target branch.")
+        return 0
+
+    previous = max(candidates, key=lambda item: item.get("created", item.get("createdAt", 0)))
+    deployment_id = previous.get("uid") or previous.get("id")
+    if not deployment_id:
+        print("FAIL redeployment: latest preview deployment has no identifier.")
+        return 1
+    try:
+        redeploy = requests.post(
+            f"{VERCEL_API}/v13/deployments",
+            params={"teamId": TEAM_ID},
+            headers=headers,
+            json={"deploymentId": deployment_id},
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        print(f"FAIL redeployment: network request failed ({type(exc).__name__})")
+        return 1
+    if redeploy.status_code not in (200, 201):
+        print(f"FAIL redeployment: Vercel API returned HTTP {redeploy.status_code}")
+        return 1
+
+    new_deployment = redeploy.json()
+    print(f"REDEPLOYED preview: {new_deployment.get('url') or new_deployment.get('id') or 'accepted'}")
     print(f"RESULT: processed {len(available)} configured provider variable(s); production was not changed.")
     return 0
 
