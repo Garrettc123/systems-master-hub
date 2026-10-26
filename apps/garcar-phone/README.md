@@ -15,13 +15,13 @@ Mobile-first PWA served by the existing FastAPI app at `revenue/garcar_core/stat
 
 Provision these server-side values through the existing authorized secret-management workflow; do not paste credentials into chat:
 
-- `GITHUB_TOKEN` — GitHub token scoped to only the repositories/issues the command center should search.
+- `GITHUB_TOKEN` — GitHub token scoped to only the repositories/issues the command center should search. The Vault mapping key is `GITHUB_READ_TOKEN`; it is intentionally separate from the broader `GHPAT` used for repository administration.
 - `SLACK_USER_TOKEN` — Slack user token with `search:read` and intended channel access. A bot token alone does not support `search.messages`.
 - `NOTION_API_KEY` — Notion integration token with only the pages/data sources explicitly shared to it.
 - `PERPLEXITY_API_KEY` — Perplexity API key; user-triggered research may incur usage charges.
 - Optional `PERPLEXITY_MODEL` — defaults to `sonar`.
 
-The current Vercel project has no environment variables or project connector connections. Therefore provider adapters are implemented but not live-connected until authorized credentials are provisioned and smoke-tested. ChatGPT's connected apps do not automatically become Vercel server credentials.
+The current Vercel project has no environment variables or project connector connections. Therefore provider adapters are implemented but not live-connected until authorized credentials are provisioned and smoke-tested. ChatGPT's connected apps do not automatically become Vercel server credentials. The new `vault/hashicorp/sync_to_vercel_preview.py` reads these keys from canonical Vault and writes only to the `feat/garcar-phone-command-center` Preview environment. It does not write Production variables. The existing scheduled/manual Vault workflow calls it in `sync` mode after this change is merged to the default branch; absent Vault keys are reported by name and are never synthesized.
 
 ## Security / deployment gate
 
