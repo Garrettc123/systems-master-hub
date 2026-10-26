@@ -3,10 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from enum import Enum
 from hashlib import sha256
+from pathlib import Path
 from threading import Lock
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 app = FastAPI(title="Garcar Core — Lead Response Engine", version="1.1.0")
@@ -102,14 +104,12 @@ store = InMemoryStore()
 
 
 def _lead_id(event: LeadEvent) -> str:
-    material = "|".join(
-        [
-            event.tenant_id,
-            event.customer.phone or "",
-            event.customer.email or "",
-            event.request.service.lower().strip(),
-        ]
-    )
+    material = "|".join([
+        event.tenant_id,
+        event.customer.phone or "",
+        event.customer.email or "",
+        event.request.service.lower().strip(),
+    ])
     return "lead_" + sha256(material.encode("utf-8")).hexdigest()[:24]
 
 
@@ -129,28 +129,15 @@ def build_lead(event: LeadEvent) -> StoredLead:
     now = datetime.now(timezone.utc)
     decision = policy_decision(event)
     if decision == "BLOCK_SENSITIVE_DATA":
-        status = LeadStatus.BLOCKED
-        next_action = "operator_review_sensitive_input"
+        status, next_action = LeadStatus.BLOCKED, "operator_review_sensitive_input"
     elif decision == "ESCALATE_NO_CONTACT_METHOD":
-        status = LeadStatus.ESCALATED
-        next_action = "obtain_valid_contact_method"
+        status, next_action = LeadStatus.ESCALATED, "obtain_valid_contact_method"
     else:
-        status = LeadStatus.QUALIFYING
-        next_action = "send_or_prepare_qualification_prompt"
-
+        status, next_action = LeadStatus.QUALIFYING, "send_or_prepare_qualification_prompt"
     return StoredLead(
-        lead_id=_lead_id(event),
-        tenant_id=event.tenant_id,
-        event_id=event.event_id,
-        source=event.source,
-        status=status,
-        customer=event.customer,
-        request=event.request,
-        owner=None,
-        next_action=next_action,
-        policy=decision,
-        created_at=now,
-        updated_at=now,
+        lead_id=_lead_id(event), tenant_id=event.tenant_id, event_id=event.event_id,
+        source=event.source, status=status, customer=event.customer, request=event.request,
+        owner=None, next_action=next_action, policy=decision, created_at=now, updated_at=now,
     )
 
 
@@ -168,23 +155,24 @@ def ingest_lead(
         raise HTTPException(status_code=400, detail="Idempotency-Key header required")
     if len(idempotency_key) > 200:
         raise HTTPException(status_code=400, detail="Idempotency-Key too long")
-
     event_key = f"{event.tenant_id}:{idempotency_key}"
     with store._lock:
         existing_id = store.events.get(event_key)
         if existing_id:
             return store.leads[existing_id]
-
     lead = build_lead(event)
     store.save(event_key, lead)
     return lead
 
 
-# Keep provider integrations read-only. This app must remain behind Vercel
-# Deployment Protection (SSO) on every hostname; do not expose the API publicly.
+# Read-only provider adapters; credentials are server-side environment variables.
+# Keep Vercel Deployment Protection (SSO) enabled on every hostname serving this app.
 try:
     from .phone_integrations import router as phone_integrations_router
 except ImportError:
     from phone_integrations import router as phone_integrations_router
-
 app.include_router(phone_integrations_router)
+
+# Serve the phone UI from the same protected FastAPI deployment as its API.
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="phone")
