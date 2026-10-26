@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-app = FastAPI(title="Garcar Core — Lead Response Engine", version="1.0.0")
+app = FastAPI(title="Garcar Core — Lead Response Engine", version="1.1.0")
 
 
 class Source(str, Enum):
@@ -178,3 +178,13 @@ def ingest_lead(
     lead = build_lead(event)
     store.save(event_key, lead)
     return lead
+
+
+# Keep provider integrations read-only. This app must remain behind Vercel
+# Deployment Protection (SSO) on every hostname; do not expose the API publicly.
+try:
+    from .phone_integrations import router as phone_integrations_router
+except ImportError:
+    from phone_integrations import router as phone_integrations_router
+
+app.include_router(phone_integrations_router)
