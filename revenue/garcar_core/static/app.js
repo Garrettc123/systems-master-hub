@@ -12,11 +12,11 @@ async function loadProviderStatus() {
     const response = await fetch("/api/phone/status", {headers:{"Accept":"application/json"},cache:"no-store",credentials:"same-origin"});
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json(), providers = data.providers || {};
-    const rows = {slack:providerRows[1],perplexity:providerRows[2],notion:providerRows[3]};
+    const rows = {github:providerRows[0],slack:providerRows[1],perplexity:providerRows[2],notion:providerRows[3]};
     Object.keys(rows).forEach((name) => setRowState(rows[name], providers[name]?.state || "unverified"));
     if (statusCards[1]) statusCards[1].querySelector(".value").textContent = providers.slack?.configured ? "Configured" : "Not configured";
     if (statusCards[2]) statusCards[2].querySelector(".value").textContent = providers.perplexity?.configured ? "Configured" : "Not configured";
-    const count = Number(data.configured_count || 0), total = Number(data.provider_count || 3);
+    const count = Number(data.configured_count || 0), total = Number(data.provider_count || 4);
     if (count === total) setOverall("Providers configured", "safe"); else if (count) setOverall("Partially configured"); else setOverall("Provider credentials missing");
   } catch (_) { setOverall("Integration status unavailable"); }
 }
