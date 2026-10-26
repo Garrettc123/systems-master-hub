@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          pytest -q revenue/garcar_core/test_app.py revenue/garcar_core/test_phone_integrations.py > "$RUNNER_TEMP/pytest-output.txt" 2>&1
+          python -m pytest -q revenue/garcar_core/test_app.py revenue/garcar_core/test_phone_integrations.py > "$RUNNER_TEMP/pytest-output.txt" 2>&1
           code=$?
           {
             echo "## Pytest"
