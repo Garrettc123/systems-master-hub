@@ -1,8 +1,7 @@
 """Read-only server-side adapters for the Garcar phone command center.
 
-The app must remain behind Vercel Deployment Protection (SSO) on every hostname.
-Provider credentials are read only from server environment variables. No write
-operations are exposed by this module.
+Keep Vercel Deployment Protection (SSO) enabled on every hostname. Credentials
+are read only from server environment variables; this module exposes no writes.
 """
 from __future__ import annotations
 
@@ -24,10 +23,10 @@ class KnowledgeQuery(BaseModel):
 
 
 def integration_status() -> dict[str, Any]:
-    """Report configuration presence only, never token values."""
-    # Slack's search.messages API requires a user token with search:read.
-    # A bot token is not sufficient for this endpoint.
+    """Report configuration presence only; never return credential values."""
+    # Slack search.messages requires a user token with search:read.
     configured = {
+        "github": bool(os.getenv("GITHUB_TOKEN")),
         "slack": bool(os.getenv("SLACK_USER_TOKEN")),
         "notion": bool(os.getenv("NOTION_API_KEY")),
         "perplexity": bool(os.getenv("PERPLEXITY_API_KEY")),
@@ -46,6 +45,31 @@ def integration_status() -> dict[str, Any]:
 @router.get("/phone/status")
 async def phone_status() -> dict[str, Any]:
     return integration_status()
+
+
+async def _github_search(client: httpx.AsyncClient, query: str) -> dict[str, Any]:
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        return {"provider": "github", "state": "not_configured", "results": []}
+    response = await client.get(
+        "https://api.github.com/search/issues",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+        params={"q": query, "per_page": 5, "sort": "updated", "order": "desc"},
+    )
+    response.raise_for_status()
+    data = response.json()
+    results = []
+    for item in data.get("items", [])[:5]:
+        results.append({
+            "title": f"GitHub · {str(item.get('title') or 'Issue or pull request')[:240]}",
+            "text": str(item.get("body") or "")[:1600],
+            "url": item.get("html_url"),
+        })
+    return {"provider": "github", "state": "connected", "results": results}
 
 
 async def _slack_search(client: httpx.AsyncClient, query: str) -> dict[str, Any]:
@@ -94,7 +118,6 @@ async def _notion_search(client: httpx.AsyncClient, query: str) -> dict[str, Any
             if isinstance(value, dict) and value.get("type") == "title":
                 title = "".join(part.get("plain_text", "") for part in value.get("title", []))
                 break
-        # Database/data-source search responses may expose title at top level.
         if not title:
             top_level_title = item.get("title")
             if isinstance(top_level_title, list):
@@ -142,11 +165,12 @@ async def knowledge_search(request: KnowledgeQuery) -> dict[str, Any]:
     if status["configured_count"] == 0:
         raise HTTPException(
             status_code=503,
-            detail="No knowledge providers are configured on the server. Add authorized provider credentials to the server secret store.",
+            detail="No knowledge providers are configured on the server. Provision authorized credentials through the existing secret workflow.",
         )
 
     async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=False) as client:
         tasks = [
+            _github_search(client, query),
             _slack_search(client, query),
             _notion_search(client, query),
             _perplexity_search(client, query),
@@ -154,9 +178,9 @@ async def knowledge_search(request: KnowledgeQuery) -> dict[str, Any]:
         raw = await asyncio.gather(*tasks, return_exceptions=True)
 
     providers: list[dict[str, Any]] = []
-    for name, item in zip(("slack", "notion", "perplexity"), raw):
+    for name, item in zip(("github", "slack", "notion", "perplexity"), raw):
         if isinstance(item, BaseException):
-            # Do not expose provider response bodies, headers, or credentials.
+            # Never return provider response bodies, headers, or credentials.
             providers.append({"provider": name, "state": "request_failed", "results": []})
         else:
             providers.append(item)
