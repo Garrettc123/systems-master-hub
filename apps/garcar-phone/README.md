@@ -15,12 +15,12 @@ Mobile-first PWA served by the existing FastAPI app at `revenue/garcar_core/stat
 
 Set these server-side environment variables using the existing authorized secret-management workflow:
 
-- `SLACK_BOT_TOKEN` — Slack bot token with the required `search:read` permission and access to the intended channels.
-- `NOTION_API_KEY` — Notion integration token with the pages/data sources explicitly shared with that integration.
-- `PERPLEXITY_API_KEY` — Perplexity API key; research calls are user-triggered and may incur provider usage charges.
+- `SLACK_USER_TOKEN` — Slack user token with `search:read` and access to intended channels. Slack's `search.messages` API is not enabled by a bot token alone.
+- `NOTION_API_KEY` — Notion integration token with the pages/data sources explicitly shared to that integration.
+- `PERPLEXITY_API_KEY` — Perplexity API key; user-triggered research may incur provider usage charges.
 - Optional `PERPLEXITY_MODEL` — defaults to `sonar`.
 
-The existing Vercel project currently reports no environment variables and no project connector connections, so provider calls will fail closed until these values are configured. The current ChatGPT Slack/Notion connectors are not automatically available to the deployed Vercel app.
+The existing Vercel project currently reports no environment variables and no project connector connections, so provider calls fail closed until existing authorized credentials are provisioned into the project. ChatGPT's Slack/Notion connectors do not automatically become Vercel server credentials.
 
 ## Security / deployment gate
 
@@ -32,8 +32,8 @@ The existing Vercel project currently reports no environment variables and no pr
 - Live provider authentication and search results in the deployed app.
 - Approval queue and action execution.
 - Durable multi-worker audit/approval storage.
-- Automated test run, browser test, and successful preview/production deployment.
+- Passing CI and verified provider smoke tests. Do not promote to production until these gates pass.
 
 ## Tests
 
-`revenue/garcar_core/test_phone_integrations.py` covers configuration-status redaction, fail-closed behavior when no providers are configured, and UI serving. Run the existing core tests and these tests in CI before promotion.
+`revenue/garcar_core/test_phone_integrations.py` covers credential redaction, bot-token rejection for Slack search, fail-closed behavior when no providers are configured, request validation, and UI serving. CI must run both `test_app.py` and `test_phone_integrations.py`.
