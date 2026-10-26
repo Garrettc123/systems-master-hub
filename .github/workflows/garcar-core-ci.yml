@@ -11,6 +11,7 @@ on:
       - "revenue/garcar_core/**"
       - "revenue/garcar-core/**"
       - ".github/workflows/garcar-core-ci.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -27,5 +28,5 @@ jobs:
         run: python -m pip install -r revenue/garcar_core/requirements.txt pytest httpx
       - name: Compile
         run: python -m compileall -q revenue/garcar_core
-      - name: Test
-        run: pytest -q revenue/garcar_core/test_app.py
+      - name: Test core and phone command center
+        run: pytest -q revenue/garcar_core/test_app.py revenue/garcar_core/test_phone_integrations.py
