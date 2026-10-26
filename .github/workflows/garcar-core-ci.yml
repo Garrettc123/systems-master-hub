@@ -29,4 +29,4 @@ jobs:
       - name: Compile
         run: python -m compileall -q revenue/garcar_core
       - name: Test core and phone command center
-        run: pytest -q revenue/garcar_core/test_app.py revenue/garcar_core/test_phone_integrations.py
+        run: python -m pytest -q revenue/garcar_core/test_app.py revenue/garcar_core/test_phone_integrations.py
