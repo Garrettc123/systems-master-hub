@@ -25,8 +25,10 @@ class KnowledgeQuery(BaseModel):
 
 def integration_status() -> dict[str, Any]:
     """Report configuration presence only, never token values."""
+    # Slack's search.messages API requires a user token with search:read.
+    # A bot token is not sufficient for this endpoint.
     configured = {
-        "slack": bool(os.getenv("SLACK_BOT_TOKEN")),
+        "slack": bool(os.getenv("SLACK_USER_TOKEN")),
         "notion": bool(os.getenv("NOTION_API_KEY")),
         "perplexity": bool(os.getenv("PERPLEXITY_API_KEY")),
     }
@@ -47,7 +49,7 @@ async def phone_status() -> dict[str, Any]:
 
 
 async def _slack_search(client: httpx.AsyncClient, query: str) -> dict[str, Any]:
-    token = os.getenv("SLACK_BOT_TOKEN")
+    token = os.getenv("SLACK_USER_TOKEN")
     if not token:
         return {"provider": "slack", "state": "not_configured", "results": []}
     response = await client.get(
@@ -92,6 +94,11 @@ async def _notion_search(client: httpx.AsyncClient, query: str) -> dict[str, Any
             if isinstance(value, dict) and value.get("type") == "title":
                 title = "".join(part.get("plain_text", "") for part in value.get("title", []))
                 break
+        # Database/data-source search responses may expose title at top level.
+        if not title:
+            top_level_title = item.get("title")
+            if isinstance(top_level_title, list):
+                title = "".join(part.get("plain_text", "") for part in top_level_title)
         results.append({
             "title": title or "Notion page",
             "text": "Notion page match",
