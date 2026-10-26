@@ -1,34 +1,39 @@
 # Garcar Enterprise — Phone Command Center
 
-A mobile-first installable web-app shell for the existing Garcar control plane. It is intentionally honest about connection status: Slack, Perplexity, Notion, and the approval queue are labelled **unverified** until authenticated server adapters and live evidence exist.
+Mobile-first PWA served by the existing FastAPI app at `revenue/garcar_core/static`. The frontend and API share one origin.
 
-## Current scope
+## Implemented in this branch
 
-- Responsive mobile UI and PWA manifest/service worker.
-- Same-origin `GET /healthz` check with timestamp and visible failure state.
-- Knowledge-search UI that calls `POST /api/knowledge/search` only when a user submits a query; missing endpoint is reported as disconnected.
-- No API keys, tokens, or session credentials are embedded in static assets.
-- No action execution, email sending, payment creation, deployment, or approval mutation from this UI.
+- PWA shell, responsive layout, service worker, and same-origin API health check.
+- `GET /api/phone/status`: reports provider credential presence only; never returns credential values.
+- `POST /api/knowledge/search`: read-only parallel search across configured Slack, Notion, and Perplexity APIs. Partial provider failure is surfaced rather than hidden.
+- Server-side adapters in `revenue/garcar_core/phone_integrations.py`, with bounded query length and request timeout.
+- Existing `POST /v1/events/lead` behavior preserved.
+- No provider credentials in browser assets; no provider write actions, outbound messaging, payments, or approval mutation.
 
-## Existing API mismatch
+## Required runtime configuration
 
-The currently inspected `revenue/garcar_core/app.py` exposes `GET /healthz` and `POST /v1/events/lead`. It does **not** expose `/api/knowledge/search`, an approvals API, Slack OAuth, or a Perplexity adapter. The current Vercel project metadata reported `live: false`, despite a latest deployment marked `READY`; a successful live request still needs to be demonstrated. This frontend must not be represented as production-ready until served and tested against an authenticated API.
+Set these server-side environment variables using the existing authorized secret-management workflow:
 
-## Integration contract before production
+- `SLACK_BOT_TOKEN` — Slack bot token with the required `search:read` permission and access to the intended channels.
+- `NOTION_API_KEY` — Notion integration token with the pages/data sources explicitly shared with that integration.
+- `PERPLEXITY_API_KEY` — Perplexity API key; research calls are user-triggered and may incur provider usage charges.
+- Optional `PERPLEXITY_MODEL` — defaults to `sonar`.
 
-1. Serve this directory over HTTPS from the intended app domain. Keep the existing lead API behavior intact.
-2. Add an authenticated backend-for-frontend; do not call provider APIs directly from the browser.
-3. Use server-side OAuth/token storage for Slack and server-side Perplexity credentials. Never expose credentials to client JavaScript.
-4. Require owner identity, CSRF protection for cookie sessions, rate limits, request IDs, schema validation, and audit events.
-5. Read-only knowledge queries may be allowed by policy. Mutations must be proposed as action requests, show the exact action/target/impact, require explicit owner approval, and be independently re-authorized at execution time.
-6. Keep control-plane MCP on stdio or behind a separately authenticated private transport; never expose an unauthenticated MCP listener.
-7. Persist approval/audit state in a durable database for multi-worker production. SQLite is local/single-node development only.
-8. Add tests for auth denial, cross-origin/CSRF, duplicate idempotency keys, approval expiry/replay, fail-closed adapters, audit integrity, and provider timeouts.
+The existing Vercel project currently reports no environment variables and no project connector connections, so provider calls will fail closed until these values are configured. The current ChatGPT Slack/Notion connectors are not automatically available to the deployed Vercel app.
 
-## Run locally
+## Security / deployment gate
 
-From this directory, serve the static files with any local static HTTP server, then open `index.html` through that server. PWA install and service-worker behavior require HTTPS or localhost. The API status will fail unless a same-origin `/healthz` endpoint is configured. This is expected and visible.
+**Keep Vercel Deployment Protection (SSO) enabled on every hostname serving this app.** The FastAPI provider endpoints rely on the protected deployment boundary; do not attach an unprotected custom domain or make the API public. The provider adapters are read-only. They do not expose Slack posting, Notion editing, payments, deployments, or autonomous action execution.
 
-## Status
+## Still not implemented / not verified
 
-UI source created; deployment, live API connectivity, OAuth, Slack, Perplexity, approval queue, and production security tests are **not yet verified**.
+- Credential provisioning from the canonical vault to Vercel.
+- Live provider authentication and search results in the deployed app.
+- Approval queue and action execution.
+- Durable multi-worker audit/approval storage.
+- Automated test run, browser test, and successful preview/production deployment.
+
+## Tests
+
+`revenue/garcar_core/test_phone_integrations.py` covers configuration-status redaction, fail-closed behavior when no providers are configured, and UI serving. Run the existing core tests and these tests in CI before promotion.
