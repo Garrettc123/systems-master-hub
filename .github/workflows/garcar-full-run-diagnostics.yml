@@ -1,0 +1,147 @@
+name: Garcar Full Run Diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: garcar-full-run-diagnostics-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnostics:
+    name: Read-only repository diagnostics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install core test and validation dependencies
+        run: python -m pip install --disable-pip-version-check -r revenue/garcar_core/requirements.txt pytest pyyaml
+
+      - name: Run core and phone tests
+        shell: bash
+        run: |
+          set +e
+          python -m pytest -q revenue/garcar_core/test_app.py revenue/garcar_core/test_phone_integrations.py > "$RUNNER_TEMP/pytest-output.txt" 2>&1
+          code=$?
+          {
+            echo "## Pytest"
+            echo "exit_code=$code"
+            cat "$RUNNER_TEMP/pytest-output.txt"
+            echo
+          } >> "$GITHUB_WORKSPACE/garcar-full-run-report.txt"
+          {
+            echo "### Pytest result"
+            if [ "$code" -eq 0 ]; then echo "- PASS: core and phone tests"; else echo "- FAIL: core and phone tests (exit $code)"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Compile Python, parse JSON/YAML, and reconcile control plane
+        shell: bash
+        run: |
+          set +e
+          {
+            echo "## Compile"
+            python -m compileall -q revenue/garcar_core
+            echo "compile_exit_code=$?"
+            echo
+            echo "## JSON and YAML syntax"
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          import yaml
+
+          errors = []
+          for path in Path(".").rglob("*.json"):
+              if any(part in {".git", "node_modules", ".venv"} for part in path.parts):
+                  continue
+              try:
+                  json.loads(path.read_text(encoding="utf-8"))
+              except Exception as exc:
+                  errors.append(f"JSON {path}: {type(exc).__name__}")
+          for path in Path(".github/workflows").glob("*.yml"):
+              try:
+                  yaml.compose(path.read_text(encoding="utf-8"))
+              except Exception as exc:
+                  errors.append(f"YAML {path}: {type(exc).__name__}")
+          if errors:
+              print("\n".join(errors))
+              raise SystemExit(1)
+          print("PASS: all scanned JSON files and workflow YAML files parse")
+          PY
+            echo "parse_exit_code=$?"
+            echo
+            echo "## Control-plane reconciliation"
+            python control-plane/reconcile.py
+            echo "reconcile_exit_code=$?"
+            echo
+          } >> "$GITHUB_WORKSPACE/garcar-full-run-report.txt" 2>&1
+          exit 0
+
+      - name: Check shell syntax
+        shell: bash
+        run: |
+          set +e
+          failures=0
+          {
+            echo "## Shell syntax"
+            while IFS= read -r -d '' file; do
+              if ! bash -n "$file" >/dev/null 2>&1; then
+                echo "FAIL: $file (bash -n)"
+                failures=$((failures+1))
+              fi
+            done < <(find . -type f -name '*.sh' -not -path './.git/*' -not -path './node_modules/*' -print0)
+            if [ "$failures" -eq 0 ]; then echo "PASS: all shell files parse"; fi
+            echo "shell_failures=$failures"
+            echo
+          } >> "$GITHUB_WORKSPACE/garcar-full-run-report.txt"
+          echo "- Shell syntax failures: $failures" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Run secret-pattern scan without printing matched contents
+        shell: bash
+        run: |
+          set +e
+          pattern='(AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|ghp_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{20,})'
+          {
+            echo "## Secret-pattern scan (file paths only)"
+            mapfile -t matches < <(grep -RIlE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.venv --exclude='*.md' "$pattern" . 2>/dev/null)
+            if [ "${#matches[@]}" -eq 0 ]; then
+              echo "PASS: no matching files"
+            else
+              printf 'MATCH: %s\n' "${matches[@]}"
+            fi
+            echo "matched_file_count=${#matches[@]}"
+            echo
+          } >> "$GITHUB_WORKSPACE/garcar-full-run-report.txt"
+          exit 0
+
+      - name: Final status summary
+        if: always()
+        run: |
+          {
+            echo "## Full Run Diagnostics"
+            echo "This is a diagnostic report, not a release gate. Existing CI and security gates remain authoritative."
+            echo
+            echo "Report sections record individual command exit codes and filenames only; the secret scan never prints matched line contents."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload diagnostic report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: garcar-full-run-diagnostics
+          path: garcar-full-run-report.txt
+          if-no-files-found: warn
+          retention-days: 7

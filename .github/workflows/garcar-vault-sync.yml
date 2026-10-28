@@ -146,6 +146,9 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+          GITHUB_READ_TOKEN: ${{ secrets.GITHUB_READ_TOKEN }}
+          SLACK_USER_TOKEN: ${{ secrets.SLACK_USER_TOKEN }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -170,6 +173,18 @@ jobs:
             github_only) echo "::error::github_only must use the dedicated fallback step"; exit 2 ;;
             *) echo "::error::Unsupported mode"; exit 2 ;;
           esac
+
+      - name: Sync read-only provider credentials to Vercel Preview
+        if: steps.config.outputs.vault_ready == 'true' && steps.config.outputs.mode == 'sync'
+        env:
+          VAULT_ADDR: ${{ secrets.VAULT_ADDR }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+          VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
+          VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+          GARCAR_VERCEL_DRY_RUN: "0"
+        working-directory: vault/hashicorp
+        shell: bash
+        run: python sync_to_vercel_preview.py
 
       - name: GitHub-only fallback
         if: steps.config.outputs.vault_ready != 'true' || steps.config.outputs.mode == 'github_only'
