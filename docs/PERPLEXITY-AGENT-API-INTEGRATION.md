@@ -10,8 +10,10 @@ This change adds a provider implementation to the existing multi-model router. I
 - Authentication: `Authorization: Bearer $PERPLEXITY_API_KEY`
 - Web research: `tools: [{"type": "web_search"}]`
 - Output: `output[].type == "message"`, content parts of type `output_text`
-- Sources: `output[].type == "search_results"` and any top-level citations
+- Sources: `output[].type == "search_results"` result URLs and message-content citation annotations
 - Cost: `usage.cost.total_cost` when returned by the API
+
+Official reference: https://docs.perplexity.ai/docs/agent-api/quickstart. The documented endpoint is `POST /v1/agent`; web search is enabled with `tools: [{"type": "web_search"}]`, and responses expose search-result items plus citation annotations.
 
 This uses the current Agent API. The legacy Sonar Chat Completions API was deprecated on 27 September 2026; do not build new integrations against its `choices[0].message.content` response shape.
 
