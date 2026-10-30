@@ -64,7 +64,6 @@ class PerplexityProvider(BaseProvider):
 
         payload: Dict[str, Any] = {
             "input": prompt,
-            "effort": self.effort,
             "max_output_tokens": max(1, int(max_tokens)),
             "tools": [{"type": "web_search"}],
             "instructions": instructions,
@@ -72,6 +71,8 @@ class PerplexityProvider(BaseProvider):
         selected_model = model or self.model
         if selected_model:
             payload["model"] = selected_model
+        else:
+            payload["effort"] = self.effort
 
         try:
             response = await asyncio.to_thread(self._post, payload)
