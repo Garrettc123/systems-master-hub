@@ -32,7 +32,8 @@ class PerplexityProviderTests(unittest.IsolatedAsyncioTestCase):
                     {"title": "Source A", "url": "https://example.com/a"}
                 ]},
                 {"type": "message", "content": [
-                    {"type": "output_text", "text": "Verified answer."}
+                    {"type": "output_text", "text": "Verified answer.",
+                     "annotations": [{"type": "url_citation", "url": "https://example.com/a"}]}
                 ]},
             ],
             "usage": {
