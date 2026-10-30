@@ -65,6 +65,7 @@ class PerplexityProvider(BaseProvider):
         payload: Dict[str, Any] = {
             "input": prompt,
             "max_output_tokens": max(1, int(max_tokens)),
+            "temperature": float(temperature),
             "tools": [{"type": "web_search"}],
             "instructions": instructions,
         }
@@ -158,7 +159,14 @@ class PerplexityProvider(BaseProvider):
 
     @classmethod
     def _extract_citations(cls, response: Dict[str, Any]) -> List[str]:
-        found = list(response.get("citations") or [])
+        found = [str(value) for value in (response.get("citations") or []) if value]
+        for item in response.get("output") or []:
+            if item.get("type") == "message":
+                for part in item.get("content") or []:
+                    for annotation in part.get("annotations") or []:
+                        url = annotation.get("url")
+                        if url:
+                            found.append(str(url))
         for item in cls._extract_search_results(response):
             url = item.get("url")
             if url:
