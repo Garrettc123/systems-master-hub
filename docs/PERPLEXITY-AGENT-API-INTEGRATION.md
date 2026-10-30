@@ -40,7 +40,7 @@ Perplexity results are research inputs, not authorization. Persist the response 
 Run from the repository root:
 
 ```bash
-python -m unittest tests.test_perplexity_client -v
+python -m unittest discover -s tests -p 'test_perplexity_client.py' -v
 python -m py_compile orchestrator/providers/perplexity_client.py
 ```
 
