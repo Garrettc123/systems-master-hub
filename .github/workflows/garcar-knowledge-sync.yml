@@ -1,0 +1,94 @@
+name: Garcar GitHub Knowledge Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 7 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "README.md"
+      - ".github/workflows/garcar-knowledge-sync.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: garcar-knowledge-sync-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    name: Read-only README snapshot to CRF
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Submit signed source snapshot
+        uses: actions/github-script@v7
+        env:
+          GARCAR_TENANT_ID: f5d93048-7984-432e-afdf-9f6a4cfe3012
+          GARCAR_INGEST_URL: https://obxeatprctjwqbvlrhfx.supabase.co/functions/v1/crf-github-ingest
+        with:
+          script: |
+            const fs = require("node:fs/promises");
+            const path = require("node:path");
+
+            const repo = `${context.repo.owner}/${context.repo.repo}`;
+            const readmePath = path.join(process.env.GITHUB_WORKSPACE, "README.md");
+            const stat = await fs.stat(readmePath);
+            if (!stat.isFile() || stat.size > 250000) {
+              core.setFailed("README is missing or exceeds the 250 KB ingestion limit");
+              return;
+            }
+
+            const content = await fs.readFile(readmePath, "utf8");
+            const oidc = await core.getIDToken("garcar-crf");
+            const payload = {
+              tenant_id: process.env.GARCAR_TENANT_ID,
+              repository: repo,
+              event_type: "github.knowledge.snapshot",
+              severity: "info",
+              correlation_id: `knowledge:${repo}:${context.sha}`,
+              knowledge_document: {
+                external_id: "README.md",
+                title: `${repo} — README`,
+                canonical_uri: `https://github.com/${repo}/blob/${context.sha}/README.md`,
+                source_modified_at: new Date().toISOString(),
+                content_text: content
+              }
+            };
+
+            const response = await fetch(process.env.GARCAR_INGEST_URL, {
+              method: "POST",
+              headers: {
+                authorization: `Bearer ${oidc}`,
+                "content-type": "application/json",
+                accept: "application/json"
+              },
+              body: JSON.stringify(payload),
+              signal: AbortSignal.timeout(30000)
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || result.ok !== true || !result.knowledge) {
+              core.setFailed(
+                `CRF knowledge ingestion rejected (HTTP ${response.status}): ${JSON.stringify(result).slice(0, 1200)}`
+              );
+              return;
+            }
+
+            core.info(JSON.stringify({
+              event: "garcar.knowledge.snapshot",
+              repository: repo,
+              commit: context.sha,
+              document_id: result.knowledge.document_id,
+              version_no: result.knowledge.version_no,
+              content_sha256: result.knowledge.content_sha256,
+              changed: result.knowledge.changed,
+              chunks_written: result.knowledge.chunks_written,
+              trust_state: result.knowledge.trust_state
+            }));
