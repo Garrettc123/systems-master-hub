@@ -14,6 +14,8 @@
 
 Run bash scripts/termux.sh install, then bash scripts/termux.sh start. The start action waits for the API readiness check and fails with a log instruction if it does not come up. Inspect with bash scripts/termux.sh status and bash scripts/termux.sh logs. Stop with bash scripts/termux.sh stop.
 
+The Termux manager tags each process with its Forge instance path and process role, then verifies those values against /proc before treating a saved PID as owned. If a PID file points to an unrelated process, the manager refuses to signal that process. A partial startup is rolled back by stopping only verified Forge processes.
+
 Android may pause background processes to conserve battery. Do not use this device as the only production host or expose the API publicly.
 
 ## Local validation
