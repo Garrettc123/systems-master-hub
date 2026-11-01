@@ -1,0 +1,18 @@
+{
+  "steps": [
+    [
+      "python",
+      "-m",
+      "unittest",
+      "discover",
+      "-v"
+    ],
+    [
+      "python",
+      "-m",
+      "compileall",
+      "-q",
+      "."
+    ]
+  ]
+}
