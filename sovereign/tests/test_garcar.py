@@ -2,6 +2,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 MODULE = Path(__file__).parents[1] / "garcar.py"
@@ -62,6 +63,23 @@ class ManifestTests(unittest.TestCase):
             self.write(temp, cfg)
             with self.assertRaises(ValueError):
                 garcar.load_deploy(temp)
+
+class CIManifestTests(unittest.TestCase):
+    def test_ci_steps_must_be_argument_arrays(self):
+        with tempfile.TemporaryDirectory() as temp:
+            (Path(temp) / "garcar.ci.json").write_text(json.dumps({"steps": ["python -m unittest"]}))
+            with self.assertRaises(ValueError):
+                garcar.load_ci(temp)
+
+    def test_ci_secret_is_not_inherited_by_default(self):
+        with patch.dict("os.environ", {"GARCAR_TEST_SECRET": "do-not-leak"}, clear=True):
+            env = garcar.ci_environment([])
+            self.assertNotIn("GARCAR_TEST_SECRET", env)
+
+    def test_ci_secret_requires_explicit_name_allowlist(self):
+        with patch.dict("os.environ", {"GARCAR_TEST_SECRET": "allowed-only-on-request"}, clear=True):
+            env = garcar.ci_environment(["GARCAR_TEST_SECRET"])
+            self.assertEqual(env["GARCAR_TEST_SECRET"], "allowed-only-on-request")
 
 if __name__ == "__main__":
     unittest.main()
