@@ -10,6 +10,8 @@ sh -n scripts/preflight.sh
 if command -v bash >/dev/null 2>&1; then
   bash -n scripts/termux.sh
   bash -n scripts/e2e-smoke.sh
+  bash -n scripts/test-termux-pid-guard.sh
+  bash scripts/test-termux-pid-guard.sh
 fi
 if command -v ruff >/dev/null 2>&1; then
   printf '\n== Ruff ==\n'

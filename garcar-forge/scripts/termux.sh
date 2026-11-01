@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ACTION="${1:-status}"
 VENV="$PWD/.venv"
-PIDDIR="$PWD/.run"
+PIDDIR="${GARCAR_FORGE_PIDDIR:-$PWD/.run}"
 mkdir -p "$PIDDIR" "$PWD/data"
 
 install_deps() {
@@ -108,6 +108,10 @@ start_one() {
   stop_one "$name"
   return 1
 }
+
+if [ "${GARCAR_TERMUX_LIBRARY_ONLY:-false}" = "true" ]; then
+  return 0
+fi
 
 case "$ACTION" in
   install) install_deps ;;
