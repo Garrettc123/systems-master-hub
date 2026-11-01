@@ -25,13 +25,34 @@ PY
   echo "Install complete. Operator token saved in .env with owner-only permissions."
 }
 
+legacy_process_matches() {
+  local name="$1" pid="$2" proc_env cmdline cwd
+  [ -r "/proc/$pid/environ" ] || return 1
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  proc_env="$(tr '\000' '\n' < "/proc/$pid/environ" 2>/dev/null || true)"
+  proc_env=$'\n'"$proc_env"$'\n'
+  [[ "$proc_env" == *$'\n'"GARCAR_LEDGER_PATH=$PWD/data/garcar-forge.sqlite3"$'\n'* ]] || return 1
+  cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null || true)"
+  [ "$cwd" = "$PWD" ] || return 1
+  cmdline="$(tr '\000' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+  case "$name" in
+    api) [[ "$cmdline" == *"$VENV/bin/uvicorn"* && "$cmdline" == *"app.main:app"* ]] ;;
+    worker) [[ "$cmdline" == *"$VENV/bin/python"* && "$cmdline" == *"-m app.worker"* ]] ;;
+    scheduler) [[ "$cmdline" == *"$VENV/bin/python"* && "$cmdline" == *"-m app.scheduler"* ]] ;;
+    *) return 1 ;;
+  esac
+}
+
 process_matches() {
   local name="$1" pid="$2" proc_env
   [ -r "/proc/$pid/environ" ] || return 1
   proc_env="$(tr '\000' '\n' < "/proc/$pid/environ" 2>/dev/null || true)"
   proc_env=$'\n'"$proc_env"$'\n'
-  [[ "$proc_env" == *$'\n'"GARCAR_FORGE_PROCESS=$name"$'\n'* ]] || return 1
-  [[ "$proc_env" == *$'\n'"GARCAR_FORGE_HOME=$PWD"$'\n'* ]]
+  if [[ "$proc_env" == *$'\n'"GARCAR_FORGE_PROCESS=$name"$'\n'* ]] &&
+     [[ "$proc_env" == *$'\n'"GARCAR_FORGE_HOME=$PWD"$'\n'* ]]; then
+    return 0
+  fi
+  legacy_process_matches "$name" "$pid"
 }
 
 stop_one() {
@@ -57,7 +78,7 @@ stop_one() {
   fi
   kill -TERM "$pid" 2>/dev/null || true
   for _ in $(seq 1 20); do
-    if ! kill -0 "$pid" 2>/dev/null; then break; fi
+    if ! kill -0 "$pid" 2>/dev/null || ! process_matches "$name" "$pid"; then break; fi
     sleep 0.2
   done
   if kill -0 "$pid" 2>/dev/null && process_matches "$name" "$pid"; then

@@ -5,10 +5,12 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TEST_PID_DIR="$(mktemp -d)"
 foreign_pid=""
 owned_pid=""
+legacy_pid=""
 
 cleanup() {
   [ -z "$foreign_pid" ] || kill "$foreign_pid" 2>/dev/null || true
   [ -z "$owned_pid" ] || kill "$owned_pid" 2>/dev/null || true
+  [ -z "$legacy_pid" ] || kill "$legacy_pid" 2>/dev/null || true
   rm -rf "$TEST_PID_DIR"
 }
 trap cleanup EXIT
@@ -39,4 +41,18 @@ wait "$owned_pid" 2>/dev/null || true
 ! kill -0 "$owned_pid" 2>/dev/null
 [ ! -f "$PIDDIR/worker.pid" ]
 
-echo "PASS: foreign PID was not signalled; owned Forge process was stopped."
+GARCAR_LEDGER_PATH="$PWD/data/garcar-forge.sqlite3" bash -c 'exec -a "$1 -m app.worker" sleep 30' _ "$VENV/bin/python" &
+legacy_pid=$!
+matched=0
+for _ in $(seq 1 20); do
+  if process_matches worker "$legacy_pid"; then matched=1; break; fi
+  sleep 0.05
+done
+[ "$matched" -eq 1 ]
+printf '%s\n' "$legacy_pid" > "$PIDDIR/worker.pid"
+stop_one worker
+wait "$legacy_pid" 2>/dev/null || true
+! kill -0 "$legacy_pid" 2>/dev/null
+[ ! -f "$PIDDIR/worker.pid" ]
+
+echo "PASS: foreign PID was not signalled; current and legacy Forge processes were stopped."
