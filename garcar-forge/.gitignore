@@ -4,6 +4,7 @@ data/
 dist/
 build/
 *.egg-info/
+backups/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
