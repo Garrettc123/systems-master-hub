@@ -10,6 +10,7 @@ Garcar Forge is the self-managed control-plane foundation for Garcar Enterprise.
 - Deployment-plan endpoint that accepts dry-run plans only.
 - Execution endpoint that is deliberately locked.
 - Non-root Docker image, localhost-only Compose binding, automated tests and CI.
+- Read-only host preflight script to check Docker, Compose, and local configuration before startup.
 
 ## Explicit limitations
 
@@ -22,14 +23,15 @@ No secrets are committed. No live services are changed by this repository. Live 
 1. Install Docker Engine and the Compose plugin on a Linux host.
 2. Copy .env.example to .env.
 3. Generate a strong operator token locally with openssl rand -hex 32 and put it in .env.
-4. Run docker compose up --build -d.
-5. Check http://127.0.0.1:8080/healthz and http://127.0.0.1:8080/readyz.
-6. Use the operator token for management routes. Do not expose port 8080 publicly until TLS, network policy, token rotation, backups, and a security review are complete.
+4. Run make preflight. This checks configuration and does not start containers.
+5. Run docker compose up --build -d.
+6. Check http://127.0.0.1:8080/healthz and http://127.0.0.1:8080/readyz.
+7. Use the operator token for management routes. Do not expose port 8080 publicly until TLS, network policy, token rotation, backups, and a security review are complete.
 
 ## API
 
 - GET /healthz — liveness probe.
-- GET /readyz — checks that the local ledger is available.
+- GET /readyz — checks ledger availability and integrity.
 - GET /v1/status — authenticated status.
 - POST /v1/plans — records a dry-run deployment plan; dry_run must be true.
 - POST /v1/deployments/execute — returns HTTP 423 while execution is disabled.

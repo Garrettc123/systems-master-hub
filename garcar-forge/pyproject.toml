@@ -20,6 +20,9 @@ dev = [
   "ruff>=0.6,<1.0"
 ]
 
+[tool.setuptools]
+packages = ["app"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

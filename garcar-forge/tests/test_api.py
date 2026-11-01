@@ -5,9 +5,9 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 
 
-def make_client(tmp_path):
+def make_client(tmp_path, token="test-operator-token"):
     path = tmp_path / "events.sqlite3"
-    app = create_app(ledger_path=str(path), operator_token="test-operator-token")
+    app = create_app(ledger_path=str(path), operator_token=token)
     return TestClient(app), path
 
 
@@ -37,6 +37,12 @@ def test_health_and_readiness(tmp_path):
 def test_management_requires_auth(tmp_path):
     client, _ = make_client(tmp_path)
     assert client.get("/v1/status").status_code == 401
+
+
+def test_missing_operator_token_fails_closed(tmp_path):
+    client, _ = make_client(tmp_path, token="")
+    response = client.get("/v1/status")
+    assert response.status_code == 503
 
 
 def test_dry_run_plan_is_recorded_and_chain_verifies(tmp_path):
