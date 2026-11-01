@@ -1,0 +1,12 @@
+.env
+.git
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+data
+dist
+build
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal

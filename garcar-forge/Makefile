@@ -1,16 +1,11 @@
-.PHONY: install test lint preflight compose-config
-
+.PHONY: install test compile compose-config preflight
 install:
 	python -m pip install -e ".[dev]"
-
 test:
 	pytest
-
-lint:
-	ruff check app tests
-
-preflight:
-	./scripts/preflight.sh
-
+compile:
+	python -m compileall -q app tests
 compose-config:
 	docker compose config --quiet
+preflight:
+	./scripts/preflight.sh
