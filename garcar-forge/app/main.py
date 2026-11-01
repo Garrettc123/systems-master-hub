@@ -14,7 +14,7 @@ from app.ledger import EventLedger
 
 class DeploymentPlan(BaseModel):
     target: str = Field(min_length=1, max_length=120, pattern=r"^[a-zA-Z0-9._/-]+$")
-    artifact_digest: str = Field(min_length=16, max_length=160)
+    artifact_digest: str = Field(pattern=r"^sha256:[a-fA-F0-9]{64}$")
     change_summary: str = Field(min_length=1, max_length=2000)
     dry_run: bool = True
     metadata: dict[str, Any] = Field(default_factory=dict)
