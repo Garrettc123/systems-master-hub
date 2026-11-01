@@ -37,7 +37,8 @@ class EventLedger:
         return conn
 
     def initialize(self) -> None:
-        with self._connect() as conn:
+        conn = self._connect()
+        try:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS events (
                     seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,6 +51,8 @@ class EventLedger:
                     event_hash TEXT NOT NULL UNIQUE
                 )
             """)
+        finally:
+            conn.close()
 
     @staticmethod
     def _hash(record: dict[str, Any]) -> str:

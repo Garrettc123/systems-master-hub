@@ -21,7 +21,7 @@ class DeploymentPlan(BaseModel):
 
 
 def create_app(ledger_path: str | None = None, operator_token: str | None = None) -> FastAPI:
-    path = ledger_path or os.getenv("GARCAR_LEDGER_PATH", "/data/garcar-forge.sqlite3")
+    path = ledger_path or os.getenv("GARCAR_LEDGER_PATH", "./data/garcar-forge.sqlite3")
     token = operator_token if operator_token is not None else os.getenv("GARCAR_OPERATOR_TOKEN", "")
     ledger = EventLedger(path)
 
@@ -54,10 +54,14 @@ def create_app(ledger_path: str | None = None, operator_token: str | None = None
     @app.get("/readyz")
     def ready() -> dict[str, str]:
         try:
-            ledger.verify()
+            verification = ledger.verify()
+            if not verification["valid"]:
+                raise HTTPException(status_code=503, detail="ledger_integrity_check_failed")
             with sqlite3.connect(path, timeout=2) as conn:
                 conn.execute("SELECT 1").fetchone()
-            return {"status": "ready", "ledger": "reachable"}
+            return {"status": "ready", "ledger": "reachable", "integrity": "valid"}
+        except HTTPException:
+            raise
         except Exception as exc:
             raise HTTPException(status_code=503, detail="ledger_unavailable") from exc
 
