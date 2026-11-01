@@ -130,9 +130,20 @@ def start_process(cfg, release, port, logfile):
                                 shell=False, start_new_session=True)
     return proc
 
-def stop_pid(pid):
+def stop_pid(pid, timeout=5):
     try:
         os.killpg(int(pid), signal.SIGTERM)
+    except (ProcessLookupError, PermissionError, ValueError):
+        return
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(int(pid), 0)
+        except (ProcessLookupError, PermissionError, ValueError):
+            return
+        time.sleep(0.1)
+    try:
+        os.killpg(int(pid), signal.SIGKILL)
     except (ProcessLookupError, PermissionError, ValueError):
         pass
 
