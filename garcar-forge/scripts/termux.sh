@@ -37,11 +37,23 @@ case "$ACTION" in
   install) install_deps ;;
   start)
     [ -x "$VENV/bin/uvicorn" ] || { echo "Run: $0 install" >&2; exit 1; }
-    set -a; [ ! -f .env ] || . ./.env; set +a
+    [ -f .env ] || { echo "Missing .env. Run: $0 install" >&2; exit 1; }
+    set -a; . ./.env; set +a
+    [ "${#GARCAR_OPERATOR_TOKEN}" -ge 32 ] || { echo "Operator token is missing or too short. Re-run install after removing the invalid .env." >&2; exit 1; }
     export GARCAR_LEDGER_PATH="${GARCAR_LEDGER_PATH:-$PWD/data/garcar-forge.sqlite3}"
     start_one api "$VENV/bin/uvicorn" app.main:app --host 127.0.0.1 --port 8080 --workers 1
     start_one worker "$VENV/bin/python" -m app.worker
     start_one scheduler "$VENV/bin/python" -m app.scheduler
+    READY=0
+    for _ in $(seq 1 30); do
+      if curl -fsS http://127.0.0.1:8080/readyz >/dev/null 2>&1; then READY=1; break; fi
+      sleep 1
+    done
+    if [ "$READY" -ne 1 ]; then
+      echo "API failed readiness check; inspect logs with: $0 logs" >&2
+      exit 1
+    fi
+    echo "GARCAR FORGE READY: http://127.0.0.1:8080/healthz"
     ;;
   stop)
     for name in scheduler worker api; do
