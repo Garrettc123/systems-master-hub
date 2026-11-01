@@ -67,7 +67,17 @@ def validate_steps(value, field):
 def load_ci(source):
     path = Path(source) / "garcar.ci.json"
     cfg = read_json(path)
-    return validate_steps(cfg.get("steps"), "steps")
+    steps = validate_steps(cfg.get("steps"), "steps")
+    passthrough = cfg.get("env_passthrough", [])
+    if not isinstance(passthrough, list) or not all(isinstance(x, str) and x.isidentifier() for x in passthrough):
+        raise ValueError("env_passthrough must contain environment variable names only")
+    return steps, passthrough
+
+def ci_environment(passthrough):
+    safe = ("PATH", "HOME", "PREFIX", "TMPDIR", "TEMP", "LANG", "LC_ALL")
+    env = {key: os.environ[key] for key in safe if key in os.environ}
+    env.update({key: os.environ[key] for key in passthrough if key in os.environ})
+    return env
 
 def run_steps(steps, cwd, env, logfile):
     for i, argv in enumerate(steps, 1):
@@ -84,9 +94,9 @@ def ci(source):
     source = Path(source).expanduser().resolve()
     if not source.is_dir():
         raise ValueError("Repository directory does not exist")
-    steps = load_ci(source)
+    steps, passthrough = load_ci(source)
     log = ROOT / "logs" / f"ci-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.log"
-    run_steps(steps, source, os.environ.copy(), log)
+    run_steps(steps, source, ci_environment(passthrough), log)
     print(f"CI PASSED: {source}\nLog: {log}")
 
 def safe_name(name):
