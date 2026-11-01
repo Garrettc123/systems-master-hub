@@ -31,6 +31,7 @@ legacy_process_matches() {
   [ -r "/proc/$pid/cmdline" ] || return 1
   proc_env="$(tr '\000' '\n' < "/proc/$pid/environ" 2>/dev/null || true)"
   proc_env=$'\n'"$proc_env"$'\n'
+  [[ "$proc_env" != *$'\n'"GARCAR_FORGE_PROCESS="* ]] || return 1
   [[ "$proc_env" == *$'\n'"GARCAR_LEDGER_PATH=$PWD/data/garcar-forge.sqlite3"$'\n'* ]] || return 1
   cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null || true)"
   [ "$cwd" = "$PWD" ] || return 1
@@ -103,10 +104,16 @@ start_one() {
       ''|*[!0-9]*) rm -f "$pidfile" ;;
       *)
         if kill -0 "$existing_pid" 2>/dev/null && process_matches "$name" "$existing_pid"; then
-          echo "$name already running (pid $existing_pid)"
-          return 0
+          if legacy_process_matches "$name" "$existing_pid"; then
+            echo "$name: replacing legacy Forge process (pid $existing_pid)"
+            stop_one "$name"
+          else
+            echo "$name already running (verified pid $existing_pid)"
+            return 0
+          fi
+        else
+          rm -f "$pidfile"
         fi
-        rm -f "$pidfile"
         ;;
     esac
   fi

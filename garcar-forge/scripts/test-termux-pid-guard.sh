@@ -45,14 +45,20 @@ GARCAR_LEDGER_PATH="$PWD/data/garcar-forge.sqlite3" bash -c 'exec -a "$1 -m app.
 legacy_pid=$!
 matched=0
 for _ in $(seq 1 20); do
-  if process_matches worker "$legacy_pid"; then matched=1; break; fi
+  if legacy_process_matches worker "$legacy_pid"; then matched=1; break; fi
   sleep 0.05
 done
 [ "$matched" -eq 1 ]
 printf '%s\n' "$legacy_pid" > "$PIDDIR/worker.pid"
-stop_one worker
+start_one worker sleep 30
+new_pid="$(cat "$PIDDIR/worker.pid")"
+[ "$new_pid" != "$legacy_pid" ]
+process_matches worker "$new_pid"
 wait "$legacy_pid" 2>/dev/null || true
 ! kill -0 "$legacy_pid" 2>/dev/null
+stop_one worker
+wait "$new_pid" 2>/dev/null || true
+! kill -0 "$new_pid" 2>/dev/null
 [ ! -f "$PIDDIR/worker.pid" ]
 
-echo "PASS: foreign PID was not signalled; current and legacy Forge processes were stopped."
+echo "PASS: foreign PID preserved; current process verified; legacy process upgraded safely."
