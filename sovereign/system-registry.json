@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0.0",
+  "registry_status": "initial_inventory_unverified",
+  "rule": "Repository presence and README claims do not prove runtime health, deployment, customers, or revenue.",
+  "systems": [
+    {
+      "id": "ai-orchestrator",
+      "name": "AI Orchestrator",
+      "domain": "control",
+      "repository": null,
+      "status": "mapping_required"
+    },
+    {
+      "id": "ai-ops-studio",
+      "name": "AI Ops Studio",
+      "domain": "control",
+      "repository": "Garrettc123/ai-ops-studio",
+      "status": "repository_identified_runtime_unverified"
+    },
+    {
+      "id": "autonomous-ai-wealth",
+      "name": "Autonomous AI Wealth ecosystem",
+      "domain": "product",
+      "repository": "Garrettc123/ai-wealth-ecosystem",
+      "status": "repository_identified_runtime_unverified"
+    },
+    {
+      "id": "ai-business-platform",
+      "name": "AI Business Platform",
+      "domain": "product",
+      "repository": "Garrettc123/ai-business-platform",
+      "status": "repository_identified_runtime_unverified"
+    },
+    {
+      "id": "mobile-analytics",
+      "name": "Mobile analytics services",
+      "domain": "intelligence",
+      "repository": null,
+      "status": "mapping_required"
+    },
+    {
+      "id": "zero-human-grid",
+      "name": "Zero-Human Enterprise Grid",
+      "domain": "control",
+      "repository": "Garrettc123/zero-human-enterprise-grid",
+      "status": "repository_identified_runtime_unverified"
+    },
+    {
+      "id": "enterprise-money-flow",
+      "name": "Enterprise Money Flow",
+      "domain": "revenue",
+      "repository": null,
+      "status": "mapping_required"
+    },
+    {
+      "id": "s25-collector",
+      "name": "S25 Collector",
+      "domain": "intelligence",
+      "repository": null,
+      "status": "mapping_required"
+    },
+    {
+      "id": "s25-analytics",
+      "name": "S25 Analytics Server",
+      "domain": "intelligence",
+      "repository": null,
+      "status": "mapping_required"
+    },
+    {
+      "id": "asset-arbitrage",
+      "name": "Asset Arbitrage System",
+      "domain": "intelligence",
+      "repository": null,
+      "status": "mapping_required"
+    },
+    {
+      "id": "controlled-app-builder",
+      "name": "Controlled App Builder",
+      "domain": "product",
+      "repository": null,
+      "status": "mapping_required"
+    },
+    {
+      "id": "nexus-weaver-vfaas",
+      "name": "Nexus Weaver VFaaS",
+      "domain": "product",
+      "repository": null,
+      "status": "mapping_required"
+    },
+    {
+      "id": "architect-pro-enterprise",
+      "name": "Architect Pro Enterprise",
+      "domain": "product",
+      "repository": "Garrettc123/ARCHITECT_Pro-Enterprise",
+      "status": "repository_identified_runtime_unverified"
+    },
+    {
+      "id": "autonomai-package",
+      "name": "AutonomAI package",
+      "domain": "product",
+      "repository": null,
+      "status": "mapping_required"
+    },
+    {
+      "id": "master-integration-hub",
+      "name": "Master Integration Hub",
+      "domain": "control",
+      "repository": "Garrettc123/MASTER-Integration-Hub",
+      "status": "repository_identified_runtime_unverified"
+    },
+    {
+      "id": "sovereign-deploy",
+      "name": "Garcar Sovereign Deploy",
+      "domain": "infrastructure",
+      "repository": "Garrettc123/systems-master-hub/sovereign",
+      "status": "source_added_to_feature_branch_tests_not_run"
+    }
+  ]
+}
