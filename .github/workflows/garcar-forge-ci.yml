@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: garcar-forge
@@ -28,9 +28,7 @@ jobs:
           python-version: "3.12"
       - name: Install
         run: python -m pip install -e ".[dev]"
-      - name: Compile
-        run: python -m compileall -q app tests
-      - name: Lint
-        run: ruff check app tests
-      - name: Test
-        run: pytest
+      - name: Local CI suite
+        run: ./scripts/ci.sh
+      - name: End-to-end API and worker smoke test
+        run: ./scripts/e2e-smoke.sh

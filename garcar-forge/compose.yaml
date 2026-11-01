@@ -26,6 +26,7 @@ services:
     environment:
       GARCAR_LEDGER_PATH: /data/garcar-forge.sqlite3
       GARCAR_WORKER_POLL_SECONDS: ${GARCAR_WORKER_POLL_SECONDS:-3}
+      GARCAR_WORKER_LEASE_SECONDS: ${GARCAR_WORKER_LEASE_SECONDS:-300}
     command: ["python", "-m", "app.worker"]
     volumes: [forge-ledger:/data]
     read_only: true

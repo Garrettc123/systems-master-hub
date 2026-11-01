@@ -8,7 +8,7 @@ mkdir -p "$PIDDIR" "$PWD/data"
 
 install_deps() {
   command -v pkg >/dev/null 2>&1 || { echo "This install command is for Termux." >&2; exit 1; }
-  pkg install -y python
+  pkg install -y python coreutils curl
   python -m venv "$VENV"
   "$VENV/bin/pip" install --upgrade pip
   "$VENV/bin/pip" install .

@@ -2,6 +2,7 @@ import sqlite3
 
 from fastapi.testclient import TestClient
 
+from app.backup import create_backup, restore_backup, verify_backup
 from app.ledger import EventLedger
 from app.main import create_app
 from app.worker import process_one
@@ -79,6 +80,7 @@ def test_job_idempotency_and_worker_completion(tmp_path):
     assert process_one(ledger, "test-worker") is True
     current = client.get(f"/v1/jobs/{first.json()['job']['job_id']}", headers=headers()).json()["job"]
     assert current["status"] == "succeeded"
+    assert ledger.verify()["checked"] == 3
 
 
 def test_idempotency_key_cannot_change_request(tmp_path):
@@ -110,3 +112,47 @@ def test_ledger_can_be_reopened(tmp_path):
     first.append("test.event", "test", {"ok": True})
     second = EventLedger(path)
     assert second.verify()["checked"] == 1
+
+
+def test_backup_verify_and_restore(tmp_path):
+    source = tmp_path / "source.sqlite3"
+    ledger = EventLedger(str(source))
+    ledger.append("test.event", "test", {"durable": True})
+    backup, manifest = create_backup(source, tmp_path / "backups")
+    assert verify_backup(backup, manifest)["valid"] is True
+    restored = tmp_path / "restored.sqlite3"
+    restore_backup(backup, restored, confirmed=True)
+    assert EventLedger(str(restored)).verify()["checked"] == 1
+
+
+def test_restore_requires_explicit_confirmation(tmp_path):
+    source = tmp_path / "source.sqlite3"
+    ledger = EventLedger(str(source))
+    ledger.append("test.event", "test", {"durable": True})
+    backup, _ = create_backup(source, tmp_path / "backups")
+    try:
+        restore_backup(backup, tmp_path / "restored.sqlite3", confirmed=False)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("restore must require explicit confirmation")
+
+
+def test_stale_worker_lease_is_reclaimed(tmp_path):
+    ledger = EventLedger(str(tmp_path / "lease.sqlite3"))
+    job, created, _ = ledger.enqueue("ledger.verify", "lease-test-job-000001", {})
+    assert created is True
+    first = ledger.claim_job("worker-crashed", lease_seconds=300)
+    assert first is not None and first["attempt_count"] == 1
+    conn = ledger.connect()
+    try:
+        conn.execute(
+            "UPDATE jobs SET started_at='2000-01-01T00:00:00+00:00' WHERE job_id=?",
+            (job["job_id"],),
+        )
+    finally:
+        conn.close()
+    recovered = ledger.claim_job("worker-recovery", lease_seconds=300)
+    assert recovered is not None
+    assert recovered["worker_id"] == "worker-recovery"
+    assert recovered["attempt_count"] == 2

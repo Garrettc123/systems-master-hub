@@ -4,7 +4,7 @@ import hashlib
 import json
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -81,32 +81,35 @@ class EventLedger:
     def _hash(record: dict[str, Any]) -> str:
         return hashlib.sha256(canonical(record).encode("utf-8")).hexdigest()
 
+    def append_in_transaction(
+        self, conn: sqlite3.Connection, event_type: str, actor: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        previous = conn.execute(
+            "SELECT event_hash FROM events ORDER BY seq DESC LIMIT 1"
+        ).fetchone()
+        previous_hash = previous["event_hash"] if previous else "GENESIS"
+        event = {
+            "event_id": str(uuid.uuid4()), "occurred_at": utc_now(),
+            "event_type": event_type, "actor": actor, "payload": payload,
+            "previous_hash": previous_hash,
+        }
+        event_hash = self._hash(event)
+        cursor = conn.execute(
+            """INSERT INTO events
+               (event_id, occurred_at, event_type, actor, payload_json, previous_hash, event_hash)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (event["event_id"], event["occurred_at"], event_type, actor,
+             canonical(payload), previous_hash, event_hash),
+        )
+        return {**event, "seq": cursor.lastrowid, "event_hash": event_hash}
+
     def append(self, event_type: str, actor: str, payload: dict[str, Any]) -> dict[str, Any]:
         conn = self.connect()
         try:
             conn.execute("BEGIN IMMEDIATE")
-            previous = conn.execute(
-                "SELECT event_hash FROM events ORDER BY seq DESC LIMIT 1"
-            ).fetchone()
-            previous_hash = previous["event_hash"] if previous else "GENESIS"
-            event = {
-                "event_id": str(uuid.uuid4()),
-                "occurred_at": utc_now(),
-                "event_type": event_type,
-                "actor": actor,
-                "payload": payload,
-                "previous_hash": previous_hash,
-            }
-            event_hash = self._hash(event)
-            cursor = conn.execute(
-                """INSERT INTO events
-                   (event_id, occurred_at, event_type, actor, payload_json, previous_hash, event_hash)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (event["event_id"], event["occurred_at"], event_type, actor,
-                 canonical(payload), previous_hash, event_hash),
-            )
+            event = self.append_in_transaction(conn, event_type, actor, payload)
             conn.commit()
-            return {**event, "seq": cursor.lastrowid, "event_hash": event_hash}
+            return event
         except Exception:
             conn.rollback()
             raise
@@ -121,10 +124,8 @@ class EventLedger:
             checked = 0
             for row in rows:
                 event = {
-                    "event_id": row["event_id"],
-                    "occurred_at": row["occurred_at"],
-                    "event_type": row["event_type"],
-                    "actor": row["actor"],
+                    "event_id": row["event_id"], "occurred_at": row["occurred_at"],
+                    "event_type": row["event_type"], "actor": row["actor"],
                     "payload": json.loads(row["payload_json"]),
                     "previous_hash": row["previous_hash"],
                 }
@@ -179,17 +180,16 @@ class EventLedger:
                 (job_id, idempotency_key, task_name, payload_json, now),
             )
             row = conn.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+            self.append_in_transaction(conn, "job.queued", "operator", {
+                "job_id": job_id, "task_name": task_name, "idempotency_key": idempotency_key
+            })
             conn.commit()
-            job = self._job_dict(row)
+            return self._job_dict(row), True, True
         except Exception:
             conn.rollback()
             raise
         finally:
             conn.close()
-        self.append("job.queued", "operator", {
-            "job_id": job_id, "task_name": task_name, "idempotency_key": idempotency_key
-        })
-        return job, True, True
 
     @staticmethod
     def _job_dict(row: sqlite3.Row) -> dict[str, Any]:
@@ -211,25 +211,49 @@ class EventLedger:
         finally:
             conn.close()
 
-    def claim_job(self, worker_id: str) -> dict[str, Any] | None:
+    def claim_job(self, worker_id: str, lease_seconds: int = 300,
+                  max_attempts: int = 3) -> dict[str, Any] | None:
         conn = self.connect()
         try:
             conn.execute("BEGIN IMMEDIATE")
+            now = datetime.now(timezone.utc)
+            cutoff = (now - timedelta(seconds=max(1, lease_seconds))).isoformat()
+            expired = conn.execute(
+                """SELECT job_id FROM jobs
+                   WHERE status='running' AND started_at < ? AND attempt_count >= ?""",
+                (cutoff, max_attempts),
+            ).fetchall()
+            for item in expired:
+                conn.execute(
+                    """UPDATE jobs SET status='failed', error_code='job_lease_expired_max_attempts',
+                       finished_at=? WHERE job_id=? AND status='running'""",
+                    (now.isoformat(), item["job_id"]),
+                )
+                self.append_in_transaction(conn, "job.failed", worker_id, {
+                    "job_id": item["job_id"], "error_code": "job_lease_expired_max_attempts"
+                })
             row = conn.execute(
-                "SELECT * FROM jobs WHERE status='queued' ORDER BY seq ASC LIMIT 1"
+                """SELECT * FROM jobs
+                   WHERE status='queued'
+                      OR (status='running' AND started_at < ? AND attempt_count < ?)
+                   ORDER BY seq ASC LIMIT 1""",
+                (cutoff, max_attempts),
             ).fetchone()
             if row is None:
                 conn.commit()
                 return None
-            now = utc_now()
+            attempt = row["attempt_count"] + 1
             conn.execute(
                 """UPDATE jobs SET status='running', worker_id=?, started_at=?,
-                   attempt_count=attempt_count+1 WHERE job_id=? AND status='queued'""",
-                (worker_id, now, row["job_id"]),
+                   attempt_count=? WHERE job_id=?""",
+                (worker_id, now.isoformat(), attempt, row["job_id"]),
             )
             claimed = conn.execute(
                 "SELECT * FROM jobs WHERE job_id=?", (row["job_id"],)
             ).fetchone()
+            self.append_in_transaction(conn, "job.claimed", worker_id, {
+                "job_id": row["job_id"], "attempt_count": attempt
+            })
             conn.commit()
             return self._job_dict(claimed)
         except Exception:
@@ -247,6 +271,9 @@ class EventLedger:
                    WHERE job_id=? AND worker_id=? AND status='running'""",
                 (canonical(result), utc_now(), job_id, worker_id),
             )
+            if cursor.rowcount == 1:
+                self.append_in_transaction(conn, "job.succeeded", worker_id,
+                                           {"job_id": job_id, "result": result})
             conn.commit()
             return cursor.rowcount == 1
         except Exception:
@@ -264,6 +291,9 @@ class EventLedger:
                    WHERE job_id=? AND worker_id=? AND status='running'""",
                 (error_code, utc_now(), job_id, worker_id),
             )
+            if cursor.rowcount == 1:
+                self.append_in_transaction(conn, "job.failed", worker_id,
+                                           {"job_id": job_id, "error_code": error_code})
             conn.commit()
             return cursor.rowcount == 1
         except Exception:
