@@ -35,9 +35,12 @@ Create `garcar.ci.json` in a repository:
   "steps": [
     ["python", "-m", "unittest", "discover", "-v"],
     ["python", "-m", "compileall", "-q", "."]
-  ]
+  ],
+  "env_passthrough": []
 }
 ```
+
+CI receives a minimal safe environment by default. Add only explicitly required variable names to `env_passthrough`; never put secret values in the JSON file.
 
 Run:
 
