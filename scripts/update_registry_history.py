@@ -39,11 +39,12 @@ def main():
         system.setdefault("upgrade_history", []).append({
             "date": now,
             "from_tier": proposal["from_tier"],
-            "tier": proposal["to_tier"],
+            "proposed_tier": proposal["to_tier"],
             "description": proposal["description"],
-            "status": "proposed",
+            "status": "proposal_generated",
         })
-        system["next_upgrade_target"] = proposal["to_tier"]
+        # Do not update the applied tier here. Only a separately verified,
+        # merged implementation may advance current_tier().
         updated += 1
 
     registry["last_updated"] = now
