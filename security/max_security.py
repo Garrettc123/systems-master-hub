@@ -35,8 +35,6 @@ class SecurityConfig:
     rate_window_seconds: int = 60
 
     def validate(self) -> None:
-        if len(self.bearer_token) < 32:
-            raise ValueError("bearer_token must contain at least 32 random bytes")
         if not isinstance(self.bearer_token, bytes) or len(self.bearer_token) < 32:
             raise ValueError("bearer_token must contain at least 32 random bytes")
         if not isinstance(self.signing_key, bytes) or len(self.signing_key) < 32:
@@ -241,8 +239,8 @@ class MaxSecurityEngine:
 
     def consume_rate_limit(self, subject: str, *, now: int | None = None) -> None:
         """Persistent fixed-window limit; subject is stored only as a digest."""
-        if not subject:
-            raise SecurityDenied("missing rate-limit subject")
+        if not isinstance(subject, str) or not subject or len(subject) > 256:
+            raise SecurityDenied("invalid rate-limit subject")
         now = self._epoch(int(time.time()) if now is None else now, "rate-limit time")
         window = now - (now % self.config.rate_window_seconds)
         digest = hashlib.sha256(subject.encode()).hexdigest()
