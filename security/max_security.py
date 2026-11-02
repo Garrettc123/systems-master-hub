@@ -13,9 +13,9 @@ import os
 import secrets
 import sqlite3
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 
 class SecurityDenied(Exception):
@@ -55,12 +55,16 @@ class MaxSecurityEngine:
         Path(config.database).parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self):
         db = sqlite3.connect(self.config.database, timeout=10, isolation_level=None)
-        db.execute("PRAGMA journal_mode=WAL")
-        db.execute("PRAGMA synchronous=FULL")
-        db.execute("PRAGMA foreign_keys=ON")
-        return db
+        try:
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("PRAGMA synchronous=FULL")
+            db.execute("PRAGMA foreign_keys=ON")
+            yield db
+        finally:
+            db.close()
 
     def _initialize(self) -> None:
         with self._connect() as db:
