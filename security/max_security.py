@@ -260,6 +260,8 @@ class MaxSecurityEngine:
         This method authorizes but does not execute the operation. The caller must
         invoke it before any payment, email, deployment, write, or external action.
         """
+        if not self.verify_audit_chain():
+            raise SecurityDenied("audit chain integrity check failed")
         self.verify_request(
             token=token, signature=signature, method=method, path=path,
             timestamp=timestamp, nonce=nonce, body=body, now=now,
