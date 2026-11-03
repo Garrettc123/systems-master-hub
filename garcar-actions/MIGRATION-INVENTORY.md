@@ -116,3 +116,20 @@ An existing local runner is present. Its runShell() calls spawnSync(..., {shell:
 - Execution parity: not tested.
 - GitHub workflow files: unchanged.
 - Production migration: not started.
+
+
+## Additional privileged workflow review
+
+- garcar-enterprise-production revenue.yml is manual-only; its schedule is explicitly disabled. It checks the storefront, installs data-science dependencies, and runs revenue_loop.py. It is not a routine CI job and remains restricted.
+- garcar-enterprise-production sales-fleet.yml is manual-only; weekday schedule is explicitly disabled. It contains a dry-run default and an approval-record gate for live email. It also references email, lead, and payment-edge integrations. Keep it disabled in Garcar Actions until approval verification, isolated secrets brokering, and no-send dry-run parity are proven.
+- garcar-enterprise-production deploy.yml can trigger a Render deployment hook and poll a health endpoint. It is a production mutation and remains disabled.
+- autonomous-income-deployment auto-approve-merge.yml grants contents: write and pull-requests: write and automatically approves/merges pull requests. Do not migrate or enable this unattended.
+- tree-of-life-system sync-linear.yml passes multiple external service credentials to a script that may write to Linear. It requires a scoped connector and explicit write approval; never copy GitHub secrets into a general runner environment.
+
+## Read-only scanner added
+
+The migration scanner is available at garcar-actions/garcar_actions/migration/scan.py. It recursively inventories .github/workflows and local-actions/workflows in a checked-out repository, records each source file SHA-256, and flags secret references, deployment, commerce, outreach, repository mutation, self-healing, shell steps, and third-party actions. It does not execute workflows and deliberately does not claim semantic equivalence. Run from the garcar-actions package root:
+
+    python -m garcar_actions.migration.scan /path/to/checkout --output migration-report.json
+
+The scanner's classification is a triage signal, not a security proof. A human review is still required before translation or execution.
