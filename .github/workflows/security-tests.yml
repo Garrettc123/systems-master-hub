@@ -1,0 +1,40 @@
+name: GARCAR Max Security Tests
+
+on:
+  push:
+    branches:
+      - security/max-security-hardening-20261102
+    paths:
+      - "security/**"
+      - "tests/test_max_security.py"
+      - ".github/workflows/security-tests.yml"
+  pull_request:
+    paths:
+      - "security/**"
+      - "tests/test_max_security.py"
+      - ".github/workflows/security-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Python security unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile security module
+        run: python -m py_compile security/max_security.py security/operation_gateway.py security/audit_checkpoint.py
+
+      - name: Run isolated unit tests
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -m unittest discover -s tests -p "test_max_security.py" -v
