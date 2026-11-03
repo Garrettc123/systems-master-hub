@@ -260,6 +260,9 @@ class MaxSecurityEngine:
         This method authorizes but does not execute the operation. The caller must
         invoke it before any payment, email, deployment, write, or external action.
         """
+        # Do not spend O(n) ledger-verification work on unauthenticated callers.
+        if not self.authenticate(token):
+            raise SecurityDenied("authentication failed")
         if not self.verify_audit_chain():
             raise SecurityDenied("audit chain integrity check failed")
         self.verify_request(
