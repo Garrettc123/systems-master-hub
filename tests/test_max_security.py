@@ -7,6 +7,7 @@ from security.max_security import (
     MaxSecurityEngine, SecurityConfig, SecurityDenied,
 )
 from security.operation_gateway import ActionPolicy, ProtectedOperationGateway
+from security.audit_checkpoint import create_checkpoint, verify_checkpoint
 
 
 class MaxSecurityTests(unittest.TestCase):
@@ -241,6 +242,47 @@ class MaxSecurityTests(unittest.TestCase):
         )
         self.assertEqual(result, "ok")
         self.assertEqual(len(called), 1)
+
+
+
+    def test_checkpoint_survives_append_and_detects_record_changes(self):
+        self.engine.append_audit("first", {"n": 1})
+        self.engine.append_audit("second", {"n": 2})
+        checkpoint = create_checkpoint(self.engine, b"k" * 32, now=1000)
+        self.assertTrue(verify_checkpoint(self.engine, b"k" * 32, checkpoint))
+        self.engine.append_audit("third", {"n": 3})
+        self.assertTrue(verify_checkpoint(self.engine, b"k" * 32, checkpoint))
+        with self.engine._connect() as db:
+            db.execute("UPDATE security_audit SET event='tampered' WHERE sequence=1")
+        self.assertFalse(verify_checkpoint(self.engine, b"k" * 32, checkpoint))
+
+    def test_checkpoint_detects_truncation_and_invalid_signatures(self):
+        self.engine.append_audit("first", {"n": 1})
+        self.engine.append_audit("second", {"n": 2})
+        checkpoint = create_checkpoint(self.engine, b"k" * 32, now=1000)
+        self.assertFalse(verify_checkpoint(self.engine, b"d" * 32, checkpoint))
+        corrupt = {"payload": dict(checkpoint["payload"]), "signature": "0" * 64}
+        self.assertFalse(verify_checkpoint(self.engine, b"k" * 32, corrupt))
+        with self.engine._connect() as db:
+            db.execute("DELETE FROM security_audit WHERE sequence=2")
+        self.assertFalse(verify_checkpoint(self.engine, b"k" * 32, checkpoint))
+
+    def test_approval_callback_not_called_for_unauthenticated_requests(self):
+        self.engine.grant_permission("operator", "read", admin_key=b"p" * 32)
+        approval_calls = []
+        gateway = ProtectedOperationGateway(
+            self.engine,
+            {"read": ActionPolicy(True)},
+            approval_verifier=lambda *items: approval_calls.append(items) or True,
+        )
+        args = self.signed_args(nonce="q" * 32)
+        args["token"] = "incorrect"
+        with self.assertRaises(SecurityDenied):
+            gateway.execute(
+                **args, action="read", principal="operator",
+                rate_subject="client", operation=lambda receipt: None,
+            )
+        self.assertEqual(approval_calls, [])
 
 
 if __name__ == "__main__":
