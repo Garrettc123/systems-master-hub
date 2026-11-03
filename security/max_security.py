@@ -177,9 +177,35 @@ class MaxSecurityEngine:
             "body_sha256": hashlib.sha256(body).hexdigest(),
         })
 
-    def grant_permission(self, principal: str, action: str, *,
-                         admin_key: bytes) -> None:
-        """Privileged local provisioning; never expose this method to agents or HTTP."""
+    def _audit_in_transaction(self, db: sqlite3.Connection, event: str,
+                              payload: dict) -> str:
+        """Append a chained audit event inside the caller's open transaction."""
+        if not isinstance(event, str) or not 0 < len(event) <= 128 or not isinstance(payload, dict):
+            raise SecurityDenied("invalid audit event")
+        try:
+            encoded = self._canonical(payload).decode("utf-8")
+            row = db.execute(
+                "SELECT record_hash FROM security_audit ORDER BY sequence DESC LIMIT 1"
+            ).fetchone()
+            previous = row[0] if row else "0" * 64
+            created = int(time.time())
+            material = self._canonical({
+                "created_at": created, "event": event,
+                "payload": json.loads(encoded), "previous_hash": previous,
+            })
+            digest = hashlib.sha256(material).hexdigest()
+            db.execute("""
+                INSERT INTO security_audit
+                (created_at, event, payload, previous_hash, record_hash)
+                VALUES (?, ?, ?, ?, ?)
+            """, (created, event, encoded, previous, digest))
+            return digest
+        except (sqlite3.Error, ValueError, TypeError, UnicodeError) as exc:
+            raise SecurityDenied("audit ledger unavailable; operation blocked") from exc
+
+    def _change_permission(self, principal: str, action: str, *,
+                           admin_key: bytes, grant: bool) -> None:
+        """Audit permission changes atomically with their database updates."""
         if (not isinstance(principal, str) or not 0 < len(principal) <= 200 or
                 any(ord(ch) < 32 for ch in principal)):
             raise SecurityDenied("invalid principal")
@@ -189,15 +215,38 @@ class MaxSecurityEngine:
         if (not isinstance(admin_key, bytes) or
                 not hmac.compare_digest(admin_key, self.config.provisioning_key)):
             raise SecurityDenied("permission provisioning denied")
-        self.append_audit("permission_grant_requested", {
-            "principal": principal, "action": action,
-        })
         try:
             with self._connect() as db:
-                db.execute("INSERT OR IGNORE INTO security_permissions VALUES (?, ?)",
-                           (principal, action))
+                db.execute("BEGIN IMMEDIATE")
+                if grant:
+                    changed = db.execute(
+                        "INSERT OR IGNORE INTO security_permissions VALUES (?, ?)",
+                        (principal, action),
+                    ).rowcount
+                else:
+                    changed = db.execute(
+                        "DELETE FROM security_permissions WHERE principal=? AND action=?",
+                        (principal, action),
+                    ).rowcount
+                operation = "granted" if grant else "revoked"
+                event = "permission_" + (operation if changed else "no_change")
+                self._audit_in_transaction(db, event, {
+                    "principal": principal, "action": action,
+                    "requested_operation": operation,
+                })
+                db.commit()
         except sqlite3.Error as exc:
-            raise SecurityDenied("permission provisioning unavailable") from exc
+            raise SecurityDenied("permission store unavailable") from exc
+
+    def grant_permission(self, principal: str, action: str, *,
+                         admin_key: bytes) -> None:
+        """Privileged local provisioning; never expose this method to agents or HTTP."""
+        self._change_permission(principal, action, admin_key=admin_key, grant=True)
+
+    def revoke_permission(self, principal: str, action: str, *,
+                          admin_key: bytes) -> None:
+        """Remove a grant, atomically recording the revocation in the audit chain."""
+        self._change_permission(principal, action, admin_key=admin_key, grant=False)
 
     def authorize_operation(self, *, token: str, signature: str, method: str,
                             path: str, timestamp: int, nonce: str, body: bytes,
@@ -282,34 +331,14 @@ class MaxSecurityEngine:
             raise SecurityDenied("rate limiter unavailable") from exc
 
     def append_audit(self, event: str, payload: dict) -> str:
-        """Append a tamper-evident record; any storage failure is fatal to caller."""
-        if not isinstance(event, str) or not 0 < len(event) <= 128 or not isinstance(payload, dict):
-            raise SecurityDenied("invalid audit event")
-        try:
-            encoded = self._canonical(payload).decode("utf-8")
-        except (TypeError, ValueError, UnicodeError) as exc:
-            raise SecurityDenied("invalid audit payload") from exc
-        created = int(time.time())
+        """Append a tamper-evident record; any storage failure denies the caller."""
         try:
             with self._connect() as db:
                 db.execute("BEGIN IMMEDIATE")
-                row = db.execute(
-                    "SELECT record_hash FROM security_audit ORDER BY sequence DESC LIMIT 1"
-                ).fetchone()
-                previous = row[0] if row else "0" * 64
-                material = self._canonical({
-                    "created_at": created, "event": event,
-                    "payload": json.loads(encoded), "previous_hash": previous,
-                })
-                digest = hashlib.sha256(material).hexdigest()
-                db.execute("""
-                    INSERT INTO security_audit
-                    (created_at, event, payload, previous_hash, record_hash)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (created, event, encoded, previous, digest))
+                digest = self._audit_in_transaction(db, event, payload)
                 db.commit()
-            return digest
-        except (sqlite3.Error, ValueError, TypeError) as exc:
+                return digest
+        except sqlite3.Error as exc:
             raise SecurityDenied("audit ledger unavailable; operation blocked") from exc
 
     def verify_audit_chain(self) -> bool:
