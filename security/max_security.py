@@ -16,6 +16,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 
 class SecurityDenied(Exception):
@@ -201,7 +202,8 @@ class MaxSecurityEngine:
     def authorize_operation(self, *, token: str, signature: str, method: str,
                             path: str, timestamp: int, nonce: str, body: bytes,
                             principal: str, action: str, rate_subject: str,
-                            now: int | None = None) -> str:
+                            now: int | None = None,
+                            approval_check: Callable[[], bool] | None = None) -> str:
         """Complete every security gate before the caller performs a side effect.
 
         This method authorizes but does not execute the operation. The caller must
@@ -213,6 +215,15 @@ class MaxSecurityEngine:
         )
         self.consume_rate_limit(rate_subject, now=now)
         self.require_permission(principal, action)
+        if approval_check is not None:
+            if not callable(approval_check):
+                raise SecurityDenied("approval checker unavailable")
+            try:
+                approved = approval_check()
+            except Exception as exc:
+                raise SecurityDenied("approval verification unavailable") from exc
+            if approved is not True:
+                raise SecurityDenied("independent approval required")
         return self.append_audit("operation_authorized", {
             "principal": principal, "action": action,
             "method": method.upper(), "path": path,
