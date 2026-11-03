@@ -42,6 +42,8 @@ class SecurityConfig:
             raise ValueError("signing_key must contain at least 32 random bytes")
         if not isinstance(self.provisioning_key, bytes) or len(self.provisioning_key) < 32:
             raise ValueError("provisioning_key must contain at least 32 random bytes")
+        if len({self.bearer_token, self.signing_key, self.provisioning_key}) != 3:
+            raise ValueError("bearer, signing, and provisioning keys must be different")
         if self.max_body_bytes < 1 or self.clock_skew_seconds < 1:
             raise ValueError("security limits must be positive")
         if self.nonce_ttl_seconds < self.clock_skew_seconds:
@@ -307,7 +309,7 @@ class MaxSecurityEngine:
             raise SecurityDenied("invalid rate-limit subject")
         now = self._epoch(int(time.time()) if now is None else now, "rate-limit time")
         window = now - (now % self.config.rate_window_seconds)
-        digest = hashlib.sha256(subject.encode()).hexdigest()
+        digest = hmac.new(self.config.signing_key, subject.encode(), hashlib.sha256).hexdigest()
         try:
             with self._connect() as db:
                 db.execute("BEGIN IMMEDIATE")
