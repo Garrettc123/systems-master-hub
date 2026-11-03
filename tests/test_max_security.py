@@ -285,5 +285,30 @@ class MaxSecurityTests(unittest.TestCase):
         self.assertEqual(approval_calls, [])
 
 
+
+    def test_permission_revoke_and_audited_grant(self):
+        self.engine.grant_permission("operator", "read", admin_key=b"p" * 32)
+        self.engine.require_permission("operator", "read")
+        with self.assertRaises(SecurityDenied):
+            self.engine.revoke_permission("operator", "read", admin_key=b"invalid")
+        self.engine.require_permission("operator", "read")
+        self.engine.revoke_permission("operator", "read", admin_key=b"p" * 32)
+        with self.assertRaises(SecurityDenied):
+            self.engine.require_permission("operator", "read")
+        self.assertTrue(self.engine.verify_audit_chain())
+
+    def test_permission_grant_rolls_back_if_audit_write_fails(self):
+        with self.engine._connect() as db:
+            db.execute("DROP TABLE security_audit")
+        with self.assertRaises(SecurityDenied):
+            self.engine.grant_permission("operator", "deploy", admin_key=b"p" * 32)
+        with self.engine._connect() as db:
+            record = db.execute(
+                "SELECT 1 FROM security_permissions WHERE principal=? AND action=?",
+                ("operator", "deploy"),
+            ).fetchone()
+        self.assertIsNone(record)
+
+
 if __name__ == "__main__":
     unittest.main()
