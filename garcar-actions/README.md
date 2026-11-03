@@ -1,54 +1,87 @@
-# Garcar Actions
+# Garcar Actions v0.2
 
-Independent, self-hostable CI/task runner for the Garcar ecosystem. GitHub remains source control; Garcar Actions owns its job queue and execution.
+An independent, Python standard-library job runner for reviewed code on a dedicated POSIX host. GitHub holds source; this service holds the local queue and executes allowed actions. This release is a tested local canary. Account-wide migration and unattended production isolation remain open.
 
-## v0.1 capabilities
-- Python standard library only; SQLite WAL queue.
-- Explicit action allowlist; no arbitrary shell input and no shell=True.
-- Workspace path confinement.
-- Bearer-token-protected job API; read-only health endpoint.
-- SHA-256 hash-chained audit log and verification.
-- Worker polling, bounded output, 10-minute execution timeout.
-- Default API bind is loopback only. Remote bind is blocked unless explicitly enabled behind TLS/reverse proxy.
+## Run the complete local checks
 
-## Supported actions
+From `garcar-actions/` in the hub checkout:
 
-| Action | Purpose |
+```bash
+make ci
+```
+
+This compiles the Python files, runs the unit suite, starts a disposable authenticated loopback API, runs separate worker processes against success/failure/empty-test fixtures, verifies the audit chain, and runs the pinned hub structure canary. Test credentials and databases are temporary; the scripts clean up their processes. No external services are contacted by these checks.
+
+The checks can also run separately:
+
+```bash
+python -m unittest discover -s tests -v
+python -m garcar_actions.smoke
+python scripts/hub-canary.py
+```
+
+## Actions and limits
+
+| Action | Behavior |
 |---|---|
-| python_tests | Run Python unittest discovery |
-| python_compile | Compile Python source |
-| node_tests | Run npm test |
-| git_status | Read working-tree status |
+| `python_tests` | Discovers `tests/` when present, otherwise the checkout root; zero tests fails with code 5 |
+| `python_compile` | Compiles Python source in the checkout |
+| `node_tests` | Runs `npm test`; npm must exist on the trusted host PATH |
+| `git_status` | Reads working-tree status |
+| `hub_structure` | Checks hub required files and JSON; prints inventory declarations |
 
-No deployment, payment, database migration, secret rotation, or customer-contact action is included in v0.1.
+- Minimal child environment and temporary HOME; parent API/cloud credentials and Python/loader overrides are excluded.
+- Workspace paths checked at submission and immediately before execution.
+- 100 pending jobs, 10-minute runtime limit, 1 MiB total output quota, last 12,000 output bytes retained plus an error suffix. Capture is bounded while the process runs.
+- POSIX process-group cleanup on success, timeout, output-limit failure, or execution exceptions. A process that deliberately escapes its group requires stronger isolation.
+- One executing worker per database using an OS file lock. Idempotency keys reuse the same request and reject conflicting requests.
+- Audit integrity checked before queue/worker mutations; state changes and their audit entries commit together.
+- Existing v0.1 databases receive additive nullable columns and a unique idempotency index; existing jobs/audit rows are preserved. Back up existing state before an upgrade.
 
-## Local run
+## Run a local service
 
-From this directory, set a strong random GARCAR_ACTIONS_TOKEN and GARCAR_WORKSPACE to an isolated checkout. Then run:
+Use the existing secret manager to provide `GARCAR_ACTIONS_TOKEN` (32–512 characters). Keep state outside the checkout and run under a dedicated account with no production credentials. From `garcar-actions/`, these commands use the actual enclosing hub checkout:
 
-    python -m garcar_actions.engine init
-    python -m garcar_actions.engine serve
+```bash
+export GARCAR_WORKSPACE="$(git rev-parse --show-toplevel)"
+export GARCAR_ACTIONS_DB="$HOME/.local/state/garcar-actions/actions.db"
+python -m garcar_actions.engine init
+python -m garcar_actions.engine serve
+```
 
-In a second terminal, with the same token and workspace:
+In another terminal with the same configuration, run `python -m garcar_actions.engine worker`. For one job only, use `worker --once`.
 
-    python -m garcar_actions.engine worker
+Submit the reviewed structure canary through the CLI:
 
-Submit a job:
+```bash
+python -m garcar_actions.migration.workflow
+python -m garcar_actions.migration.workflow --submit
+python -m garcar_actions.engine status
+python -m garcar_actions.engine audit-verify
+```
 
-    curl -sS http://127.0.0.1:8788/v1/jobs -H "Authorization: Bearer $GARCAR_ACTIONS_TOKEN" -H "Content-Type: application/json" -d '{"action":"python_tests","repo_path":"/absolute/path/to/checkout"}'
+Planning is read-only. Submission pins `.github/workflows/ci.yml` by SHA-256, and the worker checks that pin again. A changed workflow fails until reviewed and repinned. The pin covers the workflow definition; it is not a full checkout digest, signed release, or filesystem race protection.
 
-Check status with GET /v1/jobs/JOB_ID. Check audit integrity with GET /v1/audit/verify. Health is GET /health.
+HTTP endpoints are `GET /health`, `POST /v1/jobs`, `GET /v1/jobs/{id}`, and `GET /v1/audit/verify`. All except health require a Bearer token. Submission takes an action plus optional `repo_path` and `requested_by`; an optional `Idempotency-Key` header protects retries. Invalid requests return 400, unauthenticated requests 401, a full queue 429, and unavailable/corrupt queue state 503. A detected audit mismatch returns 409 from verification. Health reports API liveness only.
 
-## Tests
+The API binds to `127.0.0.1:8788`. Remote binding requires `GARCAR_ACTIONS_ALLOW_REMOTE=1`; TLS, ingress restrictions, and a production HTTP server are still operator responsibilities. Remote exposure is outside this canary's verification.
 
-    python -m unittest discover -s tests -v
+## Interrupted jobs
 
-## Deployment and security
-- Run API and worker as separate processes under a supervisor.
-- Use a dedicated unprivileged OS account and disposable workspace.
-- Keep the database on persistent storage and back it up before upgrades.
-- Store the token in a secret manager, never in source control or logs.
-- For remote access, terminate TLS at a trusted reverse proxy and restrict ingress to trusted networks.
-- Never mount production secrets or payment credentials into the runner.
-- This release is an execution kernel, not yet a webhook/polling bridge, multi-tenant scheduler, artifact store, or production deployment controller.
-- Before production use, add per-job container/VM isolation, signed job definitions, quotas, and explicit operator approval for deployment capability.
+A running job left by a worker crash blocks further execution. First stop the previous job's processes or destroy its disposable host. Then use:
+
+```bash
+python -m garcar_actions.engine recover --confirm-stopped
+```
+
+Recovery marks interrupted jobs failed with exit code 130 and records audit events. It never retries the job or guesses whether its side effects completed. Confirmation is an operator assertion, not an automatic proof that orphaned processes stopped.
+
+## Migration evidence and boundaries
+
+The `structure-check` port is defined in `migration/hub-structure.json`. Malformed JSON now fails reliably; the upstream shell pipeline could hide JSON errors. Advisory YAML/ShellCheck/Compose behavior and GitHub triggers have not been ported. The other three hub CI jobs remain untranslated. Original GitHub workflows remain enabled as configured.
+
+`validation/` contains local test/canary reports and a hashed inventory of the hub's 53 workflows. The wider 51-repository discovery list is still partial. Scanner classifications are triage signals; shell steps and imported code can perform side effects even when their workflow looks read-only.
+
+Environment filtering, timeouts, path checks, and process groups do not isolate untrusted code from the worker's filesystem or network. Before unattended or multi-tenant use, add disposable per-job containers/VMs, network and CPU/memory/disk limits, signed definitions and checkout digests, artifact retention, and an external audit anchor. The local SHA-256 chain detects altered entries; it cannot prove that a privileged writer has not rewritten or truncated the entire chain.
+
+Deployments, financial actions, outreach, secret writes, and automatic merges are not implemented as runner actions. Docker/Termux target-host operation and public serving have not been verified in this environment.
