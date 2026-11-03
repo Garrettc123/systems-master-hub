@@ -6,6 +6,7 @@ from pathlib import Path
 from security.max_security import (
     MaxSecurityEngine, SecurityConfig, SecurityDenied,
 )
+from security.operation_gateway import ActionPolicy, ProtectedOperationGateway
 
 
 class MaxSecurityTests(unittest.TestCase):
@@ -128,6 +129,118 @@ class MaxSecurityTests(unittest.TestCase):
         with self.engine._connect() as db:
             db.execute("UPDATE security_audit SET event='altered' WHERE sequence=1")
         self.assertFalse(self.engine.verify_audit_chain())
+
+
+    def test_newline_in_path_is_denied_even_when_correctly_signed(self):
+        for malformed in ("/safe\\r", "/safe\\n", "/safe\\x00", "/safe\\t"):
+            with self.subTest(path=repr(malformed)):
+                args = self.signed_args(nonce="a" * 32)
+                args["path"] = malformed
+                args["signature"] = self.engine.sign_request(
+                    "POST", malformed, args["timestamp"], args["nonce"], args["body"]
+                )
+                with self.assertRaises(SecurityDenied):
+                    self.engine.verify_request(**args)
+
+    def test_invalid_identity_and_audit_event_fail_closed(self):
+        for principal, action in ((None, "read"), (7, "read"), ("a", None), ("a", 7)):
+            with self.subTest(principal=principal, action=action):
+                with self.assertRaises(SecurityDenied):
+                    self.engine.require_permission(principal, action)
+        with self.assertRaises(SecurityDenied):
+            self.engine.append_audit("bad", {"unsupported": set((1, 2))})
+        with self.assertRaises(SecurityDenied):
+            self.engine.append_audit(5, {})
+
+    def test_deleted_middle_audit_record_is_detected(self):
+        for number in range(3):
+            self.engine.append_audit("event", {"n": number})
+        with self.engine._connect() as db:
+            db.execute("DELETE FROM security_audit WHERE sequence=2")
+        self.assertFalse(self.engine.verify_audit_chain())
+
+    def test_gateway_blocks_unapproved_and_unknown_operations(self):
+        self.engine.grant_permission("operator", "read", admin_key=b"p" * 32)
+        called = []
+        gateway = ProtectedOperationGateway(
+            self.engine, {"read": ActionPolicy()},
+        )
+        args = self.signed_args(nonce="u" * 32)
+        with self.assertRaises(SecurityDenied):
+            gateway.execute(**args, action="read", principal="operator",
+                            rate_subject="client", operation=lambda receipt: called.append(receipt))
+        with self.assertRaises(SecurityDenied):
+            gateway.execute(**args, action="deploy", principal="operator",
+                            rate_subject="client", operation=lambda receipt: called.append(receipt))
+        self.assertEqual(called, [])
+
+    def test_gateway_runs_only_authorized_local_callback(self):
+        self.engine.grant_permission("operator", "read", admin_key=b"p" * 32)
+        called = []
+        gateway = ProtectedOperationGateway(self.engine, {"read": ActionPolicy(requires_approval=False)})
+        args = self.signed_args(nonce="v" * 32)
+        result = gateway.execute(
+            **args, action="read", principal="operator", rate_subject="client",
+            operation=lambda receipt: called.append(receipt) or "local-only",
+        )
+        self.assertEqual(result, "local-only")
+        self.assertEqual(len(called), 1)
+        with self.assertRaises(SecurityDenied):
+            gateway.execute(
+                **args, action="read", principal="operator", rate_subject="client",
+                operation=lambda receipt: called.append(receipt),
+            )
+        self.assertEqual(len(called), 1)
+
+    def test_gateway_bad_signature_blocks_callback(self):
+        self.engine.grant_permission("operator", "read", admin_key=b"p" * 32)
+        called = []
+        gateway = ProtectedOperationGateway(self.engine, {"read": ActionPolicy(False)})
+        args = self.signed_args(nonce="w" * 32)
+        args["signature"] = "f" * 64
+        with self.assertRaises(SecurityDenied):
+            gateway.execute(
+                **args, action="read", principal="operator", rate_subject="client",
+                operation=lambda receipt: called.append(receipt),
+            )
+        self.assertFalse(called)
+
+    def test_gateway_db_audit_failure_blocks_callback(self):
+        self.engine.grant_permission("operator", "read", admin_key=b"p" * 32)
+        called = []
+        gateway = ProtectedOperationGateway(self.engine, {"read": ActionPolicy(False)})
+        with self.engine._connect() as db:
+            db.execute("DROP TABLE security_audit")
+        with self.assertRaises(SecurityDenied):
+            gateway.execute(
+                **self.signed_args(nonce="x" * 32),
+                action="read", principal="operator", rate_subject="client",
+                operation=lambda receipt: called.append(receipt),
+            )
+        self.assertEqual(called, [])
+
+    def test_gateway_requires_successful_independent_approval(self):
+        self.engine.grant_permission("operator", "read", admin_key=b"p" * 32)
+        called = []
+        gateway = ProtectedOperationGateway(
+            self.engine, {"read": ActionPolicy(True)},
+            approval_verifier=lambda principal, action, body, approval:
+                principal == "operator" and action == "read" and approval == "isolated-approved",
+        )
+        args = self.signed_args(nonce="y" * 32)
+        with self.assertRaises(SecurityDenied):
+            gateway.execute(
+                **args, action="read", principal="operator", rate_subject="client",
+                approval="wrong", operation=lambda receipt: called.append(receipt),
+            )
+        self.assertEqual(called, [])
+        result = gateway.execute(
+            **args, action="read", principal="operator", rate_subject="client",
+            approval="isolated-approved",
+            operation=lambda receipt: called.append(receipt) or "ok",
+        )
+        self.assertEqual(result, "ok")
+        self.assertEqual(len(called), 1)
 
 
 if __name__ == "__main__":
