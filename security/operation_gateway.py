@@ -65,15 +65,16 @@ class ProtectedOperationGateway:
         if not callable(operation):
             raise SecurityDenied("operation callback unavailable")
         policy = self.policies[action]
-        if policy.requires_approval:
-            if self.approval_verifier is None:
-                raise SecurityDenied("independent approval verifier unavailable")
-            try:
-                approved = self.approval_verifier(principal, action, body, approval)
-            except Exception as exc:
-                raise SecurityDenied("approval verification unavailable") from exc
-            if approved is not True:
-                raise SecurityDenied("independent approval required")
+        if not isinstance(policy, ActionPolicy):
+            raise SecurityDenied("invalid action policy")
+        if policy.requires_approval and self.approval_verifier is None:
+            raise SecurityDenied("independent approval verifier unavailable")
+        # Only the engine invokes this callback, after authentication, replay,
+        # rate limiting, and permission checks have all succeeded.
+        approval_check = (
+            (lambda: self.approval_verifier(principal, action, body, approval))
+            if policy.requires_approval else None
+        )
         receipt = self.engine.authorize_operation(
             token=token,
             signature=signature,
@@ -86,5 +87,6 @@ class ProtectedOperationGateway:
             action=action,
             rate_subject=rate_subject,
             now=now,
+            approval_check=approval_check,
         )
         return operation(receipt)
