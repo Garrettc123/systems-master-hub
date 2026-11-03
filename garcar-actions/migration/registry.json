@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "engine": "garcar-actions",
+  "inventory_status": "partial_discovery_snapshot",
+  "discovered_candidate_repositories": 51,
+  "policy": {
+    "default_mode": "dry_run",
+    "production_enabled": false,
+    "financial_actions_enabled": false,
+    "secret_writes_enabled": false,
+    "customer_outreach_enabled": false,
+    "auto_merge_enabled": false
+  },
+  "initial_migration_order": [
+    "systems-master-hub/.github/workflows/ci.yml",
+    "garcar-enterprise-production/.github/workflows/ci.yml",
+    "apex-revenue-system/.github/workflows/ci.yml"
+  ],
+  "gates": [
+    "pinned_source_sha256",
+    "workflow_classification",
+    "isolated_workspace",
+    "no_production_secrets",
+    "parity_evidence",
+    "owner_approval"
+  ],
+  "sources": [
+    {
+      "repository": "systems-master-hub",
+      "path": ".github/workflows/ci.yml",
+      "classification": "read_only_ci",
+      "status": "inspected_not_translated"
+    },
+    {
+      "repository": "garcar-enterprise-production",
+      "path": ".github/workflows/ci.yml",
+      "classification": "read_only_ci",
+      "status": "inspected_not_translated"
+    },
+    {
+      "repository": "apex-revenue-system",
+      "path": ".github/workflows/ci.yml",
+      "classification": "ci_with_artifact_upload",
+      "status": "inspected_not_translated"
+    },
+    {
+      "repository": "garcar-revenue-os",
+      "path": "local-actions/workflows/ci.json",
+      "classification": "existing_local_runner",
+      "status": "review_required_shell_true"
+    },
+    {
+      "repository": "garcar-data-room",
+      "path": ".github/workflows/evidence-release-gate.yml",
+      "classification": "self_hosted_review",
+      "status": "blocked_pending_isolation_review"
+    },
+    {
+      "repository": "defender-os",
+      "path": ".github/workflows/defender-os.yml",
+      "classification": "self_hosted_security",
+      "status": "blocked_pending_isolation_review"
+    }
+  ]
+}
