@@ -57,6 +57,8 @@ def create_checkpoint(engine: MaxSecurityEngine, checkpoint_key: bytes,
                       *, now: int | None = None) -> dict:
     """Create serializable signed evidence; no network calls or disk writes."""
     _check_key(checkpoint_key)
+    if checkpoint_key in (engine.config.bearer_token, engine.config.signing_key, engine.config.provisioning_key):
+        raise SecurityDenied("checkpoint key must be independently controlled")
     count, head, _ = _snapshot(engine)
     created = int(time.time()) if now is None else now
     created = engine._epoch(created, "checkpoint time")
@@ -75,6 +77,8 @@ def verify_checkpoint(engine: MaxSecurityEngine, checkpoint_key: bytes,
                       checkpoint: object) -> bool:
     """Verify signature and historic prefix against the current audit ledger."""
     _check_key(checkpoint_key)
+    if checkpoint_key in (engine.config.bearer_token, engine.config.signing_key, engine.config.provisioning_key):
+        raise SecurityDenied("checkpoint key must be independently controlled")
     if not isinstance(checkpoint, dict) or set(checkpoint) != {"payload", "signature"}:
         return False
     payload, signature = checkpoint["payload"], checkpoint["signature"]
