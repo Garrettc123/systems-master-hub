@@ -35,6 +35,21 @@ The returned audit receipt is evidence that the local authorization sequence com
 - Do not retry non-idempotent side effects automatically.
 - Never grant an agent the permission-provisioning key.
 
+
+## Isolated gateway implementation and trust contract
+
+The `security/operation_gateway.py` reference implementation is a **trusted in-process adapter**, not a public API endpoint. It denies unknown actions. `ActionPolicy()` requires independent approval by default, and `ActionPolicy(requires_approval=False)` is only appropriate for narrowly scoped actions that policy explicitly exempts, such as an isolated local read test. The supplied `operation` callback is not invoked unless the completed authorization gate returns a receipt.
+
+The approval-verifier callback is invoked **after** the signed request, nonce, rate limit, and permission checks. Approval verifiers must authenticate independent operator approval, bind it to tenant/principal/action/body digest, enforce bounded validity and replay resistance, and have no side effects. A demo callback or boolean is not a real approval artifact.
+
+The gateway assumes trusted code derives the principal and rate-limit subject from authenticated identity. These values are not cryptographically bound to individual identities by the current shared bearer-token mechanism. Never accept `principal`, `action`, policies, callback functions, or `rate_subject` directly from public JSON or model-generated tool arguments.
+
+Before integrating Stripe, email, GitHub deploy, or any external side effect, implement a durable idempotency/outbox and an approval system with independent persistence. The current adapter has neither. Existing public endpoints and services have not been wired to this adapter.
+
+## Signed offline audit checkpoints
+
+`security/audit_checkpoint.py` produces and verifies HMAC-authenticated JSON checkpoints for the local audit-chain prefix. Each checkpoint requires a separate, independent key with at least 32 bytes. Local JSON is **not** WORM storage. A separate administrative domain must archive checkpoints immutably, and a trustworthy bootstrap must validate them prior to operations. Full ledger rescans incur linear cost and are not a scalable distributed production implementation.
+
 ## Subsystem integration map
 
 | Subsystem | Protected actions | Required policy |
