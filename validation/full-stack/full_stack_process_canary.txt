@@ -1,0 +1,50 @@
+{
+  "result": "passed",
+  "scope": "disposable_local_full_stack",
+  "separate_processes_started": 6,
+  "phone_served": true,
+  "phone_service_status": {
+    "mode": "local_read_only",
+    "ready": true,
+    "services": {
+      "forge": {
+        "state": "ready",
+        "ready": true,
+        "audit_valid": true,
+        "version": "0.2.0",
+        "execution_enabled": false
+      },
+      "actions": {
+        "state": "ready",
+        "ready": true,
+        "audit_valid": true,
+        "version": "0.2.0",
+        "queue": {
+          "queued": 0,
+          "running": 0,
+          "succeeded": 1,
+          "failed": 0
+        }
+      }
+    }
+  },
+  "lead_idempotency": "passed",
+  "lead_storage": "sqlite_wal",
+  "lead_replay_after_api_restart": "passed",
+  "actions_job": "succeeded",
+  "actions_audit": {
+    "valid": true,
+    "entries_checked": 3
+  },
+  "forge_job": "succeeded",
+  "forge_audit": {
+    "valid": true,
+    "checked": 3,
+    "head": "34952a23a862612b1e5d1995c017339e22621b5aacd81012a5717716bbc82982"
+  },
+  "backup_verified": true,
+  "restore_verified": true,
+  "live_execution_http_status": 423,
+  "external_provider_calls": 0,
+  "production_deployment_performed": false
+}

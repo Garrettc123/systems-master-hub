@@ -1,10 +1,9 @@
 """
 update_registry_history.py
-After proposals are generated (and PRs opened), appends an upgrade_history
-entry to each targeted system in SYSTEM_REGISTRY.json, marking the tier
-transition as proposed for today. This is what makes the never-repeat rule
-enforceable: detect_upgrade_targets.py checks this history before selecting
-systems on the next run.
+After proposals are generated, appends proposal metadata to
+SYSTEM_REGISTRY.json. Proposal metadata is not an applied upgrade:
+detect_upgrade_targets.py advances the current tier only for merged,
+verified, or completed history entries.
 """
 
 import json
@@ -39,11 +38,12 @@ def main():
         system.setdefault("upgrade_history", []).append({
             "date": now,
             "from_tier": proposal["from_tier"],
-            "tier": proposal["to_tier"],
+            "proposed_tier": proposal["to_tier"],
             "description": proposal["description"],
-            "status": "proposed",
+            "status": "proposal_generated",
         })
-        system["next_upgrade_target"] = proposal["to_tier"]
+        # Do not update the applied tier here. Only a separately verified,
+        # merged implementation may advance current_tier().
         updated += 1
 
     registry["last_updated"] = now

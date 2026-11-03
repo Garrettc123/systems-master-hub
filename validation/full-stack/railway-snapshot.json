@@ -1,0 +1,77 @@
+{
+  "checked_at": "2026-11-03T02:47:21.124Z",
+  "scope": "read_only_railway_snapshot",
+  "projects": [
+    {
+      "project": "grand-spontaneity",
+      "project_id": "6d17bb01-be96-4505-9b41-7c095760c6ea",
+      "environment": {
+        "id": "7e960935-eb82-4eb8-bd8b-9e59159b472f",
+        "name": "production"
+      },
+      "services": [
+        {
+          "name": "scheduler",
+          "id": "7ad3a370-d549-4da0-a180-f0534650cb00",
+          "state": "cronFailed",
+          "active_deployments": [
+            {
+              "id": "e5c1b193-d4ac-4d2c-9a7d-8de34dd4b73c",
+              "status": "CRASHED",
+              "createdAt": "2026-11-03T02:40:11.629Z",
+              "statusUpdatedAt": "2026-11-03T02:42:14.038Z"
+            }
+          ]
+        },
+        {
+          "name": "worker",
+          "id": "40b1cbec-28a7-421d-a847-a56e532af20a",
+          "state": "offline",
+          "active_deployments": []
+        },
+        {
+          "name": "web",
+          "id": "6bb0473b-1865-487b-831c-d625b0d7005b",
+          "state": "online",
+          "active_deployments": [
+            {
+              "id": "96560b7b-9f07-48fb-9b5e-4ad44c53a16c",
+              "status": "SUCCESS",
+              "createdAt": "2026-11-03T00:45:15.185Z",
+              "statusUpdatedAt": "2026-11-03T00:46:07.474Z"
+            }
+          ]
+        }
+      ],
+      "pending_operations": 0
+    },
+    {
+      "project": "determined-dream",
+      "project_id": "be27a724-c39a-4391-8d63-b3871e2a4a90",
+      "environment": {
+        "id": "26e2bf55-403b-4767-bbb2-e9fb0a276a0b",
+        "name": "production"
+      },
+      "services": [
+        {
+          "name": "garcar-payment-loop",
+          "id": "effa1436-1d78-48df-9419-3f3daf13661d",
+          "state": "online",
+          "active_deployments": [
+            {
+              "id": "ecaf59ff-8785-4a0a-87bf-c79502e29e54",
+              "status": "SUCCESS",
+              "createdAt": "2026-11-03T00:52:28.157Z",
+              "statusUpdatedAt": "2026-11-03T00:52:54.289Z"
+            }
+          ]
+        }
+      ],
+      "pending_operations": 0
+    }
+  ],
+  "worker_repair_pr": "https://github.com/Garrettc123/tree-of-life-system/pull/180",
+  "worker_repair_commit": "5ebe595ff3356a37f4355466d1facde11df795dd",
+  "worker_repair_deployed_by_this_run": false,
+  "successful_customer_payments": "not_checked"
+}

@@ -34,5 +34,32 @@ class MigrationScanTests(unittest.TestCase):
             self.assertEqual(result["workflows"][0]["classification"], "read_only_candidate")
             self.assertEqual(len(result["workflows"][0]["sha256"]), 64)
 
+    def test_does_not_follow_symlinked_workflow_parent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            other = root / "outside"
+            (other / "workflows").mkdir(parents=True)
+            (other / "workflows/ci.yml").write_text("name: external")
+            (root / ".github").symlink_to(other, target_is_directory=True)
+            self.assertEqual(scan(root)["workflow_count"], 0)
+
+    def test_list_form_self_hosted_runner_requires_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            directory = root / ".github/workflows"
+            directory.mkdir(parents=True)
+            (directory / "ci.yml").write_text("runs-on: [self-hosted, linux]\n")
+            self.assertEqual(scan(root)["workflows"][0]["classification"], "host_isolation_review")
+
+    def test_privileged_trigger_requires_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            directory = root / ".github/workflows"
+            directory.mkdir(parents=True)
+            (directory / "ci.yml").write_text("on: pull_request_target\nsteps:\n  - run: python check.py\n")
+            report = scan(root)["workflows"][0]
+            self.assertEqual(report["classification"], "approval_required")
+            self.assertIn("shell_execution", report["risk_flags"])
+
 if __name__ == "__main__":
     unittest.main()

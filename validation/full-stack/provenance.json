@@ -1,0 +1,63 @@
+{
+  "repository": "Garrettc123/systems-master-hub",
+  "base_commit": "39a0e4edbc8f701cb93c50e300ae0da9455e4a2f",
+  "sources": [
+    {
+      "number": 44,
+      "url": "https://github.com/Garrettc123/systems-master-hub/pull/44",
+      "source_branch": "feat/garcar-phone-command-center",
+      "source_sha": "dd56fb9c51636651614645f51487a390ed887c21",
+      "merged_locally_for_verification": true,
+      "merged_to_main_by_this_run": false
+    },
+    {
+      "number": 45,
+      "url": "https://github.com/Garrettc123/systems-master-hub/pull/45",
+      "source_branch": "integrations/perplexity-agent-api-2026-10-30",
+      "source_sha": "685dc86dcd43da3328883450afa9d89f8836f754",
+      "merged_locally_for_verification": true,
+      "merged_to_main_by_this_run": false
+    },
+    {
+      "number": 47,
+      "url": "https://github.com/Garrettc123/systems-master-hub/pull/47",
+      "source_branch": "feat/garcar-forge-foundation-20261031",
+      "source_sha": "09a60f40f89ecf01e5d2d050e9c66b8ac0567512",
+      "merged_locally_for_verification": true,
+      "merged_to_main_by_this_run": false
+    },
+    {
+      "number": 48,
+      "url": "https://github.com/Garrettc123/systems-master-hub/pull/48",
+      "source_branch": "recovery/safe-automation-guardrails-20261101",
+      "source_sha": "64f572654ed0819b571558d05137dccd458685d7",
+      "merged_locally_for_verification": true,
+      "merged_to_main_by_this_run": false
+    },
+    {
+      "number": 49,
+      "url": "https://github.com/Garrettc123/systems-master-hub/pull/49",
+      "source_branch": "feat/sovereign-control-plane-20261101",
+      "source_sha": "3b638581849c99879ae63e1f8a44896cb65db968",
+      "merged_locally_for_verification": true,
+      "merged_to_main_by_this_run": false
+    },
+    {
+      "number": 51,
+      "url": "https://github.com/Garrettc123/systems-master-hub/pull/51",
+      "source_branch": "security/max-security-hardening-20261102",
+      "source_sha": "1a43981a0f7d7cd9e670bba78d695441edd59fd6",
+      "merged_locally_for_verification": true,
+      "merged_to_main_by_this_run": false
+    },
+    {
+      "number": 53,
+      "url": "https://github.com/Garrettc123/systems-master-hub/pull/53",
+      "source_branch": "feat/garcar-actions-v02-verified-canary",
+      "source_sha": "0d129356d301f191641310e875e0d1df66ef81e9",
+      "merged_locally_for_verification": true,
+      "merged_to_main_by_this_run": false
+    }
+  ],
+  "scope": "local integration and software verification only"
+}

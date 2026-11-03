@@ -1,0 +1,9 @@
+Processing /workspace/scratch/f65cebb921ea/garcar-full-stack/garcar-forge
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: garcar-forge
+  Building wheel for garcar-forge (pyproject.toml): started
+  Building wheel for garcar-forge (pyproject.toml): finished with status 'done'
+  Created wheel for garcar-forge: filename=garcar_forge-0.2.0-py3-none-any.whl size=9695 sha256=841adcb7139eacec4e9b870bddb30d0d97f02337db9c4254e3d1bc57099d90b1
+  Stored in directory: /tmp/garcar-completion-poan41ck/.cache/pip/wheels/eb/42/70/c6e6a33a9e24ae35d915fa9269d532fe18e8fd4b48429c0ad1
+Successfully built garcar-forge

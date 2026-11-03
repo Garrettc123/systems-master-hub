@@ -1,0 +1,101 @@
+test_allowlist_rejects_arbitrary_commands (test_engine.EngineTests.test_allowlist_rejects_arbitrary_commands) ... ok
+test_audit_tamper_is_detected (test_engine.EngineTests.test_audit_tamper_is_detected) ... ok
+test_audit_tampering_blocks_submit_and_execution (test_engine.EngineTests.test_audit_tampering_blocks_submit_and_execution) ... ok
+test_concurrent_retries_create_only_one_job_and_audit_event (test_engine.EngineTests.test_concurrent_retries_create_only_one_job_and_audit_event) ... ok
+test_concurrent_worker_cannot_claim_job (test_engine.EngineTests.test_concurrent_worker_cannot_claim_job) ... ok
+test_empty_test_suite_fails (test_engine.EngineTests.test_empty_test_suite_fails) ... ok
+test_enqueue_and_audit_verify (test_engine.EngineTests.test_enqueue_and_audit_verify) ... ok
+test_idempotency_reuses_job_and_rejects_conflict (test_engine.EngineTests.test_idempotency_reuses_job_and_rejects_conflict) ... ok
+test_interrupted_job_requires_recovery_and_is_never_replayed (test_engine.EngineTests.test_interrupted_job_requires_recovery_and_is_never_replayed) ... ok
+test_path_escape_is_rejected (test_engine.EngineTests.test_path_escape_is_rejected) ... ok
+test_pending_quota_preserves_existing_queue (test_engine.EngineTests.test_pending_quota_preserves_existing_queue) ... ok
+test_real_worker_does_not_inherit_credentials_or_home (test_engine.EngineTests.test_real_worker_does_not_inherit_credentials_or_home) ... ok
+test_relative_path_uses_configured_workspace (test_engine.EngineTests.test_relative_path_uses_configured_workspace) ... ok
+test_replaced_workspace_is_rejected_before_execution (test_engine.EngineTests.test_replaced_workspace_is_rejected_before_execution) ... ok
+test_tests_directory_is_discovered (test_engine.EngineTests.test_tests_directory_is_discovered) ... ok
+test_v01_upgrade_preserves_existing_job_and_audit (test_engine.EngineTests.test_v01_upgrade_preserves_existing_job_and_audit) ... ok
+test_worker_records_actual_test_failure (test_engine.EngineTests.test_worker_records_actual_test_failure) ... ok
+test_background_child_is_stopped_after_parent_success (test_execution.ExecutionTests.test_background_child_is_stopped_after_parent_success) ... ok
+test_invalid_utf8_does_not_leave_job_unfinished (test_execution.ExecutionTests.test_invalid_utf8_does_not_leave_job_unfinished) ... ok
+test_output_quota_stops_noisy_child_and_bounds_retained_tail (test_execution.ExecutionTests.test_output_quota_stops_noisy_child_and_bounds_retained_tail) ... ok
+test_timeout_kills_same_group_descendant (test_execution.ExecutionTests.test_timeout_kills_same_group_descendant) ... ok
+test_classifies_revenue_and_deploy_workflow_as_restricted (test_migration_scan.MigrationScanTests.test_classifies_revenue_and_deploy_workflow_as_restricted) ... ok
+test_does_not_follow_symlink (test_migration_scan.MigrationScanTests.test_does_not_follow_symlink) ... ok
+test_does_not_follow_symlinked_workflow_parent (test_migration_scan.MigrationScanTests.test_does_not_follow_symlinked_workflow_parent) ... ok
+test_list_form_self_hosted_runner_requires_review (test_migration_scan.MigrationScanTests.test_list_form_self_hosted_runner_requires_review) ... ok
+test_privileged_trigger_requires_review (test_migration_scan.MigrationScanTests.test_privileged_trigger_requires_review) ... ok
+test_read_only_workflow_is_candidate (test_migration_scan.MigrationScanTests.test_read_only_workflow_is_candidate) ... ok
+test_native_structure_check_records_missing_files (test_workflow.WorkflowTests.test_native_structure_check_records_missing_files) ... ok
+test_native_structure_check_rejects_malformed_json (test_workflow.WorkflowTests.test_native_structure_check_rejects_malformed_json) ... ok
+test_plan_is_read_only_and_checks_actual_pinned_source (test_workflow.WorkflowTests.test_plan_is_read_only_and_checks_actual_pinned_source) ... ok
+test_source_pin_cannot_escape_checkout (test_workflow.WorkflowTests.test_source_pin_cannot_escape_checkout) ... ok
+test_workflow_source_change_blocks_execution (test_workflow.WorkflowTests.test_workflow_source_change_blocks_execution) ... ok
+
+----------------------------------------------------------------------
+Ran 32 tests in 1.913s
+
+OK
+{
+  "schema_version": "1.0",
+  "result": "passed",
+  "scope": "disposable_local_canary",
+  "auth_and_request_rejection_checks": 9,
+  "duplicate_requests_reused": 4,
+  "jobs": [
+    {
+      "action": "python_tests",
+      "fixture": "passing",
+      "status": "succeeded",
+      "exit_code": 0
+    },
+    {
+      "action": "python_tests",
+      "fixture": "failing",
+      "status": "failed",
+      "exit_code": 1
+    },
+    {
+      "action": "python_tests",
+      "fixture": "empty",
+      "status": "failed",
+      "exit_code": 5
+    },
+    {
+      "action": "python_compile",
+      "fixture": "passing",
+      "status": "succeeded",
+      "exit_code": 0
+    }
+  ],
+  "audit": {
+    "valid": true,
+    "entries_checked": 12
+  }
+}
+{
+  "result": "passed",
+  "scope": "local_hub_structure_canary",
+  "repository": "Garrettc123/systems-master-hub",
+  "source_path": ".github/workflows/ci.yml",
+  "source_sha256": "1dd78a6749197e0e910549595860d3f7e39268379938d222d7b748c6e9fee659",
+  "source_job": "structure-check",
+  "action": "hub_structure",
+  "exit_code": 0,
+  "audit": {
+    "valid": true,
+    "entries_checked": 3
+  },
+  "semantic_changes": [
+    "Symlinked files and cache/data directories are excluded in addition to upstream exclusions.",
+    "Inventory counts remain declarations, not verified runtime or revenue evidence."
+  ],
+  "untranslated_jobs": [
+    "yaml-lint",
+    "shell-check",
+    "docker-compose-validate",
+    "control-plane-validation",
+    "upgrade-history-tests"
+  ],
+  "production_enabled": false
+}
+Garcar Actions local CI passed: compilation, unit tests, API/worker canary, pinned hub canary.

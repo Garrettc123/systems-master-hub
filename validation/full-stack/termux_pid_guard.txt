@@ -1,0 +1,1 @@
+BLOCKED: this host denies reading a child process environment through /proc. The process ownership guard remains fail-closed; run its regression test on the target device.

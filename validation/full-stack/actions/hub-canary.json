@@ -1,0 +1,26 @@
+{
+  "result": "passed",
+  "scope": "local_hub_structure_canary",
+  "repository": "Garrettc123/systems-master-hub",
+  "source_path": ".github/workflows/ci.yml",
+  "source_sha256": "1dd78a6749197e0e910549595860d3f7e39268379938d222d7b748c6e9fee659",
+  "source_job": "structure-check",
+  "action": "hub_structure",
+  "exit_code": 0,
+  "audit": {
+    "valid": true,
+    "entries_checked": 3
+  },
+  "semantic_changes": [
+    "Symlinked files and cache/data directories are excluded in addition to upstream exclusions.",
+    "Inventory counts remain declarations, not verified runtime or revenue evidence."
+  ],
+  "untranslated_jobs": [
+    "yaml-lint",
+    "shell-check",
+    "docker-compose-validate",
+    "control-plane-validation",
+    "upgrade-history-tests"
+  ],
+  "production_enabled": false
+}

@@ -1,0 +1,33 @@
+test_empty_or_skipped_evidence_is_not_completion (test_completion_gates.CompletionGateTests.test_empty_or_skipped_evidence_is_not_completion) ... ok
+test_failed_software_cannot_be_overridden_by_local_only (test_completion_gates.CompletionGateTests.test_failed_software_cannot_be_overridden_by_local_only) ... ok
+test_only_all_passed_without_blockers_reports_completion (test_completion_gates.CompletionGateTests.test_only_all_passed_without_blockers_reports_completion) ... ok
+test_production_blockers_remain_visible_in_local_validation (test_completion_gates.CompletionGateTests.test_production_blockers_remain_visible_in_local_validation) ... ok
+test_unavailable_host_identity_check_cannot_count_as_pass (test_completion_gates.CompletionGateTests.test_unavailable_host_identity_check_cannot_count_as_pass) ... ok
+test_production_entry_without_evidence_fails_closed (test_control_plane_reconcile.ControlPlaneReconcileTests.test_production_entry_without_evidence_fails_closed) ... ok
+test_repository_registry_passes_but_does_not_claim_runtime_health (test_control_plane_reconcile.ControlPlaneReconcileTests.test_repository_registry_passes_but_does_not_claim_runtime_health) ... ok
+test_unknown_properties_are_rejected (test_control_plane_reconcile.ControlPlaneReconcileTests.test_unknown_properties_are_rejected) ... ok
+test_audit_chain_detects_tampering (test_max_security.MaxSecurityTests.test_audit_chain_detects_tampering) ... ok
+test_authentication_uses_configured_token (test_max_security.MaxSecurityTests.test_authentication_uses_configured_token) ... ok
+test_authorize_operation_requires_every_gate (test_max_security.MaxSecurityTests.test_authorize_operation_requires_every_gate) ... ok
+test_bad_signature_is_denied (test_max_security.MaxSecurityTests.test_bad_signature_is_denied) ... ok
+test_concurrent_nonce_reuse_is_accepted_once (test_max_security.MaxSecurityTests.test_concurrent_nonce_reuse_is_accepted_once) ... ok
+test_concurrent_rate_limit_is_atomic (test_max_security.MaxSecurityTests.test_concurrent_rate_limit_is_atomic) ... ok
+test_default_deny (test_max_security.MaxSecurityTests.test_default_deny) ... ok
+test_invalid_method_path_and_nonce_are_denied (test_max_security.MaxSecurityTests.test_invalid_method_path_and_nonce_are_denied) ... ok
+test_malformed_timestamp_types_and_ranges_are_denied (test_max_security.MaxSecurityTests.test_malformed_timestamp_types_and_ranges_are_denied) ... ok
+test_permission_provisioning_requires_separate_admin_key (test_max_security.MaxSecurityTests.test_permission_provisioning_requires_separate_admin_key) ... ok
+test_rate_limit (test_max_security.MaxSecurityTests.test_rate_limit) ... ok
+test_signed_request_and_replay_rejection (test_max_security.MaxSecurityTests.test_signed_request_and_replay_rejection) ... ok
+test_agent_api_request_extracts_search_results_and_cost (test_perplexity_client.PerplexityProviderTests.test_agent_api_request_extracts_search_results_and_cost) ... ok
+test_custom_model_omits_preset (test_perplexity_client.PerplexityProviderTests.test_custom_model_omits_preset) ... ok
+test_http_200_failed_run_fails_closed (test_perplexity_client.PerplexityProviderTests.test_http_200_failed_run_fails_closed) ... ok
+test_json_mode_is_explicit_in_instructions (test_perplexity_client.PerplexityProviderTests.test_json_mode_is_explicit_in_instructions) ... ok
+test_missing_key_fails_closed (test_perplexity_client.PerplexityProviderTests.test_missing_key_fails_closed) ... ok
+test_merged_upgrade_advances_applied_tier (test_upgrade_history.UpgradeTierEvidenceTests.test_merged_upgrade_advances_applied_tier) ... ok
+test_proposal_does_not_advance_applied_tier (test_upgrade_history.UpgradeTierEvidenceTests.test_proposal_does_not_advance_applied_tier) ... ok
+test_unverified_legacy_proposal_does_not_advance_tier (test_upgrade_history.UpgradeTierEvidenceTests.test_unverified_legacy_proposal_does_not_advance_tier) ... ok
+
+----------------------------------------------------------------------
+Ran 28 tests in 0.271s
+
+OK
