@@ -310,5 +310,37 @@ class MaxSecurityTests(unittest.TestCase):
         self.assertIsNone(record)
 
 
+
+    def test_config_requires_distinct_keys(self):
+        with self.assertRaises(ValueError):
+            MaxSecurityEngine(SecurityConfig(
+                database=str(Path(self.temp.name) / "badkeys.sqlite3"),
+                bearer_token=b"a" * 32, signing_key=b"a" * 32,
+                provisioning_key=b"p" * 32,
+            ))
+
+    def test_bad_audit_chain_blocks_authorization_before_callback(self):
+        self.engine.grant_permission("operator", "read", admin_key=b"p" * 32)
+        self.engine.append_audit("baseline", {"ok": True})
+        with self.engine._connect() as db:
+            db.execute("UPDATE security_audit SET event='tampered' WHERE sequence=1")
+        calls = []
+        gateway = ProtectedOperationGateway(
+            self.engine, {"read": ActionPolicy(requires_approval=False)})
+        with self.assertRaises(SecurityDenied):
+            gateway.execute(
+                **self.signed_args(nonce="c" * 32), action="read",
+                principal="operator", rate_subject="client",
+                operation=lambda receipt: calls.append(receipt),
+            )
+        self.assertEqual(calls, [])
+
+    def test_checkpoint_rejects_reused_runtime_key(self):
+        with self.assertRaises(SecurityDenied):
+            create_checkpoint(self.engine, self.engine.config.signing_key)
+        with self.assertRaises(SecurityDenied):
+            verify_checkpoint(self.engine, self.engine.config.provisioning_key, {})
+
+
 if __name__ == "__main__":
     unittest.main()
