@@ -10,7 +10,7 @@ MAX_BODY, MAX_RUNTIME, POLL_SECONDS = 16384, 600, 2
 ACTIONS = {
     "python_tests": [sys.executable, "-m", "unittest", "discover", "-v"],
     "python_compile": [sys.executable, "-m", "compileall", "-q", "."],
-    "node_tests": ["npm", "test", "--", "--run"],
+    "node_tests": ["npm", "test"],
     "git_status": ["git", "status", "--short"],
 }
 
