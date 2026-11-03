@@ -142,7 +142,7 @@ class MaxSecurityEngine:
                 not method.isascii() or not method.isalpha() or len(method) > 16):
             raise SecurityDenied("invalid HTTP method")
         if (not isinstance(path, str) or not path.startswith("/") or
-                any(ch in path for ch in ("\\r", "\\n", "\\x00"))):
+                any(ord(ch) < 32 or ord(ch) == 127 for ch in path)):
             raise SecurityDenied("invalid request target")
         if (not isinstance(nonce, str) or not 24 <= len(nonce) <= 128 or
                 not nonce.isascii() or not all(
@@ -179,9 +179,11 @@ class MaxSecurityEngine:
     def grant_permission(self, principal: str, action: str, *,
                          admin_key: bytes) -> None:
         """Privileged local provisioning; never expose this method to agents or HTTP."""
-        if not isinstance(principal, str) or not principal or len(principal) > 200:
+        if (not isinstance(principal, str) or not 0 < len(principal) <= 200 or
+                any(ord(ch) < 32 for ch in principal)):
             raise SecurityDenied("invalid principal")
-        if not isinstance(action, str) or not action or len(action) > 200:
+        if (not isinstance(action, str) or not 0 < len(action) <= 200 or
+                any(ord(ch) < 32 for ch in action)):
             raise SecurityDenied("invalid action")
         if (not isinstance(admin_key, bytes) or
                 not hmac.compare_digest(admin_key, self.config.provisioning_key)):
@@ -218,8 +220,9 @@ class MaxSecurityEngine:
         })
 
     def require_permission(self, principal: str, action: str) -> None:
-        if not principal or not action:
-            raise SecurityDenied("missing principal or action")
+        if (not isinstance(principal, str) or not 0 < len(principal) <= 200 or
+                not isinstance(action, str) or not 0 < len(action) <= 200):
+            raise SecurityDenied("invalid principal or action")
         try:
             with self._connect() as db:
                 row = db.execute(
@@ -239,7 +242,8 @@ class MaxSecurityEngine:
 
     def consume_rate_limit(self, subject: str, *, now: int | None = None) -> None:
         """Persistent fixed-window limit; subject is stored only as a digest."""
-        if not isinstance(subject, str) or not subject or len(subject) > 256:
+        if (not isinstance(subject, str) or not 0 < len(subject) <= 256 or
+                any(ord(ch) < 32 for ch in subject)):
             raise SecurityDenied("invalid rate-limit subject")
         now = self._epoch(int(time.time()) if now is None else now, "rate-limit time")
         window = now - (now % self.config.rate_window_seconds)
@@ -268,9 +272,12 @@ class MaxSecurityEngine:
 
     def append_audit(self, event: str, payload: dict) -> str:
         """Append a tamper-evident record; any storage failure is fatal to caller."""
-        if not event or not isinstance(payload, dict):
+        if not isinstance(event, str) or not 0 < len(event) <= 128 or not isinstance(payload, dict):
             raise SecurityDenied("invalid audit event")
-        encoded = self._canonical(payload).decode("utf-8")
+        try:
+            encoded = self._canonical(payload).decode("utf-8")
+        except (TypeError, ValueError, UnicodeError) as exc:
+            raise SecurityDenied("invalid audit payload") from exc
         created = int(time.time())
         try:
             with self._connect() as db:
@@ -298,11 +305,13 @@ class MaxSecurityEngine:
         try:
             with self._connect() as db:
                 rows = db.execute("""
-                    SELECT created_at, event, payload, previous_hash, record_hash
+                    SELECT sequence, created_at, event, payload, previous_hash, record_hash
                     FROM security_audit ORDER BY sequence
                 """).fetchall()
             previous = "0" * 64
-            for created, event, payload, prev, stored in rows:
+            for expected_sequence, (sequence, created, event, payload, prev, stored) in enumerate(rows, 1):
+                if sequence != expected_sequence:
+                    return False
                 if not hmac.compare_digest(prev, previous):
                     return False
                 material = self._canonical({
