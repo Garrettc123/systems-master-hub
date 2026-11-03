@@ -32,7 +32,9 @@ jobs:
           python-version: "3.11"
 
       - name: Compile security module
-        run: python -m py_compile security/max_security.py
+        run: python -m py_compile security/max_security.py security/operation_gateway.py security/audit_checkpoint.py
 
       - name: Run isolated unit tests
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
         run: python -m unittest discover -s tests -p "test_max_security.py" -v
