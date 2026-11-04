@@ -1,0 +1,27 @@
+name: Runner startup probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/runner-startup-probe.yml'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  startup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Confirm runner executes without checkout or dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'Runner shell executed successfully.'
+          {
+            echo '## Runner startup probe'
+            echo 'PASS: runner executed a shell step without checkout, dependencies, or secrets.'
+            echo 'This is not a software test or production readiness gate.'
+            echo 'If this job fails before its first step, inspect Actions platform/account diagnostics; this probe alone does not identify the cause.'
+          } >> "$GITHUB_STEP_SUMMARY"
