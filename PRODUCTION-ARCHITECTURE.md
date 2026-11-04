@@ -37,6 +37,27 @@ First run verified 2026-11-04: a test lead flowed form → channel → agent →
 Linux/Windows/macOS in the private repo. Machines report heartbeats to
 `status/`; the daily agent monitors them.
 
+## LIVE-READY — verified running locally 2026-11-04 (needs credentials to take money)
+
+### garcar-product-factory (digital products)
+- **45 digital products** (trade callback kits, business tools, creator templates — $29 avg, $1,063 catalog value)
+- All assets built deterministically (`python3 factory.py build`), SHA-256 verified
+- **22/22 tests passing**; marketplace boots and serves catalog + storefront
+- Revenue loop is fail-closed by design: `PAYMENTS_MODE=disabled` until
+  `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` (+ Supabase for asset delivery) are set
+- Owner action to sell: set test keys → verify → flip to live
+
+### TITAN (platform node)
+- Package-import bug fixed (src/ sibling imports) — pushed to main
+- Boots and serves `/` + `/health`; system registry + API bank import clean
+- Domain logic (AI CEO, M&A, trading) is scaffolding — no external execution without credentials
+
+### Perfect customer acquisition
+- The acquisition loop is the production agent + funnel: capture → channel →
+  ICP scoring (0-100) → prioritized issue with suggested offer → owner closes
+- Outbound channels (LinkedIn/Apollo/email/SMS) remain unspecified in the
+  source repo and require consent infrastructure + provider keys — not built
+
 ## STAGED — built, tested, awaiting one owner action
 
 | Asset | What's left |
