@@ -1,12 +1,21 @@
-.PHONY: all setup build run clean omni omni-status omni-logs omni-stop
+.PHONY: all setup build run clean omni omni-status omni-logs omni-stop completion completion-local
+PYTHON ?= python3
+.DEFAULT_GOAL := completion
+
+# Read-only checks plus disposable loopback canaries; no legacy bulk deployment.
+completion:
+	$(PYTHON) scripts/full_stack_completion.py
+
+completion-local:
+	$(PYTHON) scripts/full_stack_completion.py --local-only
 
 # Docker Compose command (supports both v1 and v2)
 DOCKER_COMPOSE := $(shell command -v docker-compose 2> /dev/null || echo "docker compose")
 
-all: setup build run
+all: completion setup build run
 
 # 🚀 Omnibus deployment - Run ALL systems
-omni:
+omni: completion
 	@echo "🚀 Starting Omnibus Deployment..."
 	./run-all-omni.sh
 
@@ -34,12 +43,12 @@ setup:
 	git submodule update --init --recursive
 	@echo "✅ Submodules synced"
 
-build:
+build: completion
 	@echo "🏗️  Building All Systems..."
 	$(DOCKER_COMPOSE) build
 	@echo "✅ Build complete"
 
-run:
+run: completion
 	@echo "🚀 Launching Ecosystem..."
 	$(DOCKER_COMPOSE) up -d
 	@echo "✅ All systems running"

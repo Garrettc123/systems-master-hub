@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "result": "passed",
+  "scope": "disposable_local_canary",
+  "auth_and_request_rejection_checks": 8,
+  "duplicate_requests_reused": 4,
+  "jobs": [
+    {
+      "action": "python_tests",
+      "fixture": "passing",
+      "status": "succeeded",
+      "exit_code": 0
+    },
+    {
+      "action": "python_tests",
+      "fixture": "failing",
+      "status": "failed",
+      "exit_code": 1
+    },
+    {
+      "action": "python_tests",
+      "fixture": "empty",
+      "status": "failed",
+      "exit_code": 5
+    },
+    {
+      "action": "python_compile",
+      "fixture": "passing",
+      "status": "succeeded",
+      "exit_code": 0
+    }
+  ],
+  "audit": {
+    "valid": true,
+    "entries_checked": 12
+  }
+}

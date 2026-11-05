@@ -1,0 +1,59 @@
+services:
+  forge-control:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GARCAR_LEDGER_PATH: /data/garcar-forge.sqlite3
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes: [forge-ledger:/data]
+    read_only: true
+    tmpfs: [/tmp:size=32m,noexec,nosuid]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  forge-worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GARCAR_LEDGER_PATH: /data/garcar-forge.sqlite3
+      GARCAR_WORKER_POLL_SECONDS: ${GARCAR_WORKER_POLL_SECONDS:-3}
+      GARCAR_WORKER_LEASE_SECONDS: ${GARCAR_WORKER_LEASE_SECONDS:-300}
+    command: ["python", "-m", "app.worker"]
+    volumes: [forge-ledger:/data]
+    read_only: true
+    tmpfs: [/tmp:size=16m,noexec,nosuid]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    depends_on:
+      forge-control:
+        condition: service_healthy
+
+  forge-scheduler:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GARCAR_LEDGER_PATH: /data/garcar-forge.sqlite3
+      GARCAR_SCHEDULER_ENABLED: ${GARCAR_SCHEDULER_ENABLED:-false}
+      GARCAR_SCHEDULER_INTERVAL_SECONDS: ${GARCAR_SCHEDULER_INTERVAL_SECONDS:-300}
+    command: ["python", "-m", "app.scheduler"]
+    volumes: [forge-ledger:/data]
+    read_only: true
+    tmpfs: [/tmp:size=16m,noexec,nosuid]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    depends_on:
+      forge-control:
+        condition: service_healthy
+
+volumes:
+  forge-ledger:

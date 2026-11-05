@@ -1,0 +1,719 @@
+{
+  "schema_version": "1.0",
+  "repository_root": ".",
+  "workflow_count": 57,
+  "classification_counts": {
+    "read_only_candidate": 11,
+    "approval_required": 27,
+    "restricted_business_action": 19,
+    "host_isolation_review": 0
+  },
+  "workflows": [
+    {
+      "path": ".github/workflows/auto-deploy-all-systems.yml",
+      "sha256": "803ba474956147012b5a366da5e2357089271a9808ae1674d025539e1276664e",
+      "bytes": 3952,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/auto-deploy.yml",
+      "sha256": "9b7ef1a589e84ea4b88e100f28096c57ae27626a49006814a9be3eb7a817a0bc",
+      "bytes": 10413,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "customer_outreach",
+        "repository_mutation",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/auto-setup.yml",
+      "sha256": "a45d1ec92a2ce601776d6a3a66a3d0db4c6267033c304910ff0a4a0a78e32d73",
+      "bytes": 3469,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/autokey-rotate.yml",
+      "sha256": "74979f2e15e3ba1b070ddbbc5821c24a6faedc6df9cf1d76bd20a42ebe6cbe95",
+      "bytes": 2819,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "self_healing",
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/autokey-sweep-all.yml",
+      "sha256": "823e478af584f71de2d7f1aed9d64d45f49f5345d7e4f9e7f6cf21020e9bfc72",
+      "bytes": 18467,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "financial_or_commerce",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/autokey-validate.yml",
+      "sha256": "7ef39709318e2e555ba4b54d4890a5fe4f83093d4d281c4a296a547ff5463923",
+      "bytes": 3811,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "financial_or_commerce",
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/business-ops.yml",
+      "sha256": "081a723c23352d7f093247904126799df12e726e9039795012a140ab928ba607",
+      "bytes": 1905,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "financial_or_commerce",
+        "customer_outreach",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "1dd78a6749197e0e910549595860d3f7e39268379938d222d7b748c6e9fee659",
+      "bytes": 6989,
+      "classification": "read_only_candidate",
+      "risk_flags": [
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/codeql.yml",
+      "sha256": "55c5ffdbaae249142cc65925f91b0442eae9264d99eb50297f14d3ac579eb985",
+      "bytes": 4724,
+      "classification": "approval_required",
+      "risk_flags": [
+        "shell_execution",
+        "write_permission"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/crf-repair-worker.yml",
+      "sha256": "8df4421cf5beb6e9951baafc504c0e41bce62cd2039606d625c067e9556634e2",
+      "bytes": 913,
+      "classification": "approval_required",
+      "risk_flags": [
+        "repository_mutation",
+        "shell_execution",
+        "write_permission",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/daily-drift-check.yml",
+      "sha256": "dd5b84c056cbc55611969bc5a471a7415e335960137ba18fc36eaed97b0f0606",
+      "bytes": 306,
+      "classification": "approval_required",
+      "risk_flags": [
+        "write_permission"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/daily-evolution-v2.yml",
+      "sha256": "c05dbd2004a3a666975483186a2f8a41a9dbc4b717354ed7842f591ff1f44640",
+      "bytes": 5804,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/daily-evolution.yml",
+      "sha256": "f7c7f0ca215244a186f66852f98e03de6b3a9a3ece279552025a4150c5ae711b",
+      "bytes": 7163,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/daily-repository-readiness.yml",
+      "sha256": "67a1dbe4b75bc86b4eac4e239f78c51fe5a65be15d655af13367fd99f18a8cfa",
+      "bytes": 1236,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "shell_execution",
+        "write_permission",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/deploy-mesh.yml",
+      "sha256": "d315531b84ad4bc2eaa5202193bd9c82768beaa6431c2e92df4c8b71343e782f",
+      "bytes": 419,
+      "classification": "approval_required",
+      "risk_flags": [
+        "deployment",
+        "write_permission"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/deploy-pixel10.yml",
+      "sha256": "8ca255d180098a0d5b0314ee93bd5012e8d20df7488c65a5a01bb5bdf2e1b3b9",
+      "bytes": 23367,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/echo-revenue-flow.yml",
+      "sha256": "2624b459b317e17627f5e605ff01e8e0a01650e3819f5d75007bf51e0a1e0a62",
+      "bytes": 11390,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "financial_or_commerce",
+        "customer_outreach",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/empire-orchestrator.yml",
+      "sha256": "14ed883dc963df6375051fbfd85a20e7021c8a60a2c34270e5c6f382d9ffdc31",
+      "bytes": 1650,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "shell_execution",
+        "write_permission",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/enterprise-control-plane.yml",
+      "sha256": "91365d3db9ea290a4125775781956c78f7a261a562dae1bc8f0e355a236d98cc",
+      "bytes": 5276,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "financial_or_commerce",
+        "shell_execution",
+        "write_permission",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/full-stack-deploy.yml",
+      "sha256": "4b0854c814eccc421a64d4002ca125e95143c0e618ffba449134414431411867",
+      "bytes": 5748,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "self_healing",
+        "shell_execution",
+        "write_permission",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/full-sweep.yml",
+      "sha256": "46439987a2f9cee2c8d137bfd1d6993bdafe815a57d8f63a766a7637a64f8e9c",
+      "bytes": 3749,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "financial_or_commerce",
+        "customer_outreach",
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/garcar-all-in-one-sweep.yml",
+      "sha256": "dc14f45f0b430b86ef1ae98b97ee75c2fd915879ca9ad1eb5c671661cc8a66aa",
+      "bytes": 9004,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "financial_or_commerce",
+        "shell_execution",
+        "write_permission",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/garcar-autokey-bootstrap.yml",
+      "sha256": "adaa5dca8a7e3b97cef647ce68cc6c6bf604d78278b6ba37952e66fdedc595d5",
+      "bytes": 3036,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/garcar-autokey-inventory-propagate.yml",
+      "sha256": "bea9df150a1474d5f34301ab7d2ba4a8168e84e40320e845e6d4ab0a912811b1",
+      "bytes": 9629,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "financial_or_commerce",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/garcar-autokey-propagate.yml",
+      "sha256": "26f62a53187f03ee3ca41127a9e55b991e874ced0644af43a382bbfcdaca8c63",
+      "bytes": 13209,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "financial_or_commerce",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/garcar-autonomous-wiring.yml",
+      "sha256": "29232f9ba0dd10f932218c424a0e93d095bdb6dfb10763c478cf26fb6b774a0c",
+      "bytes": 1497,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/garcar-control-plane-mcp.yml",
+      "sha256": "ec61814335e8c3493f13fd0cf05e1ecdad3eb7d42e25cadd1f4004b0768134d4",
+      "bytes": 877,
+      "classification": "read_only_candidate",
+      "risk_flags": [
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/garcar-core-ci.yml",
+      "sha256": "c78441d14a7042c537e976b6c2cffdcf353e557bc8d9d3787cc3bb362586dbfa",
+      "bytes": 885,
+      "classification": "read_only_candidate",
+      "risk_flags": [
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/garcar-forge-ci.yml",
+      "sha256": "27fd9d0f41bcea35a132d464db770177e3f460417d15237e02ce9d7c3fe53884",
+      "bytes": 744,
+      "classification": "read_only_candidate",
+      "risk_flags": [
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/garcar-full-run-diagnostics.yml",
+      "sha256": "6b2c824f272e95314ed009dbcbcc8597ab48e257c09b2114caa8242067c57e99",
+      "bytes": 5296,
+      "classification": "read_only_candidate",
+      "risk_flags": [
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/garcar-knowledge-sync.yml",
+      "sha256": "b2351f815f6e757ad77417ff4939ac43d5771e69b76e4c72f921beb5abb9cfde",
+      "bytes": 3345,
+      "classification": "approval_required",
+      "risk_flags": [
+        "write_permission"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/garcar-vault-sync.yml",
+      "sha256": "708cd563c3f187dc350f8ddd883b820fc5c49fc0901e85b324f0ea7b7e054d6e",
+      "bytes": 9061,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "self_healing",
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/hub-build.yml",
+      "sha256": "a2d081e071531dbf35f99825fa0b1d398c59f5e09a90ccb1781e8dfb01868f3c",
+      "bytes": 3829,
+      "classification": "read_only_candidate",
+      "risk_flags": [
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/nightly-upgrade-loop.yml",
+      "sha256": "d2fc92cb98471739deb3cacd8b778af39cdb7f15ba38096e16f13a96918385c8",
+      "bytes": 2020,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "customer_outreach",
+        "repository_mutation",
+        "self_healing",
+        "shell_execution",
+        "write_permission"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/omega-nightly.yml",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "classification": "read_only_candidate",
+      "risk_flags": [],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/operator-dispatch.yml",
+      "sha256": "d90a914335de126c1321184d22ced71431d46f8fccf3a2749c8937acbe05bd9d",
+      "bytes": 10380,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "self_healing",
+        "shell_execution",
+        "write_permission",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/org-security-scan.yml",
+      "sha256": "6c99e9d4e901959344dddaf92d12586eac5d67cfb42aac5560473129e01832d3",
+      "bytes": 2821,
+      "classification": "approval_required",
+      "risk_flags": [
+        "repository_mutation",
+        "shell_execution",
+        "write_permission",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/pages.yml",
+      "sha256": "a41b02aca742cb3e290f74a9acea5b8da423e548630a024caffd32503f780451",
+      "bytes": 620,
+      "classification": "approval_required",
+      "risk_flags": [
+        "deployment",
+        "write_permission",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/perplexity-provider-validation.yml",
+      "sha256": "ca90ef7d4363c2d10956b4fcd744c12c30f0ad8a7d5ca75b6c0cd39e3f680ddf",
+      "bytes": 939,
+      "classification": "read_only_candidate",
+      "risk_flags": [
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/pixel10-deploy.yml",
+      "sha256": "48b059dc64b9d348922a5bdc665fbfb180eaa786341b372ab01ad39a73ae637e",
+      "bytes": 16092,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/platform-sweep.yml",
+      "sha256": "506d24919fc4cb89a625591b199e204c79ed2c1859bdbf39552f6e9586f716e8",
+      "bytes": 6270,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "financial_or_commerce",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/prestige-check.yml",
+      "sha256": "3d2aaf75b9138ea20edb84df618a222fea2666e8a333a810673b0e9bf70a2d35",
+      "bytes": 2025,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/public-safety-gate.yml",
+      "sha256": "7fb55b6f26ff6b5b3c526e23d65ef41258316b25b1389d78038b56d651cea508",
+      "bytes": 2484,
+      "classification": "read_only_candidate",
+      "risk_flags": [
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/qwen-model-readiness.yml",
+      "sha256": "39a10b06707476c4649800088a589f54a10cdb2fce9dfd803803b7173aec213a",
+      "bytes": 9999,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/reconcile-control-plane.yml",
+      "sha256": "4f0587adaee40e9b3f03c20cac362f5a68e5bea5a97003785abd47665299a525",
+      "bytes": 934,
+      "classification": "read_only_candidate",
+      "risk_flags": [
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/registry-daily-sync.yml",
+      "sha256": "f84aed6f74125413f23f3f42f7ecd008cc9ab20cd5091b41838325816872b297",
+      "bytes": 1431,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "customer_outreach",
+        "repository_mutation",
+        "shell_execution",
+        "write_permission"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/reusable-ci-cd.yml",
+      "sha256": "904677c1a0750f376425fcf1303df0ae6a5b7499464f878267f93e4560cc0180",
+      "bytes": 1440,
+      "classification": "approval_required",
+      "risk_flags": [
+        "deployment",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/revenue-loop.yml",
+      "sha256": "2b962d65d24385bcf910d678ed0000a3320a071d06d8ca12e978574634386a78",
+      "bytes": 2980,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "customer_outreach",
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/security-tests.yml",
+      "sha256": "058fe4677235e43ab3c444f419c7a540eb6e3f5522e3badbdacb3d4e5aef7d14",
+      "bytes": 895,
+      "classification": "read_only_candidate",
+      "risk_flags": [
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/self-heal.yml",
+      "sha256": "62f093bfe9c999de254dbd5f89e8c20e7ef520082de21b51e3755f276a11c11b",
+      "bytes": 2695,
+      "classification": "approval_required",
+      "risk_flags": [
+        "self_healing",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/set-secrets-from-autokey.yml",
+      "sha256": "a0e29b40012bc57f002f693a0d2519ab0e508887163933dc24eca76a21e233a4",
+      "bytes": 1670,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "financial_or_commerce",
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/systems-sweep.yml",
+      "sha256": "df28b20c91386a1fefb2b7129118b541f5ef94f5aa02669e828ca17aed96a677",
+      "bytes": 5134,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/terraform.yml",
+      "sha256": "a5dc4ab2282a3133eebb4ebeea0607c24c493e976ed671c0d11f5a8ec312466f",
+      "bytes": 6007,
+      "classification": "approval_required",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "repository_mutation",
+        "self_healing",
+        "shell_execution",
+        "write_permission",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/update-status-dashboard.yml",
+      "sha256": "70c19e44a4cf10c8586ced5df8fba7a70ef0269e988c6ca541e423f32fcef3b7",
+      "bytes": 2080,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "customer_outreach",
+        "repository_mutation",
+        "shell_execution",
+        "write_permission"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/upgrade-all.yml",
+      "sha256": "d17e99d4cb0b02b66d91f9bd40eb738fbcae4a1856f1d9871c5946bdc6e5465e",
+      "bytes": 6046,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "customer_outreach",
+        "repository_mutation",
+        "shell_execution",
+        "write_permission"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/wealth-agent.yml",
+      "sha256": "7165c4bfe0f4bf977c2f8961e19beb743948190333aebbb0eaed62096b561c6c",
+      "bytes": 2310,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "financial_or_commerce",
+        "shell_execution",
+        "third_party_action"
+      ],
+      "migration_status": "discovered_not_translated"
+    },
+    {
+      "path": ".github/workflows/zero-human-deploy.yml",
+      "sha256": "020ef0b2d8479c139cefb6625d79ce8a2b52c93df2c8185e2ef8033b7d6c66bc",
+      "bytes": 5414,
+      "classification": "restricted_business_action",
+      "risk_flags": [
+        "secret_reference",
+        "deployment",
+        "customer_outreach",
+        "shell_execution"
+      ],
+      "migration_status": "discovered_not_translated"
+    }
+  ]
+}

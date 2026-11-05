@@ -1,0 +1,13 @@
+test_ci_secret_is_not_inherited_by_default (test_garcar.CIManifestTests.test_ci_secret_is_not_inherited_by_default) ... ok
+test_ci_secret_requires_explicit_name_allowlist (test_garcar.CIManifestTests.test_ci_secret_requires_explicit_name_allowlist) ... ok
+test_ci_steps_must_be_argument_arrays (test_garcar.CIManifestTests.test_ci_steps_must_be_argument_arrays) ... ok
+test_rejects_same_ports (test_garcar.ManifestTests.test_rejects_same_ports) ... ok
+test_rejects_secret_values_in_passthrough (test_garcar.ManifestTests.test_rejects_secret_values_in_passthrough) ... ok
+test_rejects_shell_command_string (test_garcar.ManifestTests.test_rejects_shell_command_string) ... ok
+test_rejects_unsafe_health_path (test_garcar.ManifestTests.test_rejects_unsafe_health_path) ... ok
+test_valid_manifest (test_garcar.ManifestTests.test_valid_manifest) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.002s
+
+OK
