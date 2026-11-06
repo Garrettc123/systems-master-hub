@@ -14,7 +14,8 @@ import subprocess
 import sys
 
 IGNORED = {'.git', 'node_modules', '.venv', 'venv', '__pycache__',
-           'dist', 'build', '.next', '.pytest_cache', '.mypy_cache'}
+           'dist', 'build', '.next', '.pytest_cache', '.mypy_cache',
+           'operator-evidence', 'external-operator-evidence'}
 SIZE_LIMIT = 2_000_000
 GITHUB_REPO = re.compile(r'^https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?$')
 SENSITIVE_NAMES = {'.env', '.env.local', '.env.production', 'credentials.json',
