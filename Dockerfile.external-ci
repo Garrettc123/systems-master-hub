@@ -4,9 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /work
 RUN python -m pip install --disable-pip-version-check --no-cache-dir PyYAML==6.0.2 \
  && groupadd -r operator && useradd -r -g operator operator
-COPY --chown=operator:operator scripts /work/scripts
-COPY --chown=operator:operator tests /work/tests
+COPY --chown=operator:operator . /work
 # For one-shot operations: docker run --rm -v "$PWD:/source:ro" image --root /source --output /tmp/reports
 USER operator
 ENTRYPOINT ["python", "/work/scripts/github_ci_fallback.py"]
-CMD ["--root", "/work", "--actions", "inventory-report,security-scan", "--output", "/tmp/operator-evidence"]
+CMD ["--root", "/work", "--actions", "all", "--output", "/tmp/operator-evidence"]
