@@ -63,13 +63,16 @@ def git_info(root: Path) -> dict:
 
 def clone_public_repo(repo: str, ref: str, target: Path) -> None:
     # A public clone only. No secret-bearing URLs, submodules, or git hooks.
-    cmd = ['git', '-c', 'protocol.file.allow=never', 'clone', '--depth', '1',
+    cmd = ['git', '-c', 'protocol.file.allow=never', '-c', 'credential.helper=', 'clone', '--depth', '1',
            '--single-branch', '--no-tags', '--branch', ref,
            'https://github.com/' + repo + '.git', str(target)]
     p = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                        timeout=180, check=False,
-                       env={**os.environ, 'GIT_TERMINAL_PROMPT': '0',
-                            'GIT_CONFIG_NOSYSTEM': '1'})
+                       env={'PATH': os.environ.get('PATH', os.defpath),
+                            'HOME': '/nonexistent',
+                            'GIT_TERMINAL_PROMPT': '0',
+                            'GIT_CONFIG_NOSYSTEM': '1',
+                            'GIT_CONFIG_GLOBAL': os.devnull})
     if p.returncode != 0:
         raise RuntimeError('Public repository clone failed; check network, ref and access')
 
