@@ -38,7 +38,7 @@ This project contains `Dockerfile.external-ci`, which can run on a machine with 
 ```bash
 docker build -f Dockerfile.external-ci -t garcar-external-ci .
 mkdir -p operator-evidence
-docker run --rm -v "$PWD:/source:ro" -v "$PWD/operator-evidence:/reports" \
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/source:ro" -v "$PWD/operator-evidence:/reports" \
   garcar-external-ci --root /source --actions all --output /reports
 ```
 
