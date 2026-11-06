@@ -66,35 +66,35 @@ Publishes ONLY the separate `garcar/external-operator` status on the inspected c
 
 ## Repeated validation independent of Actions: new supervisor
 
-The trusted supervisor \`scripts/github_ci_supervisor.py\` monitors a **public GitHub branch** from a Linux machine, Termux or a private background worker. It fetches the remote HEAD SHA with \`git ls-remote\`, avoids repeated costly validation for unchanged passing/warning commits, runs the trusted existing validator on new commits, and keeps evidence in a folder named for the actual inspected SHA.
+The trusted supervisor `scripts/github_ci_supervisor.py` monitors a **public GitHub branch** from a Linux machine, Termux or a private background worker. It fetches the remote HEAD SHA with `git ls-remote`, avoids repeated costly validation for unchanged passing/warning commits, runs the trusted existing validator on new commits, and keeps evidence in a folder named for the actual inspected SHA.
 
 ### Run immediately once (no GitHub Actions)
 
-\`\`\`bash
+```bash
 python scripts/github_ci_supervisor.py \
   --repository Garrettc123/systems-master-hub \
   --branch fix/operator-manual-audit-20261106 \
   --max-cycles 1 --output ./operator-evidence-supervised
-\`\`\`
+```
 
 ### Continuous periodic schedule (Linux, Termux or private Docker worker)
 
-\`\`\`bash
+```bash
 python scripts/github_ci_supervisor.py \
   --repository Garrettc123/systems-master-hub \
   --branch main --interval-seconds 3600 --max-cycles 0 \
   --output ./operator-evidence-supervised
-\`\`\`
+```
 
 For Android Termux, run this command when the device is powered and awake; Android background limits mean a persistent process is **not a guaranteed scheduled service**. For reliable 24/7 operation, use your existing always-on Linux host or an approved private Railway worker.
 
-The operator report is written at \`operator-evidence-supervised/<commit-sha>/fallback-manifest.json\`; the latest inspection and evidence hash are recorded in \`operator-evidence-supervised/supervisor-state.json\`. The program enforces a single process for the same output directory using an OS file lock. It will **not** report a prior success as a fresh success after a network error or SHA mismatch.
+The operator report is written at `operator-evidence-supervised/<commit-sha>/fallback-manifest.json`; the latest inspection and evidence hash are recorded in `operator-evidence-supervised/supervisor-state.json`. The program enforces a single process for the same output directory using an OS file lock. It will **not** report a prior success as a fresh success after a network error or SHA mismatch.
 
 ### Container worker (optional, no new paid service created)
 
 Build the existing Dockerfile once, then run the same source as a persistent private worker:
 
-\`\`\`bash
+```bash
 docker build -f Dockerfile.external-ci -t garcar-external-ci .
 mkdir -p operator-evidence-supervised
 docker run --rm --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m \
@@ -103,18 +103,18 @@ docker run --rm --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m \
   /work/scripts/github_ci_supervisor.py \
   --repository Garrettc123/systems-master-hub --branch main \
   --interval-seconds 3600 --max-cycles 0 --output /reports
-\`\`\`
+```
 
 This reads public GitHub source only and does not need Stripe, Supabase, Railway or GitHub write credentials. For private repositories, provide a separately prepared authorized local checkout to the original fallback runner; do not enable a public remote clone with embedded credentials.
 
-**Important:** The container needs outbound access to \`github.com\`, write access to its report volume, and git. It must not expose a public HTTP endpoint. Stop the worker before changing its trust policy.
+**Important:** The container needs outbound access to `github.com`, write access to its report volume, and git. It must not expose a public HTTP endpoint. Stop the worker before changing its trust policy.
 
 ### Optional publication boundary
 
-The supervisor accepts \`--publish-status\` only when the owner explicitly supplies an appropriately scoped \`GH_TOKEN\`. It publishes the separate \`garcar/external-operator\` commit status via the underlying fallback runner; it never overrides existing required checks. No publication occurs by default.
+The supervisor accepts `--publish-status` only when the owner explicitly supplies an appropriately scoped `GH_TOKEN`. It publishes the separate `garcar/external-operator` commit status via the underlying fallback runner; it never overrides existing required checks. No publication occurs by default.
 
 ### Current failure / recovery limitations
 
-A GitHub Actions \`startup_failure\` with **zero executed steps** cannot be repaired just by changing application scripts. Review run annotations, GitHub Actions billing/budget and repository workflow state, then contact GitHub Support if those are healthy. The external supervisor does **not** override branch protection, GitHub billing holds, paid runner limits, or missing privileges.
+A GitHub Actions `startup_failure` with **zero executed steps** cannot be repaired just by changing application scripts. Review run annotations, GitHub Actions billing/budget and repository workflow state, then contact GitHub Support if those are healthy. The external supervisor does **not** override branch protection, GitHub billing holds, paid runner limits, or missing privileges.
 
-The full hub has not been inspected end-to-end by this session's container because DNS resolution to \`github.com\` is unavailable; offline supervisor regression tests do not establish a clean remote execution. No paid worker was provisioned.
+The full hub has not been inspected end-to-end by this session's container because DNS resolution to `github.com` is unavailable; offline supervisor regression tests do not establish a clean remote execution. No paid worker was provisioned.
