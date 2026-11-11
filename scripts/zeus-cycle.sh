@@ -115,6 +115,8 @@ def main():
         return block('work-unit ceiling exceeds maximum 5000')
     if MODE not in ('observe', 'l0'):
         return block('ZEUS_MODE must be observe or l0')
+    if MODE == 'l0' and budget < 4:
+        return block('L0 requires at least four work units; no requests sent')
     if MODE == 'l0' and len(os.getenv('EVE_L0_DISPATCH_KEY', '')) < 48:
         return block('missing or invalid signed L0 dispatch key; no request sent')
     started = dt.datetime.now(dt.timezone.utc).isoformat()
