@@ -1,12 +1,8 @@
-# Deterministic Railway deployment for the Garcar control-plane dashboard.
-FROM nginx:1.27-alpine
-
-COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
-COPY dashboard/ /usr/share/nginx/html/
-
-EXPOSE 80
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://127.0.0.1/health || exit 1
-
-CMD ["nginx", "-g", "daemon off;"]
+# Staging-only heartbeat canary for Systems Master Hub.
+# This container does not run the dashboard, ZEUS entrypoints, agents, or control plane.
+FROM python:3.12-alpine
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /app
+COPY mesh_heartbeat.py /app/mesh_heartbeat.py
+USER 65532:65532
+CMD ["sh", "-c", "while true; do python -u /app/mesh_heartbeat.py; sleep 300; done"]
