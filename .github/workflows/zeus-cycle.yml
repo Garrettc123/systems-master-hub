@@ -1,0 +1,97 @@
+name: ZEUS Governed Cycle
+
+on:
+  pull_request:
+    paths:
+      - scripts/zeus-cycle.sh
+      - .github/workflows/zeus-cycle.yml
+  workflow_dispatch:
+    inputs:
+      directive:
+        description: Authorized objective (L0 is limited to local analysis)
+        type: string
+        required: true
+        default: Upgrade systems off dry-run — full Sovereign One stack
+      scope:
+        description: Scope, for reporting only; does not grant extra permissions
+        type: string
+        required: true
+        default: Garcar revenue + BioForge organs + AXIOM-12
+      work_unit_ceiling:
+        description: Maximum budget; NOT a count of external actions
+        type: number
+        default: 5000
+        required: true
+      mode:
+        description: Live observation, or signed local-only L0 dispatch
+        required: true
+        type: choice
+        options:
+          - observe
+          - l0
+        default: observe
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zeus-cycle-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify shell syntax and fail-closed inputs
+        shell: bash
+        run: |
+          bash -n scripts/zeus-cycle.sh
+          set +e
+          ZEUS_MODE=invalid bash scripts/zeus-cycle.sh "test" "test" 5000 > /tmp/zeus-mode.out 2>&1
+          mode_exit=$?
+          bash scripts/zeus-cycle.sh "test" "test" 5001 > /tmp/zeus-budget.out 2>&1
+          budget_exit=$?
+          ZEUS_MODE=l0 EVE_L0_DISPATCH_KEY= bash scripts/zeus-cycle.sh "test" "test" 5000 > /tmp/zeus-key.out 2>&1
+          key_exit=$?
+          set -e
+          test "$mode_exit" -eq 3
+          test "$budget_exit" -eq 3
+          test "$key_exit" -eq 3
+          grep -q BLOCKED /tmp/zeus-mode.out
+          grep -q BLOCKED /tmp/zeus-budget.out
+          grep -q BLOCKED /tmp/zeus-key.out
+
+      - name: Execute bounded live cycle
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          ZEUS_MODE: ${{ inputs.mode }}
+          ZEUS_DIRECTIVE: ${{ inputs.directive }}
+          ZEUS_SCOPE: ${{ inputs.scope }}
+          ZEUS_BUDGET: ${{ inputs.work_unit_ceiling }}
+          EVE_L0_DISPATCH_KEY: ${{ secrets.EVE_L0_DISPATCH_KEY }}
+        run: |
+          set +e
+          bash scripts/zeus-cycle.sh "$ZEUS_DIRECTIVE" "$ZEUS_SCOPE" "$ZEUS_BUDGET" > zeus-cycle-output.json
+          result=$?
+          echo "ZEUS_EXIT=$result" >> "$GITHUB_ENV"
+          cat zeus-cycle-output.json
+          exit 0
+
+      - name: Preserve cycle evidence
+        if: github.event_name == 'workflow_dispatch' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zeus-cycle-evidence-${{ github.run_id }}
+          path: |
+            .zeus/receipts/*.json
+            zeus-cycle-output.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Fail if full stack was not verified
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: exit "${ZEUS_EXIT:-3}"
