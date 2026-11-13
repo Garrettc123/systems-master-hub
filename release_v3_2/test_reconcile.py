@@ -20,7 +20,7 @@ class ReconciliationContracts(unittest.TestCase):
 
     def test_observed_snapshot_is_not_production_certification(self):
         r = reconcile(self.manifest, self.obs)
-        self.assertEqual(r["candidate_repositories"], 14)
+        self.assertEqual(r["candidate_repositories"], 15)
         self.assertEqual(r["candidate_repositories_observed_on_railway"], 2)
         self.assertEqual(r["candidate_repositories_matching_deployed_commit"], 0)
         self.assertEqual(r["candidate_repositories_matching_production_commit"], 0)
@@ -62,7 +62,7 @@ class ReconciliationContracts(unittest.TestCase):
 
     def test_unmapped_component_is_not_invented(self):
         r = reconcile(self.manifest, self.obs)
-        self.assertEqual(len(r["matches"]), 14)
+        self.assertEqual(len(r["matches"]), 15)
 
 
 if __name__ == "__main__":
