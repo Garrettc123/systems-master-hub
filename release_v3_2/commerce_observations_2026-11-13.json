@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "observation_date": "2026-11-13",
+  "observation_basis": "Authenticated read-only GitHub and Stripe connector responses; point-in-time unsigned snapshot; not a Stripe-signed attestation",
+  "website": {
+    "source_repository": "Garrettc123/garcar-enterprise-os-ui",
+    "source_commit": "619538bc384fb06036616d2afc0b9632084b0d1a",
+    "source_path": "checkout-validation.mjs",
+    "checkout_base_url": "https://buy.stripe.com/8x2eVddjf0hQ86Tf0f43S2h",
+    "deployed_source_commit_proven": false,
+    "current_live_http_probe_verified": false
+  },
+  "stripe": {
+    "livemode": true,
+    "primary": {
+      "active": true,
+      "livemode": true,
+      "payment_link_id": "plink_1UEcv4FKGbk21LK57hRic0dR",
+      "url": "https://buy.stripe.com/8x2eVddjf0hQ86Tf0f43S2h",
+      "description": "Mark the leads that sat",
+      "currency": "usd",
+      "unit_amount": 49700,
+      "quantity": 1
+    },
+    "secondary": {
+      "active": true,
+      "livemode": true,
+      "payment_link_id": "plink_1UExqpFKGbk21LK5PHxGbDRd",
+      "description": "Lead backup — callback clock",
+      "currency": "usd",
+      "unit_amount": 250000,
+      "quantity": 1
+    },
+    "charges": {
+      "observed_count": 4,
+      "failed_count": 4,
+      "successful_paid_count": 0,
+      "has_more": false,
+      "source_operation": "GET /v1/charges",
+      "limitation": "This charge collection does not itself establish the entire settlement/balance or future customer payment ledger."
+    }
+  },
+  "fulfillment": {
+    "authenticated_order_to_fulfillment_trace_verified": false,
+    "actual_customer_deliverable_receipt_verified": false,
+    "payment_to_ledger_reconciliation_verified": false
+  },
+  "safety": {
+    "no_outbound_sent": true,
+    "no_payments_initiated": true,
+    "no_production_configuration_modified": true
+  }
+}

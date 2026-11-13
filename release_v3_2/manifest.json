@@ -1,0 +1,433 @@
+{
+  "release": "v3.2",
+  "company": "Garcar Enterprise LLC",
+  "inventory_basis": "operator-supplied v3.2 baseline; 2026-11-13 connected GitHub default-branch HEAD and source file inspection; candidate mappings only, not CI or production certificates",
+  "required_system_count": 23,
+  "production_verified": false,
+  "verification_policy": "fail_closed_remote_evidence_required",
+  "systems": [
+    {
+      "id": "GCE-001",
+      "name": "RHNS v3.1",
+      "domain": "governance",
+      "candidate_repository": "Garrettc123/garcar-rhns-core",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/garcar-rhns-core",
+        "source_commit": "a57265f97e025f203d561683381a8daa58e16083",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-002",
+      "name": "Project Forge",
+      "domain": "governance",
+      "candidate_repository": "Garrettc123/THE-FORGE",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/THE-FORGE",
+        "source_commit": "7e8749e1c0f13205964bb10a20b540a647f3f3c1",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-003",
+      "name": "RHNS Cognitive Genome",
+      "domain": "governance",
+      "candidate_repository": "Garrettc123/RHNS-Architecture",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/RHNS-Architecture",
+        "source_commit": "f8f903ec5250ec20793f8eb27022146c2df30780",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      },
+      "mapping_evidence": {
+        "level": "source_code_candidate_not_component_certification",
+        "paths": [
+          "reasoning/lats.py",
+          "memory/controller.py",
+          "tests/test_all.py"
+        ],
+        "note": "Observed implemented LATS and MemGPT-style memory modules on the pinned default-branch commit; an independently versioned RHNS Cognitive Genome v3.0/3.1 release was not proven."
+      }
+    },
+    {
+      "id": "GCE-004",
+      "name": "AutoGenesis Suite",
+      "domain": "governance",
+      "candidate_repository": "Garrettc123/AutoGenesis-AI-Platform",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/AutoGenesis-AI-Platform",
+        "source_commit": "d5fd383e4b27dde39709d838c70c886dd03e7d5c",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-005",
+      "name": "Argos Panoptes",
+      "domain": "governance",
+      "candidate_repository": "Garrettc123/garcar-autonomous-revenue-engine",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/garcar-autonomous-revenue-engine",
+        "source_commit": "9ce2829c8795913c238f63d51bd8dec0093510d4",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-006",
+      "name": "Sovereign Data Engine",
+      "domain": "data",
+      "candidate_repository": null,
+      "mapping_status": "unmapped",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": null,
+        "source_commit": null,
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-007",
+      "name": "Nexus Weaver",
+      "domain": "data",
+      "candidate_repository": null,
+      "mapping_status": "unmapped",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": null,
+        "source_commit": null,
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-008",
+      "name": "Immutable Wealth Data Room",
+      "domain": "data",
+      "candidate_repository": "Garrettc123/garcar-data-room",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/garcar-data-room",
+        "source_commit": "64244530cb3a3b88eccf71810c9d756e7acf472c",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-009",
+      "name": "ATLAS Agent Framework",
+      "domain": "agents",
+      "candidate_repository": "Garrettc123/atlas-agents",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/atlas-agents",
+        "source_commit": "0feec736cafce763226af3a0c5f747d0454e06f8",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-010",
+      "name": "MARS",
+      "domain": "agents",
+      "candidate_repository": "Garrettc123/mars-api",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/mars-api",
+        "source_commit": "76d8e8ac36bb82e7e4b7b4b4d96e30d6f5586d07",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-011",
+      "name": "Autonomous Butler Core",
+      "domain": "agents",
+      "candidate_repository": "Garrettc123/autonomous-butler-core",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/autonomous-butler-core",
+        "source_commit": "8c7df3988a9c38e3dc5c1dbb6e02a5fe03cddd9d",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-012",
+      "name": "Prometheus UltraOps",
+      "domain": "agents",
+      "candidate_repository": "Garrettc123/PROMETHEUS-Global-Infrastructure-Brain",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/PROMETHEUS-Global-Infrastructure-Brain",
+        "source_commit": "ee73bf28c8a85a8666a9dae62e1a81ad5bda17e7",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-013",
+      "name": "AutoHelix",
+      "domain": "agents",
+      "candidate_repository": "Garrettc123/autohelix",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/autohelix",
+        "source_commit": "ae336e8fe8ae2d50a9c10a274d2f60e46b4410ce",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-014",
+      "name": "High-Ticket Deal Engine",
+      "domain": "commercial",
+      "candidate_repository": "Garrettc123/deal-desk-core",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/deal-desk-core",
+        "source_commit": "a003c81473de851cbe4c2b68dd4813e24f75eb73",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-015",
+      "name": "PermitPulse DFW",
+      "domain": "commercial",
+      "candidate_repository": null,
+      "mapping_status": "unmapped",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": null,
+        "source_commit": null,
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-016",
+      "name": "Shopify Automation Pipelines",
+      "domain": "commercial",
+      "candidate_repository": "Garrettc123/garcar-shopify-app",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/garcar-shopify-app",
+        "source_commit": "7e30e61c34fc58df314042963416eff5ed002be5",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-017",
+      "name": "MegaSaleSpot Storefront",
+      "domain": "commercial",
+      "candidate_repository": null,
+      "mapping_status": "unmapped",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": null,
+        "source_commit": null,
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-018",
+      "name": "RetailHotPicks Storefront",
+      "domain": "commercial",
+      "candidate_repository": null,
+      "mapping_status": "unmapped",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": null,
+        "source_commit": null,
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-019",
+      "name": "Garcar Alpha OS",
+      "domain": "commercial",
+      "candidate_repository": "Garrettc123/garcar-alpha-os",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/garcar-alpha-os",
+        "source_commit": "3472e44ccc7fa75f3f2f02baf7723dc745d0713a",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-020",
+      "name": "Outreach Suite",
+      "domain": "commercial",
+      "candidate_repository": "Garrettc123/automated-sales-outreach",
+      "mapping_status": "repository_located",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": "https://github.com/Garrettc123/automated-sales-outreach",
+        "source_commit": "af40dbff0dde4dbf4216f3c6fc9d4b26d6ca0fae",
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-021",
+      "name": "White-Label Suite",
+      "domain": "commercial",
+      "candidate_repository": null,
+      "mapping_status": "unmapped",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": null,
+        "source_commit": null,
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-022",
+      "name": "Unspecified baseline component 22",
+      "domain": "unresolved",
+      "candidate_repository": null,
+      "mapping_status": "unmapped",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": null,
+        "source_commit": null,
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    },
+    {
+      "id": "GCE-023",
+      "name": "Unspecified baseline component 23",
+      "domain": "unresolved",
+      "candidate_repository": null,
+      "mapping_status": "unmapped",
+      "production_status": "not_independently_verified",
+      "evidence": {
+        "repository_url": null,
+        "source_commit": null,
+        "ci_run_url": null,
+        "ci_conclusion": null,
+        "production_deployment_id": null,
+        "production_environment": null,
+        "health_probe": null,
+        "customer_transaction": null
+      }
+    }
+  ]
+}
