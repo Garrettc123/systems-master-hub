@@ -20,8 +20,8 @@ class ReleaseEvidenceTests(unittest.TestCase):
 
     def test_candidate_repository_inventory_is_not_production_proof(self):
         report = evaluate(self.payload)
-        self.assertEqual(report["repository_candidates_located"], 14)
-        self.assertEqual(report["repository_unmapped"], 9)
+        self.assertEqual(report["repository_candidates_located"], 15)
+        self.assertEqual(report["repository_unmapped"], 8)
         self.assertEqual(report["independently_production_certified"], 0)
         self.assertFalse(report["release_ready"])
 
