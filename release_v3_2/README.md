@@ -10,9 +10,9 @@ unnamed entries. This manifest retains **23 explicit slots** without inventing
 the last two names.
 
 At the time of the audit:
-- 14 slots are mapped to candidate repositories actually located in GitHub.
+- 15 slots are mapped to candidate repositories actually located in GitHub.
   A repository match is **not** proof of the exact claimed capability or version.
-- 9 slots remain unmapped, including the two unspecified entries.
+- 8 slots remain unmapped, including the two unspecified entries.
 - 0/23 are independently production-certified by this tool.
 
 Historic fleet totals in SYSTEMS-INVENTORY.json, SYSTEM_REGISTRY.json,
@@ -83,13 +83,13 @@ matching source names are retained:
   different from the manifest-pinned default-branch commit.
 
 There are 2 matching repository names, **zero matching source commits**
-and **zero production source matches** for the 14 candidate mappings.
+and **zero production source matches** for the 15 candidate mappings.
 This does **not** mean other deployed systems are nonexistent; it means
 the documented v3.2 candidate revisions have not been proven deployed.
 
 Run both classes of tests and generate a second coverage artifact:
 
-    cd release_v3_2 && python -m unittest -v test_verify test_reconcile
+    cd release_v3_2 && python -m unittest -v test_verify test_reconcile test_verify_commerce
     python reconcile.py --observations provider_observations_2026-11-13.json --report source-deployment-coverage.json
 
 The tool accepts offline observations only. It is not a provider API
@@ -103,3 +103,46 @@ runner/Actions execution issue before using a GitHub workflow result as
 test evidence. The standalone Python reconciliation code has passed
 7 local contract tests, which do not cover the main product suite or
 replace hosted CI.
+
+
+## Third gate: live checkout configuration vs. collected revenue
+
+The 2026-11-13 authenticated read-only Stripe check confirmed:
+- Website canonical checkout is pinned in Garrettc123/garcar-enterprise-os-ui,
+  commit 619538bc384fb06036616d2afc0b9632084b0d1a,
+  checkout-validation.mjs.
+- The matching $497 payment link was active in live mode and its line item
+  was one unit at 49700 USD cents.
+- The separate $2,500 installation link was active in live mode, at
+  250000 USD cents. This is **not** the canonical main-site purchase action.
+- Stripe GET /v1/charges returned 4 records, all failed, has_more=false,
+  and no recorded successful paid charge. This query cannot establish that
+  all future payment or payout activity is absent.
+- No independent recent direct HTTP probe to the current site deployment,
+  authorized paid-customer handoff, complete fulfillment receipt or payment
+  ledger reconciliation was verified in this audit.
+
+The sanitized source observations are in
+commerce_observations_2026-11-13.json. This is an **unsigned audit snapshot**,
+not a Stripe-signed receipt and not something the release gate trusts as
+authenticated proof.
+
+    python release_v3_2/verify_commerce.py --observations release_v3_2/commerce_observations_2026-11-13.json --report release_v3_2/commerce-coverage.json
+    cd release_v3_2 && python -m unittest -v test_verify test_reconcile test_verify_commerce
+
+The verifier establishes snapshot schema/checkout consistency only. It
+**never** reports verified revenue or fulfillment. A configured active
+payment link is not a paid order. An operator must independently verify
+a real Stripe succeeded payment, customer-authorized intake, delivery
+receipt and reconciled ledger before commercial release acceptance.
+
+## Source qualification status after follow-up
+
+GCE-003 RHNS Cognitive Genome is now mapped as a **candidate** to
+Garrettc123/RHNS-Architecture at commit
+f8f903ec5250ec20793f8eb27022146c2df30780, where code for LATS
+reasoning, a tiered memory controller and associated tests was inspected.
+There is no independent proof that an RHNS Cognitive Genome version was
+deployed. The registry now has 15 candidate repository mappings, 8
+unmapped entries, 0 same-commit Railway deployment matches for the
+mapped components, and 0 independently production-certified.
