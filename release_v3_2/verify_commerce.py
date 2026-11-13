@@ -93,7 +93,7 @@ def evaluate(snapshot: dict) -> dict:
         if charges.get("source_operation") != "GET /v1/charges":
             errors.append("charge evidence source not specified")
         complete = charges.get("has_more") is False
-        if charges.get("has_more") not in (True, False):
+        if type(charges.get("has_more")) is not bool:
             errors.append("has_more must be a boolean")
     if not all(fulfillment.get(x) is False for x in (
         "authenticated_order_to_fulfillment_trace_verified",
