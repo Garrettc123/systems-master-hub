@@ -146,3 +146,34 @@ There is no independent proof that an RHNS Cognitive Genome version was
 deployed. The registry now has 15 candidate repository mappings, 8
 unmapped entries, 0 same-commit Railway deployment matches for the
 mapped components, and 0 independently production-certified.
+
+
+## Fourth gate: externally probed public runtime (read-only)
+
+On 2026-11-13, a fresh external GET fetch of the public deployment
+returned the homepage and three diagnostic endpoints. A separate
+authenticated Railway read confirmed matching HTTP **200** proxy records
+between 22:56:24 and 22:56:25 UTC.
+
+- /: Garcar Enterprise | Texas-Wide Lead Follow-Up Review, a $497
+  offer and the canonical Stripe-hosted checkout link.
+- /health: {"status":"ok","service":"garcar-texas-followup"}.
+- /readyz: {"status":"configured","acquisition":"configured_unverified",
+  "upstream_probe":"not_performed", ...}.
+- /integrationz: authenticated_read_only, credential_match=true,
+  lead_created=false, payment_attempted=false, customer_intake=not_tested.
+
+Railway describes the **garcar-commerce-preview** service as
+online, with latest deployment SUCCESS, in the production environment
+at 2026-11-13T16:52:25Z. The Railway service configuration identifies
+the main branch of Garrettc123/garcar-enterprise-os-ui but **does not
+show the deployed source SHA** in the observed config; do not assert
+commit parity from a repository's HEAD.
+
+Sanitized evidence: runtime_observations_2026-11-13.json.
+
+Scope: externally reachable public site and explicit read-only
+diagnostics, NOT a live acquisition transaction or successful
+customer payment. In particular, the service's own upstream status
+is configured_unverified and it reports no real customer intake test.
+Do not alter those facts in the audit to promote a release.
