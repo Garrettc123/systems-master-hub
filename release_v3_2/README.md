@@ -177,3 +177,50 @@ diagnostics, NOT a live acquisition transaction or successful
 customer payment. In particular, the service's own upstream status
 is configured_unverified and it reports no real customer intake test.
 Do not alter those facts in the audit to promote a release.
+
+
+## Fifth gate: exact deployment SHA provenance for the commercial wedge
+
+A second, more specific Railway read using **list_deployments.meta.commitHash**
+supersedes the earlier uncertainty about deployed SHA identity for the
+two production customer-acquisition services. The earlier describe_service
+response lacked the source SHA, but deployment metadata does expose it.
+
+1. The live storefront, service garcar-commerce-preview, deployed GitHub
+   Garrettc123/garcar-enterprise-os-ui/main at
+   619538bc384fb06036616d2afc0b9632084b0d1a on 2026-11-13,
+   deployment 2bd46356-4ba9-4963-96b7-a9c9122110bd, SUCCESS. Public
+   page and read-only diagnostics responded externally and Railway's proxy
+   recorded HTTP 200.
+2. The dispatcher, service web in grand-spontaneity, deployed GitHub
+   Garrettc123/tree-of-life-system branch
+   fix/railway-procfile-python-runtime-20261030 at
+   53c8b66a89a0f99e90fb00af49c21922abec3019 on 2026-11-08,
+   deployment 542eed3b-0f3d-467f-a98c-1a674f8e90d2, SUCCESS.
+   This is *not* tree-of-life-system/main. Reading only main previously
+   missed deployed consent, webhook, order queue and authenticated
+   acquisition handshake behavior.
+
+The two deployment SHAs are provider-reported and independently correlate
+with the connected GitHub source inspection. These two real services
+are commercial wedge components, not a proof that the 23 separate v3.2
+inventory entries have matching deployed commits.
+
+Read-only authenticated handshake verification has been observed through
+the storefront's /integrationz endpoint. It does **not** prove an inquiry
+was accepted, paid or fulfilled; /readyz still reports the acquisition
+upstream unprobed. Stripe GET /v1/charges returned four failed charges
+and no successful paid charges in its complete returned set.
+
+New narrow hardening: https://github.com/Garrettc123/tree-of-life-system/pull/192
+is a separate DRAFT correction for an actual SQLite same-identity inquiry
+race. The deployed source reads before insert without reserving a writer
+transaction. Under deterministic local SQLite contention, this can raise
+a UNIQUE constraint error; adding BEGIN IMMEDIATE before read serialized
+24/24 parallel submissions into one row. This is a *local transaction model*
+only. A new direct-store pytest regression is committed but full Python
+application tests and hosted CI have **not** yet passed on that PR.
+
+Source snapshot: wedge_deployment_provenance_2026-11-13.json.
+No merge, production deployment, live test inquiry, external communication
+or payment action was taken in this continuation.
