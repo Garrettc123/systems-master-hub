@@ -1,0 +1,39 @@
+name: v3.2 Evidence Inventory Gate
+on:
+  push:
+    branches:
+      - 'audit/v3-2-*'
+    paths:
+      - 'release_v3_2/**'
+      - '.github/workflows/v3_2-evidence.yml'
+  pull_request:
+    paths:
+      - 'release_v3_2/**'
+      - '.github/workflows/v3_2-evidence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate inventory and write evidence coverage report
+        run: python release_v3_2/verify.py --report release_v3_2/evidence-coverage.json
+      - name: Run fail-closed regression tests
+        run: |
+          cd release_v3_2
+          python -m unittest -v test_verify
+      - name: Publish audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v3-2-inventory-evidence
+          path: release_v3_2/evidence-coverage.json
+          if-no-files-found: warn
