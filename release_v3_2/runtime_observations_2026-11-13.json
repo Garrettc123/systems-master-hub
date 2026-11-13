@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "observed_date": "2026-11-13",
+  "external_fetch": {
+    "provider": "TinyFish fetch_content, ttl=0, read-only GET requests, per URL timeout 12000 ms",
+    "host": "garcar-enterprise.up.railway.app",
+    "pages": [
+      {
+        "path": "/",
+        "observed_title": "Garcar Enterprise | Texas-Wide Lead Follow-Up Review",
+        "expected_offer_text": "$497",
+        "canonical_stripe_link": "https://buy.stripe.com/8x2eVddjf0hQ86Tf0f43S2h",
+        "external_fetch_succeeded": true,
+        "latency_ms": 535.997
+      },
+      {
+        "path": "/health",
+        "body": {
+          "status": "ok",
+          "service": "garcar-texas-followup"
+        },
+        "external_fetch_succeeded": true,
+        "latency_ms": 343.669
+      },
+      {
+        "path": "/readyz",
+        "body": {
+          "status": "configured",
+          "service": "garcar-texas-followup",
+          "acquisition": "configured_unverified",
+          "upstream_probe": "not_performed"
+        },
+        "external_fetch_succeeded": true,
+        "latency_ms": 539.923
+      },
+      {
+        "path": "/integrationz",
+        "body": {
+          "service": "garcar-texas-followup",
+          "status": "authenticated_read_only",
+          "credential_match": true,
+          "lead_created": false,
+          "payment_attempted": false,
+          "customer_intake": "not_tested"
+        },
+        "external_fetch_succeeded": true,
+        "latency_ms": 584.421
+      }
+    ],
+    "errors": []
+  },
+  "railway_corroboration": {
+    "project": "determined-dream",
+    "environment": "production",
+    "service": "garcar-commerce-preview",
+    "service_state": "online",
+    "latest_deployment_status": "SUCCESS",
+    "latest_deployment_created_at": "2026-11-13T16:52:25.288Z",
+    "source_repository": "Garrettc123/garcar-enterprise-os-ui",
+    "source_branch": "main",
+    "source_commit_sha_from_railway": "unavailable_in_service_config",
+    "recent_proxy_http_200_paths": [
+      "/",
+      "/health",
+      "/readyz",
+      "/integrationz"
+    ],
+    "proxy_timestamp_range": [
+      "2026-11-13T22:56:24.859462636Z",
+      "2026-11-13T22:56:25.121474907Z"
+    ],
+    "environment_24h_failures": 0,
+    "environment_issues": 0
+  },
+  "conclusions": {
+    "external_public_site_reachable": true,
+    "external_health_response_ok": true,
+    "public_checkout_link_present": true,
+    "acquisition_upstream_live_success_verified": false,
+    "authenticated_customer_intake_tested": false,
+    "successful_payment_or_fulfillment_verified": false,
+    "exact_deployed_commit_match_verified": false,
+    "full_release_ready": false
+  },
+  "limitations": [
+    "External fetch utility extracts content but did not expose raw HTTP response codes; Railway proxy independently recorded 200 for all four paths.",
+    "Read-only integration diagnostic reports credential_match=true without issuing a new lead or payment; this is not a successful customer workflow.",
+    "No authenticated Stripe order, customer-approved upload, delivered callback sheet, or payment-ledger reconciliation was produced.",
+    "The current Railway service config did not expose a deployed source commit SHA; commit parity remains unverified.",
+    "This file is an unsigned snapshot written from connector observations, not a provider-signed continuous monitor."
+  ]
+}
