@@ -18,6 +18,8 @@ EXPECTED_COUNT = 23
 DOMAINS = {"governance", "data", "agents", "commercial", "unresolved"}
 REPOSITORY = re.compile(r"^Garrettc123/[A-Za-z0-9_.-]+$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
+SAFE_PATH = re.compile(r"^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$")
+MAPPING_EVIDENCE_LEVEL = "source_code_candidate_not_component_certification"
 EVIDENCE_KEYS = (
     "repository_url",
     "source_commit",
@@ -61,9 +63,12 @@ def evaluate(manifest: dict) -> dict:
         expected_id = f"GCE-{i:03d}"
         if sys_id != expected_id:
             errors.append(f"systems[{i}] id must be {expected_id}")
-        if sys_id in seen_ids:
-            errors.append(f"duplicate id: {sys_id}")
-        seen_ids.add(sys_id)
+        if isinstance(sys_id, str):
+            if sys_id in seen_ids:
+                errors.append(f"duplicate id: {sys_id}")
+            seen_ids.add(sys_id)
+        else:
+            errors.append(f"{expected_id}: id must be a string")
         if not isinstance(item.get("name"), str) or not item["name"].strip():
             errors.append(f"{expected_id}: name missing")
         if item.get("domain") not in DOMAINS:
@@ -75,7 +80,8 @@ def evaluate(manifest: dict) -> dict:
             unmapped.append(expected_id)
             if item.get("mapping_status") != "unmapped":
                 errors.append(f"{expected_id}: missing repository must be unmapped")
-        elif isinstance(repo, str) and REPOSITORY.fullmatch(repo):
+        elif (isinstance(repo, str) and REPOSITORY.fullmatch(repo)
+              and repo.split("/", 1)[1] not in (".", "..")):
             mapped.append(expected_id)
             if item.get("mapping_status") != "repository_located":
                 errors.append(f"{expected_id}: candidate mapping must be repository_located")
@@ -86,8 +92,25 @@ def evaluate(manifest: dict) -> dict:
             errors.append(f"{expected_id}: missing evidence schema")
             continue
         expected_url = f"https://github.com/{repo}" if repo else None
-        if evidence["repository_url"] != expected_url:
+        if evidence.get("repository_url") != expected_url:
             errors.append(f"{expected_id}: repository_url inconsistent with mapping")
+        mapping_evidence = item.get("mapping_evidence")
+        if mapping_evidence is not None:
+            if repo is None or not isinstance(mapping_evidence, dict):
+                errors.append(f"{expected_id}: mapping_evidence requires a mapped repository and object")
+            else:
+                paths = mapping_evidence.get("paths")
+                note = mapping_evidence.get("note")
+                if mapping_evidence.get("level") != MAPPING_EVIDENCE_LEVEL:
+                    errors.append(f"{expected_id}: source mapping cannot declare production authority")
+                if not isinstance(paths, list) or not paths or not all(
+                    isinstance(path, str) and SAFE_PATH.fullmatch(path) and
+                    all(part not in (".", "..") for part in path.split("/"))
+                    for path in paths
+                ):
+                    errors.append(f"{expected_id}: mapping_evidence.paths must be safe repository-relative paths")
+                if not isinstance(note, str) or not note.strip():
+                    errors.append(f"{expected_id}: mapping_evidence note missing")
         commit = evidence.get("source_commit")
         if commit is not None and (not isinstance(commit, str) or not SHA.fullmatch(commit)):
             errors.append(f"{expected_id}: source_commit must be a 40-character lowercase SHA")
