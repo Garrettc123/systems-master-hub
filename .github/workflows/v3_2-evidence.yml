@@ -29,9 +29,11 @@ jobs:
       - name: Run fail-closed regression tests
         run: |
           cd release_v3_2
-          python -m unittest -v test_verify test_reconcile
+          python -m unittest -v test_verify test_reconcile test_verify_commerce
       - name: Reconcile pinned source commits against historical Railway observations
         run: python release_v3_2/reconcile.py --observations release_v3_2/provider_observations_2026-11-13.json --report release_v3_2/source-deployment-coverage.json
+      - name: Validate live checkout configuration without claiming revenue
+        run: python release_v3_2/verify_commerce.py --observations release_v3_2/commerce_observations_2026-11-13.json --report release_v3_2/commerce-coverage.json
       - name: Publish audit artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -40,4 +42,5 @@ jobs:
           path: |
             release_v3_2/evidence-coverage.json
             release_v3_2/source-deployment-coverage.json
+            release_v3_2/commerce-coverage.json
           if-no-files-found: warn
