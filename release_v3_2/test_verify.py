@@ -56,6 +56,26 @@ class ReleaseEvidenceTests(unittest.TestCase):
         invalid["systems"][0]["evidence"]["repository_url"] = "https://example.invalid/"
         self.assertFalse(evaluate(invalid)["valid"])
 
+    def test_reject_non_string_id_without_exception(self):
+        invalid = copy.deepcopy(self.payload)
+        invalid["systems"][0]["id"] = {"oops": "unhashable"}
+        self.assertFalse(evaluate(invalid)["valid"])
+
+    def test_reject_missing_repository_url_without_exception(self):
+        invalid = copy.deepcopy(self.payload)
+        del invalid["systems"][0]["evidence"]["repository_url"]
+        self.assertFalse(evaluate(invalid)["valid"])
+
+    def test_candidate_source_paths_cannot_traverse_repository(self):
+        invalid = copy.deepcopy(self.payload)
+        invalid["systems"][2]["mapping_evidence"]["paths"] = ["../secrets.txt"]
+        self.assertFalse(evaluate(invalid)["valid"])
+
+    def test_candidate_source_evidence_cannot_self_certify(self):
+        invalid = copy.deepcopy(self.payload)
+        invalid["systems"][2]["mapping_evidence"]["level"] = "production_verified"
+        self.assertFalse(evaluate(invalid)["valid"])
+
     def test_40_character_commit_sha_required(self):
         invalid = copy.deepcopy(self.payload)
         invalid["systems"][0]["evidence"]["source_commit"] = "main"
