@@ -64,3 +64,42 @@ customer records, publish releases, deploy software, or start agents.
 - Existing fleet audit: [SYNC-2026-11-04.md](../SYNC-2026-11-04.md)
 - Existing registry: [SYSTEM_REGISTRY.json](../SYSTEM_REGISTRY.json)
 - Existing verification definitions: [VERIFIED_INVENTORY.md](../VERIFIED_INVENTORY.md)
+
+
+## Second gate: source-to-deployment reconciliation
+
+Observed against connected Railway on 2026-11-13, five projects
+exposed 32 services (24 staging and 8 production). All latest listed
+deployments had status SUCCESS, but these are *not* v3.2 certifications.
+
+A deliberately sanitized point-in-time cache is stored in
+provider_observations_2026-11-13.json. Only candidate repositories with
+matching source names are retained:
+- GCE-008 / garcar-data-room — staging deployment at commit
+  30ee9796b094c001f812c99116d8c718046d00d2,
+  different from the manifest-pinned default-branch commit.
+- GCE-010 / mars-api — staging deployment at commit
+  429ad12f9bce19e442a652bdddbb35c93a3d859c,
+  different from the manifest-pinned default-branch commit.
+
+There are 2 matching repository names, **zero matching source commits**
+and **zero production source matches** for the 14 candidate mappings.
+This does **not** mean other deployed systems are nonexistent; it means
+the documented v3.2 candidate revisions have not been proven deployed.
+
+Run both classes of tests and generate a second coverage artifact:
+
+    cd release_v3_2 && python -m unittest -v test_verify test_reconcile
+    python reconcile.py --observations provider_observations_2026-11-13.json --report source-deployment-coverage.json
+
+The tool accepts offline observations only. It is not a provider API
+client, an independently signed attestation or a replacement for a
+fresh authenticated verification at release time. No provider credentials,
+internal service IDs, or customer information are stored here.
+
+As of Nov 13 GitHub Actions has been returning failure with **zero
+executed job steps** on this PR; the owner must resolve the hosted
+runner/Actions execution issue before using a GitHub workflow result as
+test evidence. The standalone Python reconciliation code has passed
+7 local contract tests, which do not cover the main product suite or
+replace hosted CI.
