@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -29,8 +29,8 @@ def test_retry_dead_letter_boundary() -> None:
 
 
 def test_metrics_are_observable() -> None:
-    start = datetime(2026, 9, 15, tzinfo=timezone.utc)
-    end = datetime(2026, 9, 15, 0, 0, 30, tzinfo=timezone.utc)
+    start = datetime(2026, 9, 15, tzinfo=UTC)
+    end = datetime(2026, 9, 15, 0, 0, 30, tzinfo=UTC)
     assert elapsed_seconds(start, end) == 30
     snapshot = metric_snapshot(LeadMetrics("t", "l", start, first_response_at=end))
     assert snapshot["first_response_seconds"] == 30

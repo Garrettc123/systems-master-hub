@@ -1,14 +1,18 @@
 name: Autonomous Upgrade Loop (upgrade-all)
 
 on:
-  schedule:
-    - cron: "0 2 * * *"   # 02:00 UTC — after living registry sync
+  # Manual-only until mutation and release gates have been verified.
   workflow_dispatch:
     inputs:
       tier:
         description: "Tier to upgrade (1=highest value)"
         default: "1"
         required: false
+      dry_run:
+        description: "Plan only; no event publishing, issue creation, or repository push"
+        default: true
+        required: true
+        type: boolean
 
 permissions:
   contents: write
@@ -80,6 +84,7 @@ jobs:
           PY
 
       - name: Emit upgrade event on bus (best-effort)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == false
         env:
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
@@ -98,6 +103,7 @@ jobs:
           PY
 
       - name: Open upgrade issues for targets (PAT optional)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == false
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
@@ -118,17 +124,15 @@ jobs:
                   print(f"Skip {name}: {e}")
                   continue
               title = f"[AUTO-UPGRADE] Health={t['health']} — advance capability tier"
-              body = f"""Autonomous upgrade cycle.
-
-Health score: **{t['health']}**
-Source: systems-master-hub nightly upgrade-all
-
-Directive: NEVER_REPEAT_ONLY_UPGRADE
-- Wire Event Mesh (`garcar_bus`) if missing
-- Post any money events to `gc_ledger` within 24h
-- Ensure CI + README + health endpoint exist
-- Close this issue when the next capability tier is live
-"""
+              body = (
+                  f"Autonomous upgrade cycle.\n\nHealth score: **{t['health']}**\n"
+                  "Source: systems-master-hub upgrade-all\n\n"
+                  "Directive: NEVER_REPEAT_ONLY_UPGRADE\n"
+                  "- Wire Event Mesh (`garcar_bus`) if missing\n"
+                  "- Post any money events to `gc_ledger` within 24h\n"
+                  "- Ensure CI + README + health endpoint exist\n"
+                  "- Close this issue when the next capability tier is live\n"
+              )
               # Avoid duplicate open issues with same title
               open_titles = {i.title for i in repo.get_issues(state="open")}
               if title in open_titles:
@@ -139,6 +143,7 @@ Directive: NEVER_REPEAT_ONLY_UPGRADE
           PY
 
       - name: Commit targets snapshot
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == false
         run: |
           git config user.name "garcar-upgrade-bot"
           git config user.email "bot@garcar.enterprise"

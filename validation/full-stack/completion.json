@@ -1,0 +1,184 @@
+{
+  "schema_version": "1.0",
+  "checked_at": "2026-11-02T20:42:34.019135-06:00",
+  "result": "local_canary_passed_host_check_blocked",
+  "software_status": "incomplete_host_check",
+  "tests_passed": 108,
+  "stages": [
+    {
+      "name": "source_syntax",
+      "status": "passed",
+      "details": {
+        "result": "passed",
+        "counts": {
+          "python": 122,
+          "javascript": 4,
+          "shell": 69,
+          "json": 39,
+          "yaml": 84
+        },
+        "errors": []
+      }
+    },
+    {
+      "name": "dependency_consistency",
+      "status": "passed",
+      "exit_code": 0,
+      "tests_passed": 0,
+      "seconds": 0.208,
+      "log": "dependency_consistency.txt"
+    },
+    {
+      "name": "security_provider_registry_tests",
+      "status": "passed",
+      "exit_code": 0,
+      "tests_passed": 28,
+      "seconds": 0.371,
+      "log": "security_provider_registry_tests.txt"
+    },
+    {
+      "name": "sovereign_tests",
+      "status": "passed",
+      "exit_code": 0,
+      "tests_passed": 8,
+      "seconds": 0.076,
+      "log": "sovereign_tests.txt"
+    },
+    {
+      "name": "phone_core_tests",
+      "status": "passed",
+      "exit_code": 0,
+      "tests_passed": 25,
+      "seconds": 0.764,
+      "log": "phone_core_tests.txt"
+    },
+    {
+      "name": "forge_tests",
+      "status": "passed",
+      "exit_code": 0,
+      "tests_passed": 15,
+      "seconds": 0.854,
+      "log": "forge_tests.txt"
+    },
+    {
+      "name": "forge_core_lint",
+      "status": "passed",
+      "exit_code": 0,
+      "tests_passed": 0,
+      "seconds": 0.031,
+      "log": "forge_core_lint.txt"
+    },
+    {
+      "name": "actions_ci",
+      "status": "passed",
+      "exit_code": 0,
+      "tests_passed": 32,
+      "seconds": 3.099,
+      "log": "actions_ci.txt"
+    },
+    {
+      "name": "termux_pid_guard",
+      "status": "blocked",
+      "tests_passed": 0,
+      "reason": "host_denies_proc_environ",
+      "log": "termux_pid_guard.txt"
+    },
+    {
+      "name": "forge_wheel",
+      "status": "passed",
+      "exit_code": 0,
+      "tests_passed": 0,
+      "seconds": 0.61,
+      "log": "forge_wheel.txt"
+    },
+    {
+      "name": "sovereign_promotion_rollback",
+      "status": "passed",
+      "exit_code": 0,
+      "tests_passed": 0,
+      "seconds": 4.613,
+      "log": "sovereign_promotion_rollback.txt"
+    },
+    {
+      "name": "full_stack_process_canary",
+      "status": "passed",
+      "exit_code": 0,
+      "tests_passed": 0,
+      "seconds": 2.008,
+      "log": "full_stack_process_canary.txt"
+    }
+  ],
+  "production_readiness": {
+    "status": "blocked",
+    "legacy_compose_services": 14,
+    "blockers": [
+      {
+        "code": "docker_unavailable",
+        "detail": "Docker image build and Compose runtime cannot be verified on this host."
+      },
+      {
+        "code": "missing_build_sources",
+        "services": [
+          {
+            "service": "apex-os",
+            "context": "./ai-systems/APEX-Universal-AI-Operating-System",
+            "dockerfile": "Dockerfile"
+          },
+          {
+            "service": "mlops-platform",
+            "context": "./ai-systems/enterprise-mlops-platform",
+            "dockerfile": "Dockerfile"
+          },
+          {
+            "service": "stablecoin-api",
+            "context": "./blockchain/stablecoin-protocol",
+            "dockerfile": "Dockerfile"
+          },
+          {
+            "service": "autohelix-node",
+            "context": "./blockchain/autohelix",
+            "dockerfile": "Dockerfile"
+          },
+          {
+            "service": "unified-platform",
+            "context": "./enterprise/enterprise-unified-platform",
+            "dockerfile": "Dockerfile"
+          },
+          {
+            "service": "tree-of-life",
+            "context": "./enterprise/tree-of-life-system",
+            "dockerfile": "Dockerfile"
+          },
+          {
+            "service": "portfolio",
+            "context": "./web/portfolio-website",
+            "dockerfile": "Dockerfile"
+          }
+        ]
+      },
+      {
+        "code": "core_lead_volume_unverified",
+        "detail": "SQLite persistence is canary-tested; a private persistent GARCAR_CORE_DB volume and its target-host backup/recovery still require verification."
+      },
+      {
+        "code": "live_integrations_unverified",
+        "detail": "No paid provider request, live payment, or customer outreach is exercised by this run."
+      },
+      {
+        "code": "production_isolation_unverified",
+        "detail": "Per-job OS isolation, external audit anchoring, host recovery, and protected public access still require target-host evidence."
+      }
+    ]
+  },
+  "runtime_versions": {
+    "fastapi": "0.162.0",
+    "uvicorn": "0.54.0",
+    "httpx": "0.28.1",
+    "pytest": "9.2.0",
+    "pydantic": "2.14.2",
+    "PyYAML": "6.0.3",
+    "ruff": "0.17.3"
+  },
+  "production_deployment_performed": false,
+  "external_payment_or_outreach_performed": false
+}

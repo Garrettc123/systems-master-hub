@@ -1,0 +1,14 @@
+{
+  "result": "passed",
+  "scope": "disposable_local_promotion_and_rollback",
+  "healthy_release_promoted": true,
+  "unhealthy_promotion_rejected": true,
+  "prior_release_restarted_and_healthy": true,
+  "audit_valid": true,
+  "events": [
+    "deploy_healthy",
+    "rollback_restored",
+    "deploy_failed"
+  ],
+  "target_device_verified": false
+}

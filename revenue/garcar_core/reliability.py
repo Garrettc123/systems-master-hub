@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 
 
@@ -26,7 +26,7 @@ class RetryPolicy:
 
 
 def next_retry_at(now: datetime | None, attempt: int, policy: RetryPolicy) -> datetime:
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     return now + timedelta(seconds=policy.delay(attempt))
 
 

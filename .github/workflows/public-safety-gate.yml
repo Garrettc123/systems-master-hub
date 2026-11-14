@@ -45,11 +45,15 @@ jobs:
       - name: Detect obvious plaintext secret material
         run: |
           set -euo pipefail
-          if grep -RInE --exclude-dir=.git --exclude='*.md' \
-            '(AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|ghp_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{20,})' .; then
-            echo 'Potential credential material detected; release blocked.'
+          pattern='(AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|ghp_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{20,})'
+          mapfile -t matches < <(grep -RIlE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.venv --exclude='*.md' "$pattern" . 2>/dev/null || true)
+          if [[ "${#matches[@]}" -gt 0 ]]; then
+            echo 'Potential credential-like material detected in the following files (contents suppressed):'
+            printf ' - %s\n' "${matches[@]}"
+            echo 'Release remains blocked until every match has been reviewed.'
             exit 1
           fi
+          echo 'No credential-pattern matches detected.'
 
       - name: Ensure production registry remains evidence-based
         run: |

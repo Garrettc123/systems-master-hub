@@ -13,10 +13,20 @@
         "properties": {
           "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
           "environment": {"enum": ["dev", "staging", "prod"]},
+          "production": {"type": "boolean"},
+          "healthcheck": {"type": "string", "minLength": 1},
+          "artifact_digest_source": {"type": "string", "minLength": 1},
+          "deployment_evidence": {"type": "string", "minLength": 1},
           "desired": {"type": "object"},
           "observed": {"type": "object"},
           "evidence": {"type": "object"}
         },
+        "allOf": [
+          {
+            "if": {"properties": {"production": {"const": true}}, "required": ["production"]},
+            "then": {"required": ["healthcheck", "artifact_digest_source", "deployment_evidence"]}
+          }
+        ],
         "additionalProperties": false
       }
     },

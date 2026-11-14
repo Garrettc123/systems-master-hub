@@ -12,7 +12,9 @@ RISK_PATTERNS = {
     "customer_outreach": re.compile(r"\b(send|email|sms|outreach|lead|resend)\b", re.I),
     "repository_mutation": re.compile(r"\b(auto.?merge|approve|create.?pull.?request|contents:\s*write|pull-requests:\s*write)\b", re.I),
     "self_healing": re.compile(r"\b(self.?heal|remediat|rollback|rotate)\b", re.I),
-    "shell_execution": re.compile(r"^\s*(run:|shell:)", re.M),
+    "shell_execution": re.compile(r"^\s*(?:-\s*)?(run:|shell:)", re.M),
+    "privileged_trigger": re.compile(r"\b(pull_request_target|workflow_run)\b"),
+    "write_permission": re.compile(r"\b[a-z-]+:\s*write\b"),
     "third_party_action": re.compile(r"^\s*-\s*uses:\s*([^\s]+)", re.M),
 }
 WORKFLOW_DIRS = (".github/workflows", "local-actions/workflows")
@@ -24,9 +26,9 @@ def classify_file(path: Path, root: Path) -> dict:
     rel = path.relative_to(root).as_posix()
     if "financial_or_commerce" in flags or "customer_outreach" in flags:
         tier = "restricted_business_action"
-    elif any(x in flags for x in ("deployment", "repository_mutation", "self_healing", "secret_reference")):
+    elif any(x in flags for x in ("deployment", "repository_mutation", "self_healing", "secret_reference", "privileged_trigger", "write_permission")):
         tier = "approval_required"
-    elif "self_hosted" in content.lower() or "runs-on: self-hosted" in content.lower():
+    elif re.search(r"self[-_]hosted", content, re.I):
         tier = "host_isolation_review"
     else:
         tier = "read_only_candidate"
@@ -44,7 +46,7 @@ def scan(root: Path) -> dict:
     found = []
     for directory in WORKFLOW_DIRS:
         base = root / directory
-        if base.is_dir():
+        if base.is_dir() and not any(p.is_symlink() for p in (base, *base.parents) if p != root and root in p.parents):
             for path in sorted(base.rglob("*")):
                 if path.is_file() and not path.is_symlink() and path.suffix.lower() in (".yml", ".yaml", ".json"):
                     found.append(classify_file(path, root))

@@ -1,8 +1,22 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "engine": "garcar-actions",
   "inventory_status": "partial_discovery_snapshot",
   "discovered_candidate_repositories": 51,
+  "local_hub_workflow_count": 57,
+  "local_hub_native_canary": {
+    "profile": "migration/hub-structure.json",
+    "source_job": "structure-check",
+    "status": "local_canary_passed_with_documented_semantic_changes",
+    "untranslated_jobs": [
+      "yaml-lint",
+      "shell-check",
+      "docker-compose-validate",
+      "control-plane-validation",
+      "upgrade-history-tests"
+    ],
+    "github_triggers_migrated": false
+  },
   "policy": {
     "default_mode": "dry_run",
     "production_enabled": false,
@@ -29,7 +43,7 @@
       "repository": "systems-master-hub",
       "path": ".github/workflows/ci.yml",
       "classification": "read_only_ci",
-      "status": "inspected_not_translated"
+      "status": "one_job_ported_local_canary_passed"
     },
     {
       "repository": "garcar-enterprise-production",

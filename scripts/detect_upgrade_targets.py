@@ -21,10 +21,16 @@ TIER_ORDER = [
 
 
 def current_tier(system: dict) -> str:
-    history = system.get("upgrade_history", [])
-    if not history:
+    # A proposal is not an applied upgrade. Advance only after a human-reviewed
+    # change is merged and its completion is recorded in the registry.
+    applied = [
+        item for item in system.get("upgrade_history", [])
+        if item.get("status") in {"merged", "verified", "completed"}
+        and item.get("tier") in TIER_ORDER
+    ]
+    if not applied:
         return "scaffolded"
-    return history[-1].get("tier", "scaffolded")
+    return applied[-1]["tier"]
 
 
 def already_advanced_today(system: dict) -> bool:
