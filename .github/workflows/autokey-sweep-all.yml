@@ -3,32 +3,35 @@ name: AutoKey → Sweep All Repos
 # Master AutoKey sweep: propagates the canonical secret set from systems-master-hub
 # to every Tier-1 and Tier-2 repo in registry/repos.json.
 #
-# Trigger: manual dispatch, or any push that updates the secret registry.
+# Trigger: manual dispatch only. Secret distribution is never push-triggered.
+# DRY_RUN defaults to true; writes require an explicit manual opt-out.
 # Source of truth: secrets stored in systems-master-hub.
-# Required: GITHUB_PAT (classic PAT, repo + admin:repo_hook scopes) in systems-master-hub secrets.
 
 on:
   workflow_dispatch:
     inputs:
       target_tier:
         description: 'Which tier(s) to sync'
-        required: false
-        default: 'all'
+        required: true
+        default: 'single'
         type: choice
         options:
-          - all
+          - single
           - tier1
           - tier2
-          - single
+          - all
       single_repo:
-        description: 'If target_tier=single, enter exact repo name (e.g. garcar-payments)'
-        required: false
+        description: 'Exact repository name when target_tier=single'
+        required: true
         default: ''
-  push:
-    branches: [main]
-    paths:
-      - 'registry/repos.json'
-      - 'vault/**'
+      dry_run:
+        description: 'Preview only; set false explicitly to write GitHub Actions secrets'
+        required: true
+        default: true
+        type: boolean
+
+env:
+  DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
 
 concurrency:
   group: autokey-sweep-all
