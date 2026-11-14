@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "repository": "Garrettc123/systems-master-hub",
+  "source_path": ".github/workflows/ci.yml",
+  "source_sha256": "24756c75839a22cf0d65fe4cae657386a26531a40c1c57929f7c217319d5e7b8",
+  "source_job": "structure-check",
+  "action": "hub_structure",
+  "mode": "local_canary_only",
+  "semantic_changes": [
+    "Malformed JSON now fails the job; the original shell pipeline could hide its failure.",
+    "Symlinked files and .git/node_modules/venv/cache/data directories are excluded.",
+    "Inventory counts remain declarations, not verified runtime or revenue evidence."
+  ],
+  "untranslated_jobs": ["yaml-lint", "shell-check", "docker-compose-validate"],
+  "github_triggers_migrated": false,
+  "production_enabled": false
+}
