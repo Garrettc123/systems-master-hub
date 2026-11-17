@@ -6,18 +6,19 @@
 
 ## 1. Local diagnostics (Termux or Lenovo)
 
-From the repository root, with Python 3 and Git already installed:
+With Python 3 available, the entrypoint can be invoked from any working directory, including `~/apex-revenue-system`. First locate the real database (bounded local search):
 
 ```sh
-python scripts/sync_to_master_hub.py --repo . --db ./garcar_forge_operational.db --diagnose
+python scripts/sync_to_master_hub.py --locate-db
+python scripts/sync_to_master_hub.py --db auto --diagnose
 ```
 
-If the SQLite file resides elsewhere, give the actual local path in `--db`. The default script creates no database, never fetches secrets and uses a read-only SQLite connection. The `--diagnose` mode prints only redacted metadata and does not write or push.
+The `--locate-db` option prints matching absolute paths without opening or uploading their content. `--db auto` selects a source only when exactly one match is found; otherwise specify the correct absolute `--db` path. A missing database is never silently created. The `--diagnose` operation requires no hub clone and does not create or push a telemetry report. It opens SQLite in read-only mode; a concurrent application's WAL/checkpoint lifecycle may still change auxiliary files independently of the exporter.
 
 ## 2. Export aggregate state locally
 
 ```sh
-python scripts/sync_to_master_hub.py --repo . --db ./garcar_forge_operational.db
+python scripts/sync_to_master_hub.py --repo . --db auto
 ```
 
 The output file is `telemetry/public_swarm_snapshot.json`. **It has not been generated or uploaded from the operator's actual machine in this change.** The payload includes:
@@ -45,10 +46,10 @@ The export creates a local report even if the schema is incomplete, returns exit
 
 ```sh
 git switch -c telemetry/swarm-2026-11-17
-python scripts/sync_to_master_hub.py --repo . --db ./garcar_forge_operational.db --push --allow-public
+python scripts/sync_to_master_hub.py --repo . --db auto --push --allow-public
 ```
 
-The tool checks the exact GitHub remote, refuses to push `main`, refuses unrelated dirty files, stages only `telemetry/public_swarm_snapshot.json`, and pushes to a `telemetry/swarm-YYYY-MM-DD` review branch. It does not open or merge a pull request. Review the resulting diff before public exposure; using a private repository or approved private storage is preferable for sensitive or operationally detailed telemetry.
+The tool checks the exact GitHub remote even for local export (an Apex checkout is rejected), refuses to push `main`, refuses unrelated dirty files, stages only `telemetry/public_swarm_snapshot.json`, and pushes to a `telemetry/swarm-YYYY-MM-DD` review branch. It does not open or merge a pull request. Review the resulting diff before public exposure; using a private repository or approved private storage is preferable for sensitive or operationally detailed telemetry.
 
 For noninteractive scheduling, invoke the **local export-only** command from an existing approved Termux supervisor or system scheduler. Enable public push only when expressly approved for that environment. No automation was installed on the operator's devices by this GitHub change.
 
