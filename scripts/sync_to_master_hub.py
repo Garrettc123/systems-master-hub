@@ -39,6 +39,65 @@ class SyncError(RuntimeError):
     pass
 
 
+SKIP_DIRS = frozenset({
+    ".git", ".cache", ".local", ".venv", "venv", "node_modules",
+    "__pycache__", "storage", "Android", "Downloads", "tmp",
+})
+DB_FILENAME = "garcar_forge_operational.db"
+
+
+def discover_databases(*, roots=None, max_depth=4) -> list[Path]:
+    """Find only exact database filenames in bounded operator workspaces.
+
+    Directory names are not printed or uploaded unless the user runs local
+    --locate-db. No file contents are opened during discovery.
+    """
+    if roots is None:
+        home = Path.home()
+        roots = [
+            Path.cwd(), home / "apex-revenue-system",
+            home / "systems-master-hub", home / "systems-master-hub-sync",
+            home / "ZEUS" / "repos", home / "garcar-enterprise",
+        ]
+    found: dict[str, Path] = {}
+    for root in roots:
+        root = Path(root).expanduser()
+        if not root.is_dir() or root.is_symlink():
+            continue
+        for current, directories, filenames in os.walk(root, followlinks=False):
+            current_path = Path(current)
+            depth = len(current_path.relative_to(root).parts)
+            directories[:] = [
+                name for name in directories
+                if depth < max_depth and name not in SKIP_DIRS
+                and not (current_path / name).is_symlink()
+            ]
+            if DB_FILENAME in filenames:
+                candidate = current_path / DB_FILENAME
+                if candidate.is_file() and not candidate.is_symlink():
+                    resolved = candidate.resolve()
+                    found[str(resolved)] = resolved
+    return sorted(found.values(), key=str)
+
+
+def resolve_database(db: Path, *, roots=None) -> Path:
+    """Require one unambiguous existing source; never create an empty DB."""
+    if str(db) != "auto":
+        return db.expanduser()
+    paths = discover_databases(roots=roots)
+    if not paths:
+        raise SyncError(
+            "No garcar_forge_operational.db found in the bounded search; "
+            "use --locate-db or pass its absolute location with --db"
+        )
+    if len(paths) != 1:
+        raise SyncError(
+            "Multiple matching databases found. Set --db to the intended "
+            "absolute path after inspecting --locate-db"
+        )
+    return paths[0]
+
+
 def _counts(values):
     """Allowlisted status labels; all other labels collapsed into 'other'."""
     result = {}
@@ -223,10 +282,12 @@ def publish_review_branch(repo_path: Path, data: dict, *, public_ack: bool) -> s
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db", required=True, type=Path,
-                        help="local SQLite file (never uploaded)")
-    parser.add_argument("--repo", default=Path("."), type=Path,
-                        help="systems-master-hub clone root")
+    parser.add_argument("--db", default=Path("auto"), type=Path,
+                        help="absolute SQLite file path, or auto (bounded local lookup)")
+    parser.add_argument("--repo", default=None, type=Path,
+                        help="required for export: systems-master-hub clone root")
+    parser.add_argument("--locate-db", action="store_true",
+                        help="print local matching DB paths, never open or publish them")
     parser.add_argument("--diagnose", action="store_true",
                         help="print redacted diagnostics; do not write or push")
     parser.add_argument("--push", action="store_true",
@@ -237,11 +298,31 @@ def main(argv=None) -> int:
     if args.diagnose and args.push:
         parser.error("--diagnose cannot be combined with --push")
     try:
-        result = snapshot(args.db)
+        if args.locate_db:
+            matches = discover_databases()
+            for match in matches:
+                print(match)
+            if not matches:
+                print("No matching database found in bounded workspaces.", file=sys.stderr)
+                return 2
+            return 0
+        source = resolve_database(args.db)
+        result = snapshot(source)
         if args.diagnose:
             print(json.dumps(result, indent=2, sort_keys=True))
         else:
-            path = atomic_export(args.repo, result)
+            if args.repo is None:
+                raise SyncError("Export requires --repo pointing to systems-master-hub")
+            root = args.repo.expanduser().resolve(strict=True)
+            remote = _git(root, "remote", "get-url", "origin")
+            if remote not in {
+                "https://github.com/" + EXPECTED_REPO + ".git",
+                "https://github.com/" + EXPECTED_REPO,
+                "git@github.com:" + EXPECTED_REPO + ".git",
+                "git@github.com:" + EXPECTED_REPO,
+            }:
+                raise SyncError("Export target must be systems-master-hub clone, not apex-revenue-system")
+            path = atomic_export(root, result)
             print("Local aggregate written:", path)
         if args.push:
             print("Pushed review branch:",
