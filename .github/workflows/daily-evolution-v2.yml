@@ -131,7 +131,7 @@ jobs:
   notify:
     name: Notify Results
     needs: [discover-and-plan, create-upgrade-prs]
-    if: ${{ always() && needs.discover-and-plan.result == 'success' }}
+    if: ${{ always() && needs['discover-and-plan'].result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Download plan
