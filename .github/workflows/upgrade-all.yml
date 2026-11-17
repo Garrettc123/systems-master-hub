@@ -120,15 +120,15 @@ jobs:
               title = f"[AUTO-UPGRADE] Health={t['health']} — advance capability tier"
               body = f"""Autonomous upgrade cycle.
 
-Health score: **{t['health']}**
-Source: systems-master-hub nightly upgrade-all
+          Health score: **{t['health']}**
+          Source: systems-master-hub nightly upgrade-all
 
-Directive: NEVER_REPEAT_ONLY_UPGRADE
-- Wire Event Mesh (`garcar_bus`) if missing
-- Post any money events to `gc_ledger` within 24h
-- Ensure CI + README + health endpoint exist
-- Close this issue when the next capability tier is live
-"""
+          Directive: NEVER_REPEAT_ONLY_UPGRADE
+          - Wire Event Mesh (`garcar_bus`) if missing
+          - Post any money events to `gc_ledger` within 24h
+          - Ensure CI + README + health endpoint exist
+          - Close this issue when the next capability tier is live
+          """
               # Avoid duplicate open issues with same title
               open_titles = {i.title for i in repo.get_issues(state="open")}
               if title in open_titles:
