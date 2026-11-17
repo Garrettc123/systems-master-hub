@@ -177,6 +177,48 @@ class TestPublicSnapshot(unittest.TestCase):
         self.assertEqual(actual, branch)
         self.assertFalse(any(cmd and cmd[0] in ("commit", "push") for cmd in calls))
 
+    def test_auto_discovery_finds_only_exact_database_name(self):
+        fixture(self.db)
+        (self.base / "node_modules").mkdir()
+        (self.base / "node_modules" / "garcar_forge_operational.db").write_bytes(b"x")
+        (self.base / "other.db").write_bytes(b"x")
+        paths = sync.discover_databases(roots=[self.base])
+        self.assertEqual(paths, [self.db.resolve()])
+        self.assertEqual(sync.resolve_database(Path("auto"), roots=[self.base]),
+                         self.db.resolve())
+
+    def test_auto_discovery_refuses_ambiguity(self):
+        fixture(self.db)
+        other = self.base / "second"
+        other.mkdir()
+        (other / self.db.name).write_bytes(b"same filename")
+        with self.assertRaisesRegex(sync.SyncError, "Multiple matching"):
+            sync.resolve_database(Path("auto"), roots=[self.base])
+
+    def test_auto_discovery_missing_never_creates_database(self):
+        with self.assertRaisesRegex(sync.SyncError, "No garcar"):
+            sync.resolve_database(Path("auto"), roots=[self.base])
+        self.assertFalse(self.db.exists())
+
+    def test_diagnostic_no_repository_required(self):
+        fixture(self.db)
+        self.assertEqual(sync.main(["--db", str(self.db), "--diagnose"]), 0)
+
+    def test_export_requires_explicit_master_hub_checkout(self):
+        fixture(self.db)
+        self.assertEqual(sync.main(["--db", str(self.db)]), 1)
+        # A non-hub repository is rejected before writing the telemetry.
+        with patch.object(sync, "_git", return_value="https://github.com/other/repo.git"):
+            self.assertEqual(sync.main(["--db", str(self.db), "--repo", str(self.repo)]), 1)
+        self.assertFalse((self.repo / sync.EXPORT_RELATIVE).exists())
+
+    def test_local_db_lookup_does_not_follow_symlink(self):
+        fixture(self.db)
+        alias = self.base / "nested"
+        alias.mkdir()
+        (alias / sync.DB_FILENAME).symlink_to(self.db)
+        self.assertEqual(sync.discover_databases(roots=[alias]), [])
+
     def test_cli_diagnostic_on_missing_db_is_error(self):
         self.assertEqual(sync.main(["--db", str(self.db), "--diagnose"]), 1)
 
