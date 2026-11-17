@@ -1,0 +1,32 @@
+name: Workflow Startup Regression
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/omega-nightly.yml'
+      - '.github/workflows/daily-evolution-v2.yml'
+      - '.github/workflows/workflow-startup-regression-ci.yml'
+      - 'tests/test_workflow_startup_guards.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate safe workflow schemas and gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install YAML parser
+        run: python -m pip install 'PyYAML>=6,<7'
+      - name: Check tests compile
+        run: python -m py_compile tests/test_workflow_startup_guards.py
+      - name: Validate workflow contract
+        run: python -m unittest discover -s tests -p 'test_workflow_startup_guards.py' -v
