@@ -24,7 +24,7 @@ on:
 permissions:
   contents: read
   actions: read
-  pull_requests: write
+  pull-requests: read
 
 jobs:
   discover-and-plan:
@@ -85,6 +85,9 @@ jobs:
     if: github.event.inputs.dry_run == 'false' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Download plan
         uses: actions/download-artifact@v4
@@ -128,7 +131,7 @@ jobs:
   notify:
     name: Notify Results
     needs: [discover-and-plan, create-upgrade-prs]
-    if: always()
+    if: ${{ always() && needs.discover-and-plan.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Download plan
@@ -150,27 +153,10 @@ jobs:
             echo "**Actions Planned**: $TOTAL" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Actions by Type" >> $GITHUB_STEP_SUMMARY
-            cat $PLAN_FILE | jq -r '.summary | to_entries[] | "- \(.key): \(.value)"" >> $GITHUB_STEP_SUMMARY
+            cat "$PLAN_FILE" | jq -r '.summary | to_entries[] | "- \(.key): \(.value)"' >> "$GITHUB_STEP_SUMMARY"
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Details" >> $GITHUB_STEP_SUMMARY
             cat $PLAN_FILE | jq -r '.actions[] | "- **[\\(.repo)]** \(.title) — risk: \(.risk_tier)/8"' >> $GITHUB_STEP_SUMMARY
           else
             echo "No plan generated" >> $GITHUB_STEP_SUMMARY
           fi
-
-      - name: Create issue if high-risk
-        if: github.event.inputs.dry_run == 'true'
-        run: |
-          PLAN_FILE="plan/plan.json"
-          if [ -f "$PLAN_FILE" ]; then
-            HIGH_RISK=$(cat $PLAN_FILE | jq '[.actions[] | select(.risk_tier >= 6)] | length')
-            if [ "$HIGH_RISK" -gt 0 ]; then
-              gh issue create \
-                --repo Garrettc123/systems-master-hub \
-                --title "[Continuum Grid] High-risk actions detected in run $(cat $PLAN_FILE | jq -r '.run_id')" \
-                --body "$(cat $PLAN_FILE | jq -r '.actions[] | select(.risk_tier >= 6) | "- **[\\(.repo)]** \(.title) — risk: \(.risk_tier)/8"')" \
-                --label "continuum-grid,high-risk,review-needed" || true
-            fi
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
