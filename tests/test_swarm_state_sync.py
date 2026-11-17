@@ -97,15 +97,25 @@ class TestPublicSnapshot(unittest.TestCase):
         self.assertEqual(result["coverage"]["task_queue"]["state"],
                          "schema_mismatch")
 
-    def test_read_only_snapshot_does_not_change_database(self):
+    def test_read_only_snapshot_preserves_logical_rows(self):
         fixture(self.db)
-        before = self.db.stat().st_size
+        def logical_state():
+            # WAL checkpointing may change file size independently of writes
+            # issued by this read-only exporter. Compare actual data instead.
+            with sqlite3.connect("file:" + str(self.db) + "?mode=ro",
+                                 uri=True) as conn:
+                return (
+                    conn.execute("SELECT status FROM task_queue ORDER BY rowid").fetchall(),
+                    conn.execute(
+                        "SELECT event_id,event_type,status,timestamp "
+                        "FROM event_ledger ORDER BY rowid"
+                    ).fetchall(),
+                    conn.execute("SELECT COUNT(*) FROM dead_letter_quarantine").fetchone()[0],
+                )
+        before = logical_state()
         sync.snapshot(self.db, today=NOW)
-        after = self.db.stat().st_size
-        self.assertEqual(before, after)
-        with sqlite3.connect(self.db) as conn:
-            count = conn.execute("SELECT COUNT(*) FROM task_queue").fetchone()[0]
-        self.assertEqual(count, 5)
+        self.assertEqual(logical_state(), before)
+        self.assertEqual(len(before[0]), 5)
 
     def test_snapshot_content_digest_deterministic_per_day(self):
         fixture(self.db)
