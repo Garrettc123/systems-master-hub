@@ -205,12 +205,15 @@ def publish_review_branch(repo_path: Path, data: dict, *, public_ack: bool) -> s
         raise SyncError("push requires a telemetry/swarm-YYYY-MM-DD review branch")
     # Do not push if any unrelated edits are present. Avoid folding other
     # staged changes into a telemetry commit.
-    dirty = _git(root, "status", "--porcelain", "--untracked-files=normal")
+    dirty = _git(root, "status", "--porcelain", "--untracked-files=all")
     for line in dirty.splitlines():
         if line[3:] != EXPORT_RELATIVE.as_posix():
             raise SyncError("unrelated working-tree changes; refusing push")
     _git(root, "add", "--", EXPORT_RELATIVE.as_posix())
-    if _git(root, "diff", "--cached", "--name-only") != EXPORT_RELATIVE.as_posix():
+    staged = _git(root, "diff", "--cached", "--name-only")
+    if not staged:
+        return branch  # idempotent: no change to commit or push
+    if staged != EXPORT_RELATIVE.as_posix():
         raise SyncError("staging scope differs from expected telemetry file")
     _git(root, "commit", "-m", "chore(telemetry): aggregate SQLite health checkpoint",
          "--", EXPORT_RELATIVE.as_posix())
