@@ -1,0 +1,66 @@
+name: OMEGA Nightly Read-Only Health Report
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omega-nightly-readonly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  repository-evidence:
+    name: Check registry artifacts without executing agents
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate local registry evidence and write a summary
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from datetime import datetime, timezone
+          import json
+          import os
+          from pathlib import Path
+
+          sources = ("SYSTEMS-INVENTORY.json", "SYSTEM_REGISTRY.json")
+          checked = []
+          errors = []
+          for filename in sources:
+              path = Path(filename)
+              if not path.is_file():
+                  checked.append((filename, "missing"))
+                  continue
+              try:
+                  value = json.loads(path.read_text(encoding="utf-8"))
+                  if not isinstance(value, (dict, list)):
+                      raise ValueError("JSON root must be a mapping or list")
+                  checked.append((filename, "parseable; not independently verified"))
+              except (ValueError, UnicodeError, OSError):
+                  checked.append((filename, "invalid"))
+                  errors.append(filename)
+
+          summary = [
+              "# OMEGA read-only registry inspection",
+              "",
+              "This job does not run agents, touch wallets, deploy, or send messages.",
+              "A parseable file is not proof of a healthy operating system.",
+              "",
+              "| File | Observation |",
+              "|---|---|",
+          ]
+          summary += [f"| `{filename}` | {state} |" for filename, state in checked]
+          summary.append("")
+          summary.append("Business revenue and bounty earnings: not verified by this check.")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+              output.write("\n".join(summary) + "\n")
+          if errors:
+              raise SystemExit("Invalid local registry JSON; see summary")
+          PY
