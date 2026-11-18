@@ -1,0 +1,36 @@
+name: SQLite Swarm Telemetry Safety
+
+on:
+  pull_request:
+    paths:
+      - "scripts/sync_to_master_hub.py"
+      - "scripts/qil.py"
+      - "tests/test_swarm_state_sync.py"
+      - "tests/test_qil.py"
+      - "docs/SWARM_SYNC_AND_INVESTOR_EVIDENCE.md"
+      - "docs/QIL_QUERY_INTELLIGENCE_LAYER.md"
+      - ".github/workflows/sqlite-swarm-telemetry-ci.yml"
+      - ".gitignore"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile synchronizer
+        run: python -m py_compile scripts/sync_to_master_hub.py scripts/qil.py
+      - name: Run hermetic SQLite security regressions
+        run: python -m unittest discover -s tests -p "test_swarm_state_sync.py" -v
+      - name: Validate named QIL queries and fail-closed response contracts
+        run: python -m unittest discover -s tests -p "test_qil.py" -v
