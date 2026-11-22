@@ -1,0 +1,22 @@
+name: Bounded repository health check
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/manual-healthcheck-20261122.yml'
+permissions:
+  contents: read
+  statuses: read
+  checks: read
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run existing status script
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: timeout 240 bash ./status.sh
