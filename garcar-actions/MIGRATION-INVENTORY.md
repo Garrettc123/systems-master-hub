@@ -112,10 +112,16 @@ An existing local runner is present. Its runShell() calls spawnSync(..., {shell:
 
 - Discovery snapshot: created from GitHub code-search results.
 - Actual complete repository-tree census: not yet performed.
-- Workflow translation: not yet performed for the listed candidates.
-- Execution parity: not tested.
+- Workflow translation: the hub's `structure-check` job has a native local-canary port in `migration/hub-structure.json`; the other jobs/repositories remain untranslated.
+- Execution evidence: this port passed through a separate worker on the hub checkout. JSON error handling is deliberately stricter, so full semantic parity is not claimed. See `validation/hub-canary.json`.
 - GitHub workflow files: unchanged.
 - Production migration: not started.
+
+## Local hub census and canary update — 2026-11-02
+
+A checkout scan enumerated all 53 current hub workflow files and pinned each SHA-256. The scanner marked 7 read-only candidates, 27 requiring approval/review, and 19 restricted business workflows. These are static triage results, not proof that any workflow is safe to execute. The complete per-file inventory is in `validation/hub-inventory.json`; it does not extend the account-wide coverage claim.
+
+The native structure canary validates required files and JSON and reports inventory declarations. It verifies the workflow source hash both at queue submission and before execution. It does not install dependencies, start services, or execute upstream shell text. The default plan command writes nothing. Explicit local submission is available through `python -m garcar_actions.migration.workflow --submit`.
 
 
 ## Additional privileged workflow review

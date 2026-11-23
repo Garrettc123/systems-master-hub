@@ -1,0 +1,26 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    ".gitignore": "b543118c3bc144efb87347c864e93dccc2d5bb74b5a4fbd6cc9ceb4695e3a419",
+    "MIGRATION-INVENTORY.md": "62bcd06afb1b03fab16b744ec4003c3c4923c78fa4a1e11f0870ec378130f3dd",
+    "Makefile": "52c7b4cf4538bb486a02c9d783f3bace2f15b2fd83b27710d3ef4e19861d07a5",
+    "README.md": "09990d39e7dc94ee92a39f65f05ece9c8e37ab9b77229c1736a524708ef1b8c7",
+    "garcar_actions/__init__.py": "f5c928eec121f0047c9cbcfa0122ebeba233cf9a823cbfbc3ca19a936b566f81",
+    "garcar_actions/engine.py": "c19a42119e0a75308e58ff361124da960b787f92b05c78eb41fec654259bf3d7",
+    "garcar_actions/execution.py": "91806483fbc790f24abcf985b6ed5df2e232190b232bd83f0ce8c5d11f87c54a",
+    "garcar_actions/hub_check.py": "4502afa2d66bfdb424fbd1bb98e3a5a24132c76f3677c29c5b019f3cf7a9bd62",
+    "garcar_actions/migration/__init__.py": "7f19fef057e166bf26918cf225e82be319a255c65a90edbebdddea73fb3a4cf8",
+    "garcar_actions/migration/scan.py": "297359df2d24f8ab41c047f5cdd4881f65a55b74a7c27b7818ed770ec3c9b003",
+    "garcar_actions/migration/workflow.py": "8ad8331df213f0de81634331ebbf0b97b2403f7a39eb03e2cd6da390932d2200",
+    "garcar_actions/smoke.py": "2f8edec12cf5debbe73d1b2967e800a42d0ba31dd9e259830777bccd5de9d004",
+    "garcar_actions/test_job.py": "775f98b7a0573cd9874cfe48490f825bb22d94ab58530add1baa9c1cfc6ec4f2",
+    "migration/hub-structure.json": "b1509c75d4f961207908a258d0863454033a3f2cb2c58ba04bc8da32afa7de73",
+    "migration/registry.json": "467c0ce89923fdd284481733ac3946badcdfc669a042522cefce20bbda72a143",
+    "scripts/ci.py": "e75ef9b97cc20df13fc80aaf8db25e9d6225fbecb86c9a3790e513e981e99a76",
+    "scripts/hub-canary.py": "e8629163d35da56f61b0504b45c6daaf4eb3824345a903f91be9bef79c7deb9b",
+    "tests/test_engine.py": "9a8bb705039fe466efd82a87f6d4c372511c3e8c0b5a1640a46d6c22d86ab60a",
+    "tests/test_execution.py": "c9fc6606b7e35df9d1d59a99587b1cb97302001c0326c3be756ff0c96ebdddad",
+    "tests/test_migration_scan.py": "b35cdb09cea8af13bcdf6266a26877707a08f1b99d3d940861b80be2f15c0177",
+    "tests/test_workflow.py": "7cb77fc6ac2ad210cbf551d170e5e7b711a959666da519c071a44d7d50512c99"
+  }
+}
