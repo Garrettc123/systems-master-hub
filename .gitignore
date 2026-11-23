@@ -50,3 +50,13 @@ logs/
 # Temp
 tmp/
 .tmp/
+
+# Local state must never be checked into the public master hub
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+telemetry/.snapshot-*.tmp
