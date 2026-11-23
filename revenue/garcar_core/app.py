@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import os
+
 from datetime import datetime, timezone
 from enum import Enum
 from hashlib import sha256
@@ -10,6 +13,37 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 app = FastAPI(title="Garcar Core — Lead Response Engine", version="1.0.0")
+
+
+# This opt-in health-only reporter does not transport business or customer data.
+@app.on_event("startup")
+async def start_optional_mesh_heartbeat():
+    if os.getenv("GARCAR_MESH_PUBLISH_ENABLED", "").lower() != "true":
+        return
+
+    async def periodic_report():
+        from mesh_heartbeat import send_heartbeat
+        while True:
+            try:
+                await asyncio.to_thread(send_heartbeat, "degraded")
+            except Exception:
+                # Sync Core outages must not affect the existing business API.
+                pass
+            await asyncio.sleep(300)
+
+    app.state.mesh_reporter = asyncio.create_task(periodic_report())
+
+
+@app.on_event("shutdown")
+async def stop_optional_mesh_heartbeat():
+    task = getattr(app.state, "mesh_reporter", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
 
 
 class Source(str, Enum):
