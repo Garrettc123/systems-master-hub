@@ -52,6 +52,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install YAML parser
+        run: python3 -m pip install --disable-pip-version-check pyyaml
+
       - name: Validate Prometheus config
         run: |
           if [ -f 10-monitoring-observability/prometheus/prometheus.yml ]; then

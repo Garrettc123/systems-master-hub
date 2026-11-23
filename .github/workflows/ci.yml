@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   yaml-lint:
     name: Lint YAML workflows
@@ -14,29 +17,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install yamllint
-        run: pip install yamllint -q
+      - name: Install YAML validators
+        run: python -m pip install --disable-pip-version-check yamllint pyyaml
 
-      - name: Lint workflow files
+      - name: Advisory YAML style lint
         run: |
-          echo "::group::yamllint results"
-          yamllint -d '{extends: default, rules: {line-length: {max: 256}, truthy: disable, document-start: disable, comments-indentation: disable}}' \
-            .github/workflows/*.yml || true
-          echo "::endgroup::"
+          yamllint -d '{extends: default, rules: {line-length: {max: 256}, truthy: disable, document-start: disable, comments-indentation: disable}}' .github/workflows/*.yml || true
 
-      - name: Validate YAML is parseable
+      - name: Validate workflow YAML syntax
         run: |
-          pip install pyyaml -q
-          ERRORS=0
-          for f in .github/workflows/*.yml; do
-            python3 -c "import yaml; yaml.safe_load(open('$f'))" 2>/dev/null \
-              && echo "OK  $f" \
-              || { echo "ERR $f"; ERRORS=$((ERRORS+1)); }
-          done
-          if [ "$ERRORS" -gt 0 ]; then
-            echo "::error::$ERRORS workflow file(s) have YAML parse errors"
-            exit 1
-          fi
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          failures = []
+          for path in sorted(Path(".github/workflows").glob("*.yml")):
+              try:
+                  yaml.compose(path.read_text(encoding="utf-8"))
+                  print(f"OK  {path}")
+              except Exception as exc:
+                  failures.append(f"{path}: {type(exc).__name__}: {exc}")
+          if failures:
+              print("\n".join(failures))
+              raise SystemExit(1)
+          PY
 
   shell-check:
     name: Lint shell scripts
@@ -44,24 +48,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Syntax-check all .sh files
+      - name: Syntax-check all shell scripts
+        shell: bash
         run: |
-          ERRORS=0
-          while IFS= read -r f; do
-            bash -n "$f" 2>/dev/null \
-              && echo "OK  $f" \
-              || { echo "ERR $f"; ERRORS=$((ERRORS+1)); }
-          done < <(find . -name '*.sh' -not -path './.git/*')
-          if [ "$ERRORS" -gt 0 ]; then
-            echo "::error::$ERRORS shell script(s) have syntax errors"
+          set -uo pipefail
+          failures=0
+          while IFS= read -r -d '' file; do
+            if bash -n "$file" 2>"$RUNNER_TEMP/bash-n.err"; then
+              echo "OK  $file"
+            else
+              echo "FAIL $file"
+              cat "$RUNNER_TEMP/bash-n.err"
+              failures=$((failures+1))
+            fi
+          done < <(find . -type f -name '*.sh' -not -path './.git/*' -not -path './node_modules/*' -not -path './.venv/*' -print0)
+          if [ "$failures" -gt 0 ]; then
+            echo "::error::$failures shell script(s) have syntax errors"
             exit 1
           fi
 
       - name: ShellCheck (advisory)
+        shell: bash
         run: |
           sudo apt-get install -y shellcheck -qq 2>/dev/null || true
-          find . -name '*.sh' -not -path './.git/*' -print0 \
-            | xargs -0 shellcheck --severity=error 2>/dev/null || true
+          find . -type f -name '*.sh' -not -path './.git/*' -not -path './node_modules/*' -not -path './.venv/*' -print0 \
+            | xargs -0 -r shellcheck --severity=error 2>/dev/null || true
 
   docker-compose-validate:
     name: Validate Docker Compose
@@ -69,25 +80,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate docker-compose.yml
+      - name: Validate root Compose files
+        shell: bash
         run: |
-          for f in docker-compose*.yml; do
-            [ -f "$f" ] || continue
-            echo "--- Validating $f ---"
-            docker compose -f "$f" config --quiet 2>/dev/null \
-              && echo "OK  $f" \
-              || echo "WARN $f (may reference build contexts not present)"
-          done
+          set -uo pipefail
+          found=0
+          while IFS= read -r -d '' file; do
+            found=1
+            echo "--- Validating $file ---"
+            if docker compose -f "$file" config --quiet 2>/dev/null; then
+              echo "OK  $file"
+            else
+              echo "WARN $file (may reference optional build contexts or runtime-only values)"
+            fi
+          done < <(find . -maxdepth 1 -type f -name 'docker-compose*.yml' -print0)
+          if [ "$found" -eq 0 ]; then
+            echo "No root docker-compose*.yml files found; checking docker-compose.yml"
+            docker compose -f docker-compose.yml config --quiet 2>/dev/null \
+              && echo "OK docker-compose.yml" \
+              || echo "WARN docker-compose.yml (may reference optional build contexts or runtime-only values)"
+          fi
 
-      - name: Validate sub-directory compose files
+      - name: Validate nested Compose files
+        shell: bash
         run: |
-          find . -name 'docker-compose*.yml' -not -path './.git/*' | while read f; do
-            dir=$(dirname "$f")
-            echo "--- $f ---"
-            (cd "$dir" && docker compose -f "$(basename "$f")" config --quiet 2>/dev/null) \
-              && echo "OK  $f" \
-              || echo "WARN $f (expected — build contexts may not exist)"
-          done
+          while IFS= read -r -d '' file; do
+            echo "--- Validating $file ---"
+            if docker compose -f "$file" config --quiet 2>/dev/null; then
+              echo "OK  $file"
+            else
+              echo "WARN $file (may reference optional build contexts or runtime-only values)"
+            fi
+          done < <(find . -type f -name 'docker-compose*.yml' -not -path './.git/*' -not -path './node_modules/*' -not -path './.venv/*' -print0)
 
   structure-check:
     name: Validate repo structure
@@ -96,35 +120,59 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Required files exist
+        shell: bash
         run: |
-          MISSING=0
-          for f in README.md Makefile docker-compose.yml SYSTEMS-INVENTORY.json .github/workflows/ci.yml; do
-            [ -f "$f" ] && echo "OK  $f" || { echo "MISSING $f"; MISSING=$((MISSING+1)); }
+          set -euo pipefail
+          required=(README.md Makefile docker-compose.yml SYSTEMS-INVENTORY.json .github/workflows/ci.yml)
+          missing=0
+          for file in "${required[@]}"; do
+            if [ -s "$file" ]; then
+              echo "OK  $file"
+            else
+              echo "MISSING $file"
+              missing=$((missing+1))
+            fi
           done
-          if [ "$MISSING" -gt 0 ]; then
-            echo "::error::$MISSING required file(s) missing"
+          if [ "$missing" -gt 0 ]; then
+            echo "::error::$missing required file(s) are missing or empty"
             exit 1
           fi
 
       - name: Validate JSON files
+        shell: bash
         run: |
-          ERRORS=0
-          find . -name '*.json' -not -path './.git/*' -not -path './node_modules/*' | while read f; do
-            python3 -c "import json; json.load(open('$f'))" 2>/dev/null \
-              && echo "OK  $f" \
-              || { echo "ERR $f"; ERRORS=$((ERRORS+1)); }
-          done
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          excluded = {".git", "node_modules", ".venv", "venv", "dist", "build"}
+          failures = []
+          for path in sorted(Path(".").rglob("*.json")):
+              if any(part in excluded for part in path.parts):
+                  continue
+              try:
+                  json.loads(path.read_text(encoding="utf-8"))
+                  print(f"OK  {path}")
+              except Exception as exc:
+                  failures.append(f"{path}: {type(exc).__name__}: {exc}")
+          if failures:
+              print("\n".join(failures))
+              raise SystemExit(1)
+          PY
 
       - name: Inventory coherence check
         run: |
-          echo "Systems in inventory:"
-          python3 -c "
+          python - <<'PY'
           import json
-          inv = json.load(open('SYSTEMS-INVENTORY.json'))
-          cats = inv.get('categories', {})
-          count = sum(len(v) for v in cats.values())
-          print(f'  Categories: {len(cats)}')
-          print(f'  Systems:    {count}')
-          repos = inv.get('overview', {}).get('total_repositories', 0)
-          print(f'  Declared repos: {repos}')
-          "
+          from pathlib import Path
+
+          inventory = json.loads(Path("SYSTEMS-INVENTORY.json").read_text(encoding="utf-8"))
+          categories = inventory.get("categories", {})
+          if not isinstance(categories, dict):
+              raise SystemExit("Inventory categories must be an object")
+          count = sum(len(value) for value in categories.values() if isinstance(value, list))
+          repos = inventory.get("overview", {}).get("total_repositories", 0)
+          print(f"Categories: {len(categories)}")
+          print(f"Counted systems: {count}")
+          print(f"Declared repositories: {repos}")
+          PY

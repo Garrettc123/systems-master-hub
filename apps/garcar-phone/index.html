@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#11111b"><meta name="description" content="Garcar Enterprise mobile command center">
+<link rel="manifest" href="./manifest.webmanifest"><link rel="stylesheet" href="./styles.css">
+<title>Garcar Command Center</title>
+</head>
+<body>
+<header class="topbar"><div class="brandmark">G</div><div><p class="eyebrow">GARCAR ENTERPRISE</p><h1>Command Center</h1></div><button id="refresh" class="icon-button" aria-label="Refresh status" title="Refresh status">↻</button></header>
+<main>
+<section class="hero"><div><p class="eyebrow">CONTROL PLANE</p><h2>One view. Governed actions.</h2><p class="muted">Phone-ready operations for knowledge, connected systems, and approval-gated work.</p></div><span id="overall" class="status-pill status-unknown">Not verified</span></section>
+<section class="section-head"><h2>System status</h2><span id="lastChecked" class="muted small">Not checked</span></section>
+<div class="grid status-grid">
+<article class="panel"><div class="panel-head"><span class="tile-icon">⌁</span><span class="status-dot unknown"></span></div><h3>API health</h3><p id="apiStatus" class="value">Not checked</p><p id="apiDetail" class="muted small">No successful live health check yet.</p></article>
+<article class="panel"><div class="panel-head"><span class="tile-icon">S</span><span class="status-dot unknown"></span></div><h3>Slack</h3><p class="value">Not verified</p><p class="muted small">No live app connection confirmed.</p></article>
+<article class="panel"><div class="panel-head"><span class="tile-icon">P</span><span class="status-dot unknown"></span></div><h3>Perplexity</h3><p class="value">Not verified</p><p class="muted small">Research adapter and credentials not confirmed.</p></article>
+<article class="panel"><div class="panel-head"><span class="tile-icon">✓</span><span class="status-dot safe"></span></div><h3>Governance</h3><p class="value">Fail-closed</p><p class="muted small">UI does not execute external actions.</p></article>
+</div>
+<section class="section-head"><h2>Knowledge search</h2><span class="muted small">Read-only interface</span></section>
+<form id="searchForm" class="panel search-panel"><label for="query">Search connected knowledge</label><div class="search-row"><input id="query" name="query" placeholder="Ask about a project, task, or decision…" autocomplete="off" required><button class="primary" type="submit">Search</button></div><p class="muted small">Search is disabled until an authenticated knowledge API is configured. No credentials are stored in this page.</p><div id="searchResult" class="result" role="status" aria-live="polite">No search run yet.</div></form>
+<section class="section-head"><h2>Approval queue</h2><span class="status-pill status-safe">Approval required</span></section>
+<div class="panel empty-state"><div class="empty-symbol">✓</div><h3>No live queue connected</h3><p class="muted">Pending actions will appear here after the authenticated control-plane API is integrated. This screen will not imply that an action was approved or executed without server evidence.</p></div>
+<section class="section-head"><h2>Connected systems</h2></section>
+<div class="panel integrations">
+<div class="integration-row"><div class="integration-icon">GH</div><div class="integration-copy"><strong>GitHub</strong><span class="muted small">Repository connector available in ChatGPT; app connection unverified</span></div><span class="status-pill status-unknown">Unverified</span></div>
+<div class="integration-row"><div class="integration-icon">SL</div><div class="integration-copy"><strong>Slack</strong><span class="muted small">Requires authenticated adapter and event verification</span></div><span class="status-pill status-unknown">Unverified</span></div>
+<div class="integration-row"><div class="integration-icon">PX</div><div class="integration-copy"><strong>Perplexity</strong><span class="muted small">Requires research adapter and server-side credential</span></div><span class="status-pill status-unknown">Unverified</span></div>
+<div class="integration-row"><div class="integration-icon">NT</div><div class="integration-copy"><strong>Notion</strong><span class="muted small">Read scope must be verified by the server</span></div><span class="status-pill status-unknown">Unverified</span></div>
+</div>
+<footer><p>Garcar Enterprise · Mobile web app</p><p class="muted small">Secure by default: no secrets in the browser, no autonomous external actions.</p></footer>
+</main>
+<script src="./app.js" defer></script>
+</body></html>

@@ -1,0 +1,13 @@
+{
+  "id": "./",
+  "name": "Garcar Enterprise Command Center",
+  "short_name": "Garcar",
+  "description": "Mobile command center with verified status and governed operations.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d0d14",
+  "theme_color": "#11111b",
+  "orientation": "portrait",
+  "icons": []
+}
