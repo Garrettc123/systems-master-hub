@@ -1,0 +1,29 @@
+{
+  "provider": "Railway",
+  "observed_date": "2026-11-13",
+  "source": "authenticated connected Railway read-only service inspection",
+  "classification": "point_in_time_unsigned_observation_not_production_attestation",
+  "scope": {
+    "projects": 5,
+    "services": 32,
+    "staging": 24,
+    "production": 8,
+    "latest_success": 32,
+    "notes": "These are all service counts. Candidate-deployment records below are deliberately limited to two matching v3.2 repository names, not a complete inventory of 32 service sources."
+  },
+  "candidate_deployments": [
+    {
+      "source_repo": "Garrettc123/garcar-data-room",
+      "source_commit": "30ee9796b094c001f812c99116d8c718046d00d2",
+      "environment": "staging",
+      "latest_status": "SUCCESS"
+    },
+    {
+      "source_repo": "Garrettc123/mars-api",
+      "source_commit": "429ad12f9bce19e442a652bdddbb35c93a3d859c",
+      "environment": "staging",
+      "latest_status": "SUCCESS"
+    }
+  ],
+  "limitation": "A self-contained JSON snapshot is not cryptographically signed and cannot substitute for direct authenticated provider verification at release time. No health, auth, ledger, customer transaction or system-wide certification is inferred."
+}

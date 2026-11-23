@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "observed_date": "2026-11-13",
+  "source": "Authenticated Railway list_deployments metadata and GitHub fetch_file/read-only fetch; no production changes",
+  "scope": "Two real production services in customer-review commercial wedge; this is not the 23-system v3.2 platform inventory.",
+  "services": [
+    {
+      "name": "garcar-commerce-preview",
+      "railway_project": "determined-dream",
+      "environment": "production",
+      "source_repository": "Garrettc123/garcar-enterprise-os-ui",
+      "source_branch": "main",
+      "deployed_sha": "619538bc384fb06036616d2afc0b9632084b0d1a",
+      "deployment_id": "2bd46356-4ba9-4963-96b7-a9c9122110bd",
+      "deployment_status": "SUCCESS",
+      "deployed_at": "2026-11-13T16:52:25.288Z",
+      "public_domain": "garcar-enterprise.up.railway.app",
+      "public_health_observed": true,
+      "checkout_base_matches_live_stripe": true
+    },
+    {
+      "name": "web",
+      "railway_project": "grand-spontaneity",
+      "environment": "production",
+      "source_repository": "Garrettc123/tree-of-life-system",
+      "source_branch": "fix/railway-procfile-python-runtime-20261030",
+      "deployed_sha": "53c8b66a89a0f99e90fb00af49c21922abec3019",
+      "deployment_id": "542eed3b-0f3d-467f-a98c-1a674f8e90d2",
+      "deployment_status": "SUCCESS",
+      "deployed_at": "2026-11-08T18:45:21.610Z",
+      "public_domain": "web-production-d0e94.up.railway.app",
+      "authenticated_handshake_observed_from_site": true,
+      "customer_intake_tested": false,
+      "live_stripe_paid_order_receipt_verified": false
+    }
+  ],
+  "identified_risk": {
+    "description": "Concurrent same-identity acquisition submissions can race between SELECT and INSERT in the deployed branch.",
+    "production_fix_applied": false,
+    "proposed_review_pr": "https://github.com/Garrettc123/tree-of-life-system/pull/192",
+    "local_test": "Two-thread SQL transaction race reproduces IntegrityError; BEGIN IMMEDIATE model accepts 24 simultaneous submissions, one row, submissions=24.",
+    "full_hosted_application_tests_verified": false
+  },
+  "certification": {
+    "exact_deployed_sha_identity_for_these_services": true,
+    "public_site_reachable": true,
+    "stripe_paid_customer_verified": false,
+    "paid_order_to_fulfillment_verified": false,
+    "v3_2_release_ready": false
+  },
+  "limitations": [
+    "Railway success and exact commit provenance do not imply functional end-to-end intake.",
+    "Read-only dispatcher handshake verifies shared credential without creating a lead.",
+    "Proposed concurrency correction exists in unmerged draft PR #192, not the production source branch.",
+    "No verified live successful charges from Stripe in the inspected set."
+  ]
+}
