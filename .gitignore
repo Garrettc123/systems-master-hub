@@ -50,3 +50,7 @@ logs/
 # Temp
 tmp/
 .tmp/
+
+# Generated read-only external operator validation evidence
+operator-evidence/
+external-operator-evidence/

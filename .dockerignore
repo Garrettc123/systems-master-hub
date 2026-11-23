@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+*.pem
+*.key
+*credentials*.json
+*service-account*.json
+node_modules
+.venv
+venv
+__pycache__
+operator-evidence
+external-operator-evidence
+*.sqlite3
+*.db
