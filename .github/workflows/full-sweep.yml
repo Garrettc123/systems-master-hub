@@ -97,11 +97,11 @@ jobs:
             -H 'Content-type: application/json' \
             --data "{
               \"blocks\": [
-                {\"type\": \"header\", \"text\": {\"type\": \"plain_text\", \"text\": \"⚡ GARCAR SWEEP COMPLETE\"}},
+                {\"type\": \"header\", \"text\": {\"type\": \"plain_text\", \"text\": \"GARCAR SWEEP REPORT\"}},
                 {\"type\": \"section\", \"fields\": [
                   {\"type\": \"mrkdwn\", \"text\": \"*Time:*\\n$TIMESTAMP\"},
-                  {\"type\": \"mrkdwn\", \"text\": \"*Platforms:*\\nGitHub ✅ Supabase ✅ HF ✅ Shopify ✅ Base ✅ Linear ✅ Notion ✅\"},
-                  {\"type\": \"mrkdwn\", \"text\": \"*Status:*\\n🟢 ALL SYSTEMS NOMINAL\"}
+                  {\"type\": \"mrkdwn\", \"text\": \"*Platforms:*\\nConfigured integrations attempted; inspect individual steps for skipped or failed checks.\"},
+                  {\"type\": \"mrkdwn\", \"text\": \"*Status:*\\nREPORT GENERATED — NOT A HEALTH CERTIFICATION\"}
                 ]}
               ]
             }"

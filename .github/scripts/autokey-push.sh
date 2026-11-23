@@ -19,11 +19,17 @@ if [ -z "${GH_TOKEN:-}" ]; then
 fi
 
 OK=0; FAIL=0; SKIP=0
+DRY_RUN="${DRY_RUN:-true}"
 
 push_secret() {
   local name="$1"
   local value="$2"
   if [ -n "$value" ]; then
+    if [ "${DRY_RUN,,}" != "false" ]; then
+      echo "  [DRY-RUN] would set $name in $TARGET"
+      SKIP=$((SKIP+1))
+      return 0
+    fi
     if printf '%s' "$value" | gh secret set "$name" --repo "$TARGET" --body - 2>&1; then
       echo "  [OK]   $name"
       OK=$((OK+1))
@@ -38,7 +44,7 @@ push_secret() {
 }
 
 echo "========================================"
-echo " AutoKey → $TARGET"
+echo " AutoKey → $TARGET"\necho " Dry run: $DRY_RUN"
 echo "========================================"
 
 # Iterate every VAL_* env var and push it as the secret name without the VAL_ prefix
@@ -49,7 +55,7 @@ done < <(env | grep '^VAL_' | sort)
 
 echo ""
 echo "======================================"
-echo " Result: $OK pushed | $FAIL failed | $SKIP skipped"
+echo " Result: $OK pushed | $FAIL failed | $SKIP skipped (includes dry-run previews)"
 echo "======================================"
 
 if [ $SKIP -gt 0 ]; then
