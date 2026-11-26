@@ -1,0 +1,20 @@
+# Agent policy registry. Every consequential external action requires human approval.
+version: "1.0"
+default_mode: read_only
+agents:
+  - name: rhns-agent-core
+    repo: Garrettc123/rhns-agent-core
+    mode: approval_required
+  - name: mars-api
+    repo: Garrettc123/mars-api
+    mode: approval_required
+  - name: outreach-agent
+    mode: blocked_until_compliance_gate
+    gate: governance/outreach_compliance.py
+    requires: [human_approval, consent_ledger, suppression_sync, dnc_scrub_31d]
+  - name: billing-agent
+    mode: approval_required
+    rule: "Stripe paid=true only"
+  - name: bounty-scanner
+    mode: read_only
+review: "Texas attorney to review consent language and registration before live outreach."
